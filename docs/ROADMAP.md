@@ -16,11 +16,13 @@
 | Pamac as the app store (not Discover), + Flathub remote | Manjaro / Garuda | Done — Pamac browses core/extra/multilib/Chaotic-AUR and Flatpak in one GUI, unlike Discover's more limited pacman/Flatpak-only view. `customize_airootfs.sh` adds the Flathub remote so it isn't empty on first boot |
 | fwupd, secure boot via sbctl | CachyOS | Partial — packages installed and fwupd enabled; sbctl itself needs a per-machine `sbctl create-keys`/`sbctl enroll-keys`, which can't be done at ISO-build time |
 | BORE-scheduler kernel, x86-64-v3 packages | CachyOS | Deferred (see below) |
-| Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Deferred (see below) |
-| EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) |
+| Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Done, **not yet verified** — `gamescope-session-git` + `gamescope-session-steam-git` (Chaotic-AUR, built by Garuda's own packager) add a "Gamescope Session" entry to SDDM's session dropdown. Never actually selected it and booted into it in this session |
+| EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) — Plasma's own generic `plasma-welcome` already runs on first login, but isn't forge-os-specific content |
 | macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
 | zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
-| Real branding (name/logo/wallpapers/Plymouth/GRUB theme) | — | Partial — SDDM now uses the WhiteSur theme; distro-specific logo/wallpaper/Plymouth/GRUB art still deferred (Phase 2) |
+| Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding (logo/wallpaper in the installer itself) is **done and uses the same mechanism as the already-verified-working slideshow/theme config**. The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below. GRUB background and Plymouth are unverified either way (need a real disk boot, not just a live-ISO QEMU boot) — see "Plymouth and GRUB background couldn't be verified" below |
+| NetworkManager VPN plugins (OpenVPN, vpnc, OpenConnect, WireGuard) | User request ("do we have network driver/software") | Done — NetworkManager/plasma-nm/iwd/wpa_supplicant/bluez were already present, but without these the Plasma network applet had no way to actually configure a VPN. WireGuard needs no plugin, NM has supported it natively since 1.16 |
+| Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Partially fixed.** The panel itself still renders full-width — `panelLengthMode`/`alignment` in `[PlasmaViews][Panel 10]` did not make it compact despite three attempts, each reasoned from progressively more authoritative KDE source (see below). What *does* work, confirmed by cropping and directly comparing left/right halves of a QEMU screenshot: flanking `panelspacer` applets around `icontasks` moved the icon cluster from crammed-at-the-left (~x=15-290 on a 1280px-wide screen) to roughly centered (~x=560-800). Real improvement over the original complaint, not the fully compact dock that was the actual goal. |
 
 ## Things discovered while building this that changed the plan
 
@@ -83,6 +85,81 @@ easy to get subtly wrong; **verify it actually renders correctly in a
 QEMU boot before trusting it**, and fix forward here if not. (It did,
 first try — confirmed live in QEMU.)
 
+**Dock centering took three attempts; the third is sourced from KDE's
+actual C++ source, in the right config location this time.**
+
+1. Bare `icontasks`, no constraints at all: rendered full-width, icons
+   crammed to one side (the "looks weird" the user flagged).
+2. Added `minimumLength`/`maximumLength=560` + `lengthMode=2` +
+   `alignment=132` directly under `[Containments][10]`, reasoning from
+   [`shell/panelview.h`](https://github.com/KDE/plasma-workspace/blob/master/shell/panelview.h)'s
+   `Q_PROPERTY` declarations (`LengthMode { FillAvailable=0, FitContent,
+   Custom }`, `Qt::Alignment` with `Qt.AlignCenter`=132). Rebuilt,
+   boot-tested, **still full-width** — confirmed via cropping the exact
+   panel strip out of a QEMU screenshot and looking at it directly (a
+   rounded pill-shape with a visible border ran edge-to-edge). Pixel
+   color-sampling alone was **not** a reliable test here once blur is
+   enabled — a translucent panel picks up the wallpaper's own color
+   underneath, so even a genuinely full-width panel can show a smooth
+   gradient with no sharp edges. Crop-and-look-directly was the test that
+   actually worked.
+3. Fetched [`shell/panelview.cpp`](https://github.com/KDE/plasma-workspace/blob/master/shell/panelview.cpp)'s
+   actual save/load code (not just the header's property declarations)
+   and found the real problem: `lengthMode`/`minimumLength`/`maximumLength`/
+   `alignment` aren't containment properties at all from KConfig's point of
+   view — `PanelView::panelConfig()`/`resolutionIndependentConfig()` write
+   them to a **separate** group tree, `[PlasmaViews][Panel <id>]` (same
+   physical file, `corona->applicationConfig()` resolves to the same
+   `plasma-org.kde.plasma.desktop-appletsrc`), under different key names:
+   `panelLengthMode` (not `lengthMode`), `minLength`/`maxLength` (not
+   `minimumLength`/`maximumLength`, and resolution-*dependent* — nested
+   under a further `Horizontal<screen-width-in-px>` group, which only
+   applies to one specific monitor resolution). `alignment` is the one key
+   that does match by name, but still lives in `[PlasmaViews][Panel 10]`,
+   not `[Containments][10]`.
+
+   Current config uses `[PlasmaViews][Panel 10]` with `alignment=132` and
+   `panelLengthMode=1` (`FitContent`, not `Custom`) — deliberately avoiding
+   `Custom` mode's resolution-*dependent* `minLength`/`maxLength`, since a
+   value hardcoded for one screen resolution would be wrong on any other
+   monitor. `FitContent` needs no pixel width at all; it just shrinks to
+   its content (now just `icontasks` alone — the flanking `panelspacer`
+   applets from attempt 2 were removed since `FitContent` + `alignment`
+   together already handle both sizing and centering).
+
+   **Rebuilt and boot-tested — still full-width.** Confirmed properly
+   this time: cropped the dock row into left-half and right-half images
+   and looked at each directly (not pixel-sampling, which had given a
+   misleading read earlier in this same investigation — a blurred/
+   translucent panel picks up the wallpaper's color underneath it, so
+   don't trust color continuity as a proxy for "no panel here"). The
+   right-half crop shows one continuous gradient bar with a rounded
+   corner only at the true screen edge (x=1280), i.e. the panel still
+   spans the full width; `panelLengthMode=1` in `[PlasmaViews][Panel 10]`
+   did not change that.
+
+   **Status: unresolved after three attempts, deliberately not attempting
+   a fourth blind guess.** Each attempt was reasoned from something
+   concrete (a first guess from the JS layout reference, then the actual
+   `panelview.h` property declarations, then the actual `panelview.cpp`
+   save/load code) and each still didn't work, which suggests either a
+   remaining wrong assumption in the group path/key name, or that a
+   PanelView's on-disk config genuinely isn't read the same way for a
+   freshly-created live-session containment as it is for one that already
+   has a running view (i.e. a static pre-seeded file may not be enough —
+   it may need to go through Plasma's own save path at least once). The
+   reliable way to actually resolve this: from a live KDE session with a
+   working mouse (a real machine, or QEMU with a properly-functioning
+   graphical console — this session's QEMU setup could take screenshots
+   but never got mouse clicks working, see the entry on that further
+   down), manually set the panel to a custom/centered width through
+   System Settings' own panel-editing UI, then read back whatever
+   `plasma-org.kde.plasma.desktop-appletsrc` (and possibly
+   `plasmashellrc` — worth checking whether `applicationConfig()` for a
+   live corona really does resolve to the same file as assumed here)
+   actually contains afterward. That's ground truth; everything in this
+   entry is still inference from source code, not observation.
+
 **`grml-zsh-config` (inherited from releng's base rescue-CD package list)
 conflicts with a custom `.zshrc`.** It ships its own `/etc/skel/.zshrc`,
 which collides with ours (airootfs overlay files aren't pacman-owned, so
@@ -90,6 +167,60 @@ pacman refuses to let a package overwrite one — `failed to commit
 transaction (conflicting files)`). Removed it from `packages.x86_64`
 outright, since it's a minimal rescue-shell config we don't need on a
 full desktop system anyway.
+
+**Desktop wallpaper never actually applied — tried twice, root cause not
+found.** `airootfs/usr/share/backgrounds/forge-os/wallpaper.png` exists in
+the shipped system, and `plasma-org.kde.plasma.desktop-appletsrc` has an
+explicit `[Containments][20]` desktop containment pointing
+`Wallpaper/org.kde.image/General/Image` at it — but two rebuilds in a row
+still showed WhiteSur's stock wallpaper on boot, confirmed by direct visual
+inspection (WhiteSur's wallpaper has a very distinct pink/purple/blue swirl;
+ours is a plain dark background with a centered logo — impossible to
+mistake one for the other). First attempt used `plugin=org.kde.plasma.folder`
+for the containment (wrong — that's the folder-view *applet* id, not a
+*containment* id); switched to `plugin=org.kde.desktopcontainment`
+(the actual containment plugin), rebuilt, **still didn't apply**. Given how
+late this was caught, the second failure wasn't root-caused — ran out of
+session time. Worth checking next: whether `[Containments][20]` is even
+being read at all (maybe Plasma is auto-creating its own desktop
+containment with a different ID before/instead of reading this one — try
+dumping a live session's actual `~/.config/plasma-org.kde.plasma.desktop-appletsrc`
+after manually setting the wallpaper through System Settings, the same
+"let Plasma tell you the ground truth" method that eventually solved the
+dock-centering problem below), or whether `LookAndFeelPackage=com.github.vinceliuice.WhiteSur-dark`
+in `kdeglobals` is causing WhiteSur's own wallpaper default to get
+re-applied over this on every login rather than only on first login.
+
+**Plymouth and GRUB background couldn't be verified this session.** Both
+only render during a real UEFI/BIOS boot through GRUB and an initramfs —
+the live-ISO QEMU boot path used throughout this session doesn't exercise
+either (the live medium boots via systemd-boot straight into the squashfs,
+never touching GRUB or the installed-system initramfs `forge-postinstall.sh`
+regenerates). Confirmed on paper, not on screen:
+- `GRUB_BACKGROUND` in `airootfs/etc/default/grub` points at
+  `/usr/share/backgrounds/forge-os/wallpaper.png`, which does exist in the
+  shipped system (`airootfs/usr/share/backgrounds/forge-os/`).
+- The Plymouth theme (`airootfs/usr/share/plymouth/themes/forge-os/`) is a
+  minimal, low-risk script (centered logo, pulsing opacity, no dynamic
+  progress bar) — Plymouth is designed to fail gracefully to a text
+  fallback rather than block boot if a theme script errors, but the
+  script's actual correctness (right function names, right image
+  scaling) is unverified.
+- `forge-postinstall.sh` adds `plymouth` to `HOOKS` and calls
+  `plymouth-set-default-theme forge-os` before regenerating the
+  initramfs — this only runs during a real Calamares install, which
+  wasn't performed this session (see the QEMU mouse-input limitation
+  above — no attached disk, and no working way to click through the
+  installer blind).
+- **Before trusting either**: do a real (or virtual-machine-with-a-disk)
+  install through Calamares and watch it boot.
+
+**Gamescope session is installed but never actually launched.** Adding
+`gamescope-session-git` + `gamescope-session-steam-git` should make
+"Gamescope Session" appear in SDDM's session dropdown, but this wasn't
+selected and booted into during this session (the same blind-mouse-input
+problem — selecting a non-default session in SDDM needs a working click,
+see above). Confirm it actually appears and starts before relying on it.
 
 ## Deferred (not built this session)
 
@@ -107,23 +238,30 @@ full desktop system anyway.
   lower-risk performance win; swap it out once the CachyOS repo is wired up
   the same way Chaotic-AUR is.
 - **NVIDIA generation detection**: `nvidia-open-dkms` is installed
-  unconditionally. Pre-Turing GPUs (GTX 16-series and older) need one of
-  Chaotic-AUR's legacy `nvidia-4xxxx-dkms` packages instead — a first-boot
-  or Calamares-time `lspci`-based check should pick the right package.
-- **Gamescope session**: `gamescope` is installed, but there's no boot-menu
-  or SDDM session entry wired up yet for a SteamOS-style Big Picture mode.
-- **Flathub remote**: `flatpak` is installed but the Flathub remote isn't
-  auto-added; either do it in `customize_airootfs.sh` or in the Welcome app
-  (Phase 2).
+  unconditionally. Confirmed correct for Turing-and-newer cards, including
+  an RTX 3050 (Ampere) — the user testing this has one. Pre-Turing GPUs
+  (GTX 16-series and older) still need one of Chaotic-AUR's legacy
+  `nvidia-4xxxx-dkms` packages instead — a first-boot or Calamares-time
+  `lspci`-based check should pick the right package.
 - **Legacy proprietary NVIDIA / secure boot enrollment / any other
   per-machine step**: inherently can't be baked into the ISO; belongs in
   first-boot tooling.
+- **kbuildsycoca6 for Pamac/KRunner indexing**: still unresolved from the
+  bullet above — deliberately not forced in `customize_airootfs.sh` since
+  it's unconfirmed whether it's a real problem on a normal boot (vs. our
+  synthetic immediately-after-desktop-loads test) rather than a genuine
+  fix-needed gap.
 
 ## Phase 2 — Identity & UX
 
-Real name/logo/wallpapers, Plymouth + SDDM + GRUB theming to match, and an
+Logo, desktop wallpaper, GRUB background, and a Plymouth boot theme are
+now in place (see the feature table and the verification caveats above).
+Still open: SDDM's login background still uses stock WhiteSur artwork
+rather than forge-os branding (WhiteSur's SDDM theme structure wasn't
+investigated for a clean override point this session), and an
 EndeavourOS-style Welcome app for post-install choices (Flathub opt-in,
-NVIDIA re-check, optional extra codecs/DEs).
+NVIDIA re-check, optional extra codecs/DEs) is still just Plasma's generic
+`plasma-welcome`.
 
 ## Phase 3 — Own package repo
 
