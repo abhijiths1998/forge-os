@@ -45,6 +45,10 @@ location=4
 plugin=org.kde.panel
 wallpaperplugin=org.kde.image
 
+[Containments][10][Applets][9]
+immutability=1
+plugin=org.kde.plasma.panelspacer
+
 [Containments][10][Applets][11]
 immutability=1
 plugin=org.kde.plasma.icontasks
@@ -52,8 +56,37 @@ plugin=org.kde.plasma.icontasks
 [Containments][10][Applets][11][Configuration][General]
 launchers=applications:org.kde.dolphin.desktop,applications:brave-browser.desktop,applications:steam.desktop,applications:org.manjaro.pamac.manager.desktop,applications:org.kde.konsole.desktop,applications:systemsettings.desktop
 
+[Containments][10][Applets][12]
+immutability=1
+plugin=org.kde.plasma.panelspacer
+
 [Containments][10][General]
-AppletOrder=11
+AppletOrder=9;11;12
+
+# Panel view geometry (size/position on screen) is a SEPARATE config
+# structure from the containment's own widget layout above — it's read
+# from PlasmaViews/Panel <containmentId>, not from [Containments][10]
+# itself (confirmed from shell/panelview.cpp in the actual KDE source,
+# see docs/ROADMAP.md). This did NOT actually make the panel compact when
+# tested (still renders full-width — see docs/ROADMAP.md); left in place
+# since it's harmless, but don't trust it. The flanking panelspacer
+# applets above are what's actually doing the visual work right now,
+# centering the icon group within the full-width bar.
+[PlasmaViews][Panel 10]
+alignment=132
+panelLengthMode=1
+
+[Containments][20]
+activityId=
+formfactor=0
+immutability=1
+lastScreen=0
+location=0
+plugin=org.kde.desktopcontainment
+wallpaperplugin=org.kde.image
+
+[Containments][20][Wallpaper][org.kde.image][General]
+Image=file:///usr/share/backgrounds/forge-os/wallpaper.png
 
 [ScreenMapping]
 itemsOnDisabledScreens=

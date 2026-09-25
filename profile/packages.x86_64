@@ -175,6 +175,14 @@ pipewire-jack
 wireplumber
 networkmanager
 plasma-nm
+# VPN protocol plugins: NetworkManager itself was already here, but without
+# these its Plasma applet has no way to actually configure a VPN connection
+# (WireGuard needs no plugin, just the userspace tools - NM has supported it
+# natively since 1.16).
+networkmanager-openvpn
+networkmanager-vpnc
+networkmanager-openconnect
+wireguard-tools
 bluez
 bluez-utils
 kwalletmanager
@@ -225,6 +233,11 @@ discord
 game-devices-udev
 protonup-qt
 
+# SteamOS-style Big Picture session, selectable from the SDDM login screen
+# (Session dropdown) alongside the normal Plasma session.
+gamescope-session-git
+gamescope-session-steam-git
+
 # Snapshots / rollback safety net (btrfs-progs already listed above)
 snapper
 grub-btrfs
@@ -237,6 +250,7 @@ ananicy-cpp
 irqbalance
 fwupd
 sbctl
+plymouth
 chaotic-keyring
 chaotic-mirrorlist
 calamares
