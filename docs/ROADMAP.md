@@ -18,7 +18,9 @@
 | BORE-scheduler kernel, x86-64-v3 packages | CachyOS | Deferred (see below) |
 | Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Deferred (see below) |
 | EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) |
-| Real branding (name/logo/wallpapers/Plymouth/SDDM/GRUB theme) | — | Deferred (Phase 2) |
+| macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
+| zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
+| Real branding (name/logo/wallpapers/Plymouth/GRUB theme) | — | Partial — SDDM now uses the WhiteSur theme; distro-specific logo/wallpaper/Plymouth/GRUB art still deferred (Phase 2) |
 
 ## Things discovered while building this that changed the plan
 
@@ -58,8 +60,47 @@ eventually). It's what creates the `liveuser` account and enables the
 baseline systemd services. Worth revisiting via a pacman-hook-based approach
 if/when archiso actually drops it.
 
+**WhiteSur's installer needs a fake TERM.** `whitesur-gtk-theme`'s
+`install.sh` calls `setterm` for its spinner animation; with no TTY (a
+Docker `RUN` step), that fails outright and — because the script wraps
+everything in `set -e` and swallows its own stderr into a temp log it
+prints only if non-empty — it aborts completely silently, no diagnostic
+at all. `build/Containerfile` sets `TERM=xterm` before building it.
+Cost real time to track down: had to strip the script's own
+`exec 2> logfile` redirect to see the actual `setterm: $TERM is not
+defined` error underneath.
+
+**The Plasma panel layout is hand-authored ini, not run through
+Plasma.** WhiteSur's look-and-feel packages ship a `layout.js` (Plasma's
+scripted layout format) for the top menu bar, but applying that requires
+a running `plasmashell`/D-Bus session — not available in a chroot during
+the ISO build. Instead, `airootfs/etc/skel/.config/plasma-org.kde.plasma.desktop-appletsrc`
+is a directly-authored copy of what that JS *would* produce (same widget
+plugins: kickoff, appmenu, panelspacer, systemtray, digitalclock), plus a
+second hand-built bottom-panel containment (`icontasks`) for the dock with
+Dolphin/Brave/Steam/Pamac/Konsole/System Settings pinned. This format is
+easy to get subtly wrong; **verify it actually renders correctly in a
+QEMU boot before trusting it**, and fix forward here if not. (It did,
+first try — confirmed live in QEMU.)
+
+**`grml-zsh-config` (inherited from releng's base rescue-CD package list)
+conflicts with a custom `.zshrc`.** It ships its own `/etc/skel/.zshrc`,
+which collides with ours (airootfs overlay files aren't pacman-owned, so
+pacman refuses to let a package overwrite one — `failed to commit
+transaction (conflicting files)`). Removed it from `packages.x86_64`
+outright, since it's a minimal rescue-shell config we don't need on a
+full desktop system anyway.
+
 ## Deferred (not built this session)
 
+- **KRunner didn't initially list Pamac as an application**, only as a
+  "Run pamac" raw command-line match — but running `pamac-manager` directly
+  worked fine (it's a real, working install). Likely the KDE application
+  cache (`kbuildsycoca6`) just hadn't indexed newly-installed `.desktop`
+  files yet in that fresh live session; worth either confirming this
+  resolves itself after a normal boot (not our synthetic KRunner-immediately-
+  after-desktop-loads test) or forcing a `kbuildsycoca6` run at the end of
+  `customize_airootfs.sh` if it doesn't.
 - **CachyOS kernel / x86-64-v3 packages**: needs its own separate repo +
   keyring bootstrap (parallel to the Chaotic-AUR one) plus CPU-microarch
   detection to pick v3 vs v4 vs baseline. `linux-zen` ships today as a

@@ -51,4 +51,29 @@ RUN pacman -S --noconfirm --needed \
     && userdel -r builder \
     && rm -rf /tmp/calamares
 
+# macOS-style theming (WhiteSur, https://github.com/vinceliuice/WhiteSur-*):
+# also not on Chaotic-AUR, built from AUR the same way as calamares. These
+# are asset packages (icons/theme files), not compiled C++, so this is fast.
+# TERM must be set: WhiteSur's install.sh calls `setterm` for its spinner
+# animation, which fails outright (aborting under set -e) with no TTY/TERM,
+# as Docker RUN steps have.
+RUN pacman -S --noconfirm --needed sassc which gtk3 ncurses \
+    && useradd -m builder \
+    && su builder -c ' \
+        set -e; \
+        export TERM=xterm; \
+        cd /tmp; \
+        for pkg in whitesur-gtk-theme whitesur-icon-theme whitesur-kde-theme; do \
+            git clone --depth 1 "https://aur.archlinux.org/${pkg}.git"; \
+            (cd "${pkg}" && makepkg --noconfirm --skippgpcheck); \
+        done \
+    ' \
+    && cp /tmp/whitesur-gtk-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+    && cp /tmp/whitesur-icon-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+    && cp /tmp/whitesur-kde-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+    && repo-add /var/cache/forge-os-local-repo/forge-os-local.db.tar.gz \
+        /var/cache/forge-os-local-repo/*.pkg.tar.zst \
+    && userdel -r builder \
+    && rm -rf /tmp/whitesur-gtk-theme /tmp/whitesur-icon-theme /tmp/whitesur-kde-theme
+
 WORKDIR /build

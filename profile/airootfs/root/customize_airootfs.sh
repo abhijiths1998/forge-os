@@ -9,7 +9,7 @@ set -e -u
 # A real desktop login (not root) for the live/Calamares session. Password
 # is empty; SDDM autologin (etc/sddm.conf.d/autologin.conf) is what actually
 # gets a user to the desktop, so no one is ever prompted for this password.
-useradd -m -G wheel,users,storage,power,network,video,audio,disk,input,uucp -s /bin/bash liveuser
+useradd -m -G wheel,users,storage,power,network,video,audio,disk,input,uucp -s /bin/zsh liveuser
 passwd -d liveuser
 
 # --- Services ---

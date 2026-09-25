@@ -1,0 +1,18 @@
+[DesktopSwitcher]
+LayoutName=org.kde.breeze.desktop
+
+[WindowSwitcher]
+LayoutName=org.kde.breeze.desktop
+
+[org.kde.kdecoration2]
+ButtonsOnLeft=XAI
+ButtonsOnRight=
+library=org.kde.kwin.aurorae
+theme=__aurorae__svg__WhiteSur-dark
+
+# Frosted-glass look: WhiteSur's panel/dock backgrounds are drawn with a
+# blur-behind mask, so turning these on is what actually makes them
+# translucent instead of solid.
+[Plugins]
+blurEnabled=true
+contrastEnabled=true

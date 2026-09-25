@@ -1,0 +1,9 @@
+[General]
+ColorScheme=WhiteSurDark
+Name=WhiteSurDark
+
+[Icons]
+Theme=WhiteSur-dark
+
+[KDE]
+LookAndFeelPackage=com.github.vinceliuice.WhiteSur-dark
