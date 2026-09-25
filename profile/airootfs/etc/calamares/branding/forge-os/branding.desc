@@ -1,0 +1,46 @@
+# forge-os Calamares branding. Placeholder strings/images (borrowed from
+# Calamares' own default theme) — Phase 2 replaces these with real
+# name/logo/wallpaper.
+---
+componentName:  forge-os
+
+welcomeStyleCalamares:   false
+welcomeExpandingLogo:   true
+
+windowExpanding:    normal
+windowSize: 800px,520px
+windowPlacement: center
+
+sidebar: widget
+navigation: widget
+
+strings:
+    productName:         forge-os
+    shortProductName:    forge-os
+    version:             0.1
+    shortVersion:        0.1
+    versionedName:       "forge-os 0.1"
+    shortVersionedName:  "forge-os 0.1"
+    bootloaderEntryName: forge-os
+    productUrl:          https://example.invalid/
+    supportUrl:          https://example.invalid/
+    knownIssuesUrl:      https://example.invalid/
+    releaseNotesUrl:     https://example.invalid/
+    donateUrl:           https://example.invalid/
+
+images:
+    productIcon:         "squid.png"
+    productLogo:         "squid.png"
+    productWelcome:      "languages.png"
+
+style:
+   SidebarBackground:        "#292F34"
+   SidebarText:              "#FFFFFF"
+   SidebarTextCurrent:       "#292F34"
+   SidebarBackgroundCurrent: "#D35400"
+
+slideshow:               "show.qml"
+slideshowAPI: 2
+
+uploadServer:
+    type:    "none"

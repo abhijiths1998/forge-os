@@ -1,0 +1,14 @@
+# Shipped as the target's /etc/default/grub. Regenerated into grub.cfg by
+# Calamares' bootloader module (grub-mkconfig) at install time.
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="forge-os"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash nvidia-drm.modeset=1"
+GRUB_CMDLINE_LINUX=""
+GRUB_PRELOAD_MODULES="part_gpt part_msdos"
+GRUB_TIMEOUT_STYLE=menu
+GRUB_TERMINAL_INPUT=console
+GRUB_GFXMODE=auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GRUB_DISABLE_RECOVERY=true
+GRUB_DISABLE_OS_PROBER=false

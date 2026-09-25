@@ -1,0 +1,54 @@
+# Arch Linux build environment for producing the forge-os ISO.
+# Runs archiso's mkarchiso, since archiso only works on Arch itself
+# and the host machine here is Fedora/Nobara-based.
+FROM archlinux:base-devel
+
+RUN pacman -Syu --noconfirm --needed \
+        archiso \
+        git \
+        dosfstools \
+        squashfs-tools \
+        libisoburn \
+        edk2-ovmf \
+    && pacman -Scc --noconfirm
+
+# Bootstrap Chaotic-AUR on the BUILD HOST (this container), not just in the
+# ISO's own pacman.conf. mkarchiso resolves the profile's pacman.conf with
+# `pacman-conf` before pacstrap ever runs, which means the repo's
+# `Include = /etc/pacman.d/chaotic-mirrorlist` file must already exist on
+# this filesystem, and pacstrap verifies package signatures against this
+# container's pacman keyring. Without this, pacstrap fails outright on any
+# chaotic-aur-only package (e.g. calamares, proton-ge-custom) in
+# packages.x86_64.
+RUN pacman-key --init \
+    && pacman-key --populate archlinux \
+    && pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com \
+    && pacman-key --lsign-key 3056513887B78AEB \
+    && pacman -U --noconfirm \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+
+# calamares itself is on neither the official repos nor Chaotic-AUR (every
+# distro that uses it ships its own build in its own repo), so build it once
+# here from its AUR PKGBUILD and serve it from a local file:// repo that
+# profile/pacman.conf points pacstrap at during the ISO build.
+RUN pacman -S --noconfirm --needed \
+        extra-cmake-modules kcoreaddons kpmcore libpwquality \
+        qt6-declarative qt6-svg yaml-cpp libglvnd ninja qt6-tools \
+        qt6-translations cmake \
+    && useradd -m builder \
+    && su builder -c ' \
+        set -e; \
+        cd /tmp; \
+        git clone --depth 1 https://aur.archlinux.org/calamares.git; \
+        cd calamares; \
+        makepkg --noconfirm --skippgpcheck \
+    ' \
+    && mkdir -p /var/cache/forge-os-local-repo \
+    && cp /tmp/calamares/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+    && repo-add /var/cache/forge-os-local-repo/forge-os-local.db.tar.gz \
+        /var/cache/forge-os-local-repo/*.pkg.tar.zst \
+    && userdel -r builder \
+    && rm -rf /tmp/calamares
+
+WORKDIR /build
