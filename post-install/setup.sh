@@ -122,7 +122,8 @@ esac
 # ---------------------------------------------------------------------------
 
 GAMING_CHOICES=$(gum choose --no-limit --height 15 \
-    --header "Gaming tools (space to select, enter to confirm):" \
+    --header "Gaming tools (space to toggle, enter to confirm):" \
+    --selected="Steam,GameMode,MangoHud,ProtonUp-Qt (GE-Proton installer),Discord" \
     "Steam" "Lutris" "Heroic Games Launcher" "Wine (staging) + Winetricks" \
     "GameMode" "MangoHud" "GOverlay" "vkBasalt" "ProtonUp-Qt (GE-Proton installer)" \
     "Gamescope" "Discord" "OBS Studio" "Controller support (udev rules)")
@@ -171,22 +172,44 @@ while IFS= read -r choice; do
 done <<< "${OPT_CHOICES}"
 
 # ---------------------------------------------------------------------------
-# Browser
+# Browser (Brave first: it's the default choice, just press enter)
 # ---------------------------------------------------------------------------
 
-BROWSER_CHOICE=$(gum choose "Firefox" "Chromium" "Brave" "Skip" --header "Default browser:")
+BROWSER_CHOICE=$(gum choose "Brave" "Firefox" "Chromium" "Skip" --header "Default browser:")
 BROWSER_PACKAGES=()
 case "${BROWSER_CHOICE}" in
+    Brave) BROWSER_PACKAGES=(brave-bin) ;;
     Firefox) BROWSER_PACKAGES=(firefox) ;;
     Chromium) BROWSER_PACKAGES=(chromium) ;;
-    Brave) BROWSER_PACKAGES=(brave-bin) ;;
 esac
+
+# ---------------------------------------------------------------------------
+# Desktop essentials: keyring + app store. Pre-selected — these are the kind
+# of basics you want by default, not something to hunt for in a menu.
+# ---------------------------------------------------------------------------
+
+ESSENTIALS_CHOICES=$(gum choose --no-limit --height 6 \
+    --header "Desktop essentials:" \
+    --selected="Pamac (AUR + Flatpak + pacman app store),GNOME Keyring + Seahorse (credential storage),Flatpak + Flathub (app store content)" \
+    "Pamac (AUR + Flatpak + pacman app store)" \
+    "GNOME Keyring + Seahorse (credential storage)" \
+    "Flatpak + Flathub (app store content)")
+
+ESSENTIALS_PACKAGES=()
+DO_FLATPAK=0
+while IFS= read -r choice; do
+    case "${choice}" in
+        "Pamac (AUR + Flatpak + pacman app store)") ESSENTIALS_PACKAGES+=(pamac) ;;
+        "GNOME Keyring + Seahorse (credential storage)") ESSENTIALS_PACKAGES+=(gnome-keyring seahorse libsecret) ;;
+        "Flatpak + Flathub (app store content)") ESSENTIALS_PACKAGES+=(flatpak); DO_FLATPAK=1 ;;
+    esac
+done <<< "${ESSENTIALS_CHOICES}"
 
 # ---------------------------------------------------------------------------
 # Summary + confirm
 # ---------------------------------------------------------------------------
 
-ALL_PACKAGES=("${NVIDIA_PACKAGES[@]}" "${GAMING_PACKAGES[@]}" "${OPT_PACKAGES[@]}" "${BROWSER_PACKAGES[@]}")
+ALL_PACKAGES=("${NVIDIA_PACKAGES[@]}" "${GAMING_PACKAGES[@]}" "${OPT_PACKAGES[@]}" "${BROWSER_PACKAGES[@]}" "${ESSENTIALS_PACKAGES[@]}")
 
 if [[ "${#ALL_PACKAGES[@]}" -eq 0 ]]; then
     gum style --foreground 240 "Nothing selected — nothing to do."
@@ -255,6 +278,15 @@ fi
 if [[ " ${GAMING_PACKAGES[*]} " == *" game-devices-udev "* ]]; then
     sudo udevadm control --reload-rules
     sudo udevadm trigger
+fi
+
+if [[ "${DO_FLATPAK}" -eq 1 ]]; then
+    section "Adding the Flathub remote..."
+    sudo flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+fi
+
+if [[ " ${ESSENTIALS_PACKAGES[*]} " == *" gnome-keyring "* ]]; then
+    gum style --foreground 240 "Note: gnome-keyring is installed, but auto-unlock-on-login needs a pam_gnome_keyring line in your display manager's PAM config (varies by DM) — see the ArchWiki's GNOME Keyring page if you want that wired up."
 fi
 
 title "Done!"

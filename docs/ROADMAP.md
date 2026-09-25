@@ -9,9 +9,11 @@
 | Btrfs + snapper + grub-btrfs snapshots | Garuda | Done, but **untested on real hardware** — Calamares' partition/mount modules default to a btrfs `@`/`@home`/`@cache`/`@log`/`@snapshots` layout, and `forge-postinstall.sh` runs `snapper create-config` + enables the timers |
 | Calamares installer with branding/slideshow | Garuda / EndeavourOS | Done — see "Calamares isn't packaged anywhere" below for how it's actually built |
 | Minimal, curated package base | EndeavourOS | Done — see "kde-applications-meta was a trap" below |
-| Gaming stack (Steam, Lutris, Heroic, gamemode, mangohud, goverlay, vkBasalt, ProtonUp-Qt, controller udev rules) | Bazzite / Nobara / CachyOS | Done |
+| Gaming stack (Steam, Lutris, Heroic, gamemode, mangohud, goverlay, vkBasalt, ProtonUp-Qt, Discord, controller udev rules) | Bazzite / Nobara / CachyOS | Done |
 | zram, ananicy-cpp, irqbalance, reflector, parallel pacman + ILoveCandy | Common across modern spins | Done |
-| Flatpak preinstalled | Nobara / Bazzite | Done (package only; Flathub remote isn't auto-added yet, see Deferred) |
+| Default browser (Brave, via Chaotic-AUR) | Common across modern spins | Done |
+| KWallet + KWalletManager (keyring) | KDE default | Done |
+| Pamac as the app store (not Discover), + Flathub remote | Manjaro / Garuda | Done — Pamac browses core/extra/multilib/Chaotic-AUR and Flatpak in one GUI, unlike Discover's more limited pacman/Flatpak-only view. `customize_airootfs.sh` adds the Flathub remote so it isn't empty on first boot |
 | fwupd, secure boot via sbctl | CachyOS | Partial — packages installed and fwupd enabled; sbctl itself needs a per-machine `sbctl create-keys`/`sbctl enroll-keys`, which can't be done at ISO-build time |
 | BORE-scheduler kernel, x86-64-v3 packages | CachyOS | Deferred (see below) |
 | Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Deferred (see below) |

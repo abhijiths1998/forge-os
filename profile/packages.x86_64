@@ -161,7 +161,6 @@ okular
 spectacle
 kcalc
 kdeconnect
-discover
 filelight
 partitionmanager
 ffmpegthumbs
@@ -179,6 +178,15 @@ networkmanager
 plasma-nm
 bluez
 bluez-utils
+kwalletmanager
+
+# App store (Pamac, not Discover: native repo browsing across
+# core/extra/multilib/Chaotic-AUR plus Flatpak, in one Manjaro/Garuda-style
+# GUI, rather than KDE's more limited Flatpak/pacman-only Discover)
+pamac
+
+# Default browser
+brave-bin
 
 # Gaming stack
 steam

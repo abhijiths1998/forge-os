@@ -28,3 +28,9 @@ systemctl enable fwupd.service
 # the signing key into this system's own pacman keyring and populated
 # /etc/pacman.d/chaotic-mirrorlist during pacstrap, so /etc/pacman.conf's
 # [chaotic-aur] block (see airootfs/etc/pacman.conf) is usable as-is.
+
+# --- App store ---
+# Pamac (installed via packages.x86_64) shows Flatpak apps too via its
+# optional flatpak support; add the Flathub remote system-wide so that's
+# actually populated from first boot.
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
