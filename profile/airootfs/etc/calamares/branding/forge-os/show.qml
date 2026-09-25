@@ -1,13 +1,3 @@
-/* === This file is part of Calamares - <https://calamares.io> ===
- *
- *   SPDX-FileCopyrightText: 2015 Teo Mrnjavac <teo@kde.org>
- *   SPDX-FileCopyrightText: 2018 Adriaan de Groot <groot@kde.org>
- *   SPDX-License-Identifier: GPL-3.0-or-later
- *
- *   Calamares is Free Software: see the License-Identifier above.
- *
- */
-
 import QtQuick 2.0;
 import calamares.slideshow 1.0;
 
@@ -16,62 +6,70 @@ Presentation
     id: presentation
 
     function nextSlide() {
-        console.log("QML Component (default slideshow) Next slide");
         presentation.goToNextSlide();
     }
 
     Timer {
         id: advanceTimer
-        interval: 1000
+        interval: 6000
         running: presentation.activatedInCalamares
         repeat: true
         onTriggered: nextSlide()
     }
 
     Slide {
-
         Image {
-            id: background
-            source: "squid.png"
-            width: 200; height: 200
+            id: logo
+            source: "forge-os-logo.png"
+            width: 160; height: 160
             fillMode: Image.PreserveAspectFit
-            anchors.centerIn: parent
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: 20
         }
         Text {
-            anchors.horizontalCenter: background.horizontalCenter
-            anchors.top: background.bottom
-            text: "This is a customizable QML slideshow.<br/>"+
-                  "Distributions should provide their own slideshow and list it in <br/>"+
-                  "their custom branding.desc file.<br/>"+
-                  "To create a Calamares presentation in QML, import calamares.slideshow,<br/>"+
-                  "define a Presentation element with as many Slide elements as needed."
+            id: title
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: logo.bottom
+            anchors.topMargin: 20
+            text: "Welcome to forge-os"
+            font.pixelSize: 22
+            font.bold: true
+            color: "#FFFFFF"
+        }
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: title.bottom
+            anchors.topMargin: 10
+            width: presentation.width * 0.8
+            text: "An Arch-based distro built for NVIDIA + gaming + KDE Plasma,\ncherry-picking the best ideas from CachyOS, Nobara, Garuda, and more."
             wrapMode: Text.WordWrap
-            width: presentation.width
             horizontalAlignment: Text.Center
+            color: "#CCCCCC"
         }
     }
 
     Slide {
-        centeredText: qsTr("This is a second Slide element.")
+        centeredText: qsTr("NVIDIA drivers are already installed and configured —\nnvidia-open-dkms, with mkinitcpio and kernel cmdline set up for you.")
     }
 
     Slide {
-        centeredText: qsTr("This is a third Slide element.")
+        centeredText: qsTr("A full gaming stack out of the box: Steam, Lutris, Heroic,\nGameMode, MangoHud, vkBasalt, ProtonUp-Qt, and Gamescope.")
     }
 
-    // When this slideshow is loaded as a V1 slideshow, only
-    // activatedInCalamares is set, which starts the timer (see above).
-    //
-    // In V2, also the onActivate() and onLeave() methods are called.
-    // These example functions log a message (and re-start the slides
-    // from the first).
+    Slide {
+        centeredText: qsTr("Pamac gives you one app store for official repos, Chaotic-AUR,\nand Flatpak — no more juggling three different tools.")
+    }
+
+    Slide {
+        centeredText: qsTr("A macOS-style KDE Plasma desktop: WhiteSur theme, a top menu\nbar, a dock, and frosted-glass panels — all set up by default.")
+    }
+
     function onActivate() {
-        console.log("QML Component (default slideshow) activated");
         presentation.currentSlide = 0;
     }
 
     function onLeave() {
-        console.log("QML Component (default slideshow) deactivated");
     }
 
 }

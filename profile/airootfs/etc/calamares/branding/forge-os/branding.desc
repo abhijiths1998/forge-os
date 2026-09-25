@@ -1,6 +1,4 @@
-# forge-os Calamares branding. Placeholder strings/images (borrowed from
-# Calamares' own default theme) — Phase 2 replaces these with real
-# name/logo/wallpaper.
+# forge-os Calamares branding.
 ---
 componentName:  forge-os
 
@@ -29,15 +27,15 @@ strings:
     donateUrl:           https://example.invalid/
 
 images:
-    productIcon:         "squid.png"
-    productLogo:         "squid.png"
-    productWelcome:      "languages.png"
+    productIcon:         "forge-os-logo.png"
+    productLogo:         "forge-os-logo.png"
+    productWelcome:      "forge-os-wallpaper.png"
 
 style:
-   SidebarBackground:        "#292F34"
+   SidebarBackground:        "#1B2430"
    SidebarText:              "#FFFFFF"
-   SidebarTextCurrent:       "#292F34"
-   SidebarBackgroundCurrent: "#D35400"
+   SidebarTextCurrent:       "#1B2430"
+   SidebarBackgroundCurrent: "#E8752C"
 
 slideshow:               "show.qml"
 slideshowAPI: 2

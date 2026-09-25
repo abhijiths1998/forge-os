@@ -9,8 +9,9 @@ set -u
 # mount, PXE, etc.) that must not ship on the installed system.
 rm -f /etc/mkinitcpio.conf.d/archiso.conf
 cat > /etc/mkinitcpio.conf.d/base.conf <<'EOF'
-HOOKS=(base udev autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)
+HOOKS=(base udev plymouth autodetect microcode modconf kms keyboard keymap consolefont block filesystems fsck)
 EOF
+plymouth-set-default-theme forge-os 2>/dev/null || true
 mkinitcpio -P || true
 
 # NOPASSWD sudo was a live-session convenience; require a password for real.

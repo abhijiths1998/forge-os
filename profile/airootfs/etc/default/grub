@@ -12,3 +12,4 @@ GRUB_GFXMODE=auto
 GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_DISABLE_RECOVERY=true
 GRUB_DISABLE_OS_PROBER=false
+GRUB_BACKGROUND="/usr/share/backgrounds/forge-os/wallpaper.png"

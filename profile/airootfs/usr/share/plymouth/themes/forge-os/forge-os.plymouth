@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=forge-os
+Description=forge-os boot splash
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/forge-os
+ScriptFile=/usr/share/plymouth/themes/forge-os/forge-os.script
