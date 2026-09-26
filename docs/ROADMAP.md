@@ -20,7 +20,8 @@
 | EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) — Plasma's own generic `plasma-welcome` already runs on first login, but isn't forge-os-specific content |
 | macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
 | zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
-| Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding (logo/wallpaper in the installer itself) is **done and uses the same mechanism as the already-verified-working slideshow/theme config**. The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below. GRUB background and Plymouth are unverified either way (need a real disk boot, not just a live-ISO QEMU boot) — see "Plymouth and GRUB background couldn't be verified" below |
+| Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding is done (same mechanism as the already-verified slideshow/theme config). **Plymouth boot splash (logo + live progress bar) is done and verified live in QEMU** — replaces the scrolling systemd unit list entirely on the live medium. GRUB background is still unverified (only applies post-install through GRUB, which a live-ISO QEMU boot never exercises). The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below |
+| Replace WhiteSur's Apple branding: Kickoff launcher icon, SDDM login screen, Plasma login→desktop splash | User request ("remove apple and add some other logo") | **Kickoff icon: done and verified live in QEMU** — the top-left launcher icon is now the forge-os badge, confirmed by cropping and looking directly at it. **SDDM login background/logo and the Plasma splash screen: config applied via the identical proven mechanism, but not visually confirmed** — the live medium autologins straight past SDDM's screen, and the Plasma splash is too brief to reliably catch in a screenshot. Both need a real install (autologin off) or a manual logout to actually see |
 | NetworkManager VPN plugins (OpenVPN, vpnc, OpenConnect, WireGuard) | User request ("do we have network driver/software") | Done — NetworkManager/plasma-nm/iwd/wpa_supplicant/bluez were already present, but without these the Plasma network applet had no way to actually configure a VPN. WireGuard needs no plugin, NM has supported it natively since 1.16 |
 | Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Partially fixed.** The panel itself still renders full-width — `panelLengthMode`/`alignment` in `[PlasmaViews][Panel 10]` did not make it compact despite three attempts, each reasoned from progressively more authoritative KDE source (see below). What *does* work, confirmed by cropping and directly comparing left/right halves of a QEMU screenshot: flanking `panelspacer` applets around `icontasks` moved the icon cluster from crammed-at-the-left (~x=15-290 on a 1280px-wide screen) to roughly centered (~x=560-800). Real improvement over the original complaint, not the fully compact dock that was the actual goal. |
 
@@ -191,29 +192,35 @@ dock-centering problem below), or whether `LookAndFeelPackage=com.github.vinceli
 in `kdeglobals` is causing WhiteSur's own wallpaper default to get
 re-applied over this on every login rather than only on first login.
 
-**Plymouth and GRUB background couldn't be verified this session.** Both
-only render during a real UEFI/BIOS boot through GRUB and an initramfs —
-the live-ISO QEMU boot path used throughout this session doesn't exercise
-either (the live medium boots via systemd-boot straight into the squashfs,
-never touching GRUB or the installed-system initramfs `forge-postinstall.sh`
-regenerates). Confirmed on paper, not on screen:
-- `GRUB_BACKGROUND` in `airootfs/etc/default/grub` points at
-  `/usr/share/backgrounds/forge-os/wallpaper.png`, which does exist in the
-  shipped system (`airootfs/usr/share/backgrounds/forge-os/`).
-- The Plymouth theme (`airootfs/usr/share/plymouth/themes/forge-os/`) is a
-  minimal, low-risk script (centered logo, pulsing opacity, no dynamic
-  progress bar) — Plymouth is designed to fail gracefully to a text
-  fallback rather than block boot if a theme script errors, but the
-  script's actual correctness (right function names, right image
-  scaling) is unverified.
-- `forge-postinstall.sh` adds `plymouth` to `HOOKS` and calls
-  `plymouth-set-default-theme forge-os` before regenerating the
-  initramfs — this only runs during a real Calamares install, which
-  wasn't performed this session (see the QEMU mouse-input limitation
-  above — no attached disk, and no working way to click through the
-  installer blind).
-- **Before trusting either**: do a real (or virtual-machine-with-a-disk)
-  install through Calamares and watch it boot.
+**Plymouth boot splash: verified working on the live medium; GRUB
+background still isn't.** Initially both were assumed untestable without
+a real disk boot, but that was wrong for Plymouth specifically — the live
+ISO boots through its own initramfs (systemd-boot/syslinux, not GRUB), so
+enabling Plymouth there was both possible and worth doing:
+- Added the `plymouth` hook to `airootfs/etc/mkinitcpio.conf.d/archiso.conf`
+  (right after `udev`, matching the ArchWiki-recommended order) and `quiet
+  splash nvidia-drm.modeset=1` to both live boot entries (`syslinux` and
+  `systemd-boot`).
+- `plymouthd.conf` can't be pre-seeded via the airootfs overlay (the
+  `plymouth` package owns that path — another `grml-zsh-config`-class
+  conflict), so `customize_airootfs.sh` calls `plymouth-set-default-theme
+  forge-os` + `mkinitcpio -P` there instead, same pattern
+  `forge-postinstall.sh` already used for the installed system. This runs
+  *before* mkarchiso copies `/boot` out of the airootfs, so the
+  regenerated initramfs is what actually ships.
+- Added a real progress bar to the theme script (`progress_box.png`/
+  `progress_bar.png`, generated with ImageMagick, `Scale()`d by
+  `progress_callback` — same pattern as Arch's own stock "script" theme).
+- **Confirmed live in QEMU**: boots straight to the forge-os logo with a
+  visibly filling progress bar, completely replacing the scrolling
+  systemd unit list.
+
+GRUB background remains unverified — it only applies post-install through
+GRUB, which a live-ISO boot never touches. `GRUB_BACKGROUND` in
+`airootfs/etc/default/grub` points at
+`/usr/share/backgrounds/forge-os/wallpaper.png`, which does exist in the
+shipped system, but confirming it actually renders still needs a real (or
+virtual-machine-with-a-disk) install through Calamares.
 
 **Gamescope session is installed but never actually launched.** Adding
 `gamescope-session-git` + `gamescope-session-steam-git` should make
@@ -221,6 +228,36 @@ regenerates). Confirmed on paper, not on screen:
 selected and booted into during this session (the same blind-mouse-input
 problem — selecting a non-default session in SDDM needs a working click,
 see above). Confirm it actually appears and starts before relying on it.
+
+**Replacing WhiteSur's Apple branding: found by grepping the actual
+package contents, not guessing.** Kickoff's launcher icon turned out not
+to be a per-applet setting at all — its `metadata.json` just declares
+`Icon: start-here-kde`, a standard XDG icon name resolved through
+whatever icon theme is active (WhiteSur-dark). Confirmed by listing
+`whitesur-icon-theme`'s actual package contents (`tar -tf` the built
+`.pkg.tar.zst`) rather than guessing: it ships `start-here-kde.svg` (and
+several size/symbolic variants) styled as an Apple logo. Fix: overwrite
+every `start-here*.svg` under `WhiteSur-dark/places/*/` with our own logo
+wrapped in a trivial SVG (`<image>` element, PNG base64-embedded — needed
+because these are raster PNGs, not real SVGs, but the filenames are
+hardcoded with a `.svg` extension in the theme). Same technique reused for
+Plasma's splash screen (`Splash.qml` hardcodes `images/logo.svg`) and
+SDDM's login screen, the latter via `theme.conf.user` — WhiteSur-dark's
+own sanctioned override file (confirmed by reading `Main.qml`'s
+`config.background`/`config.logo` bindings back to `theme.conf`), so no
+package file needed overwriting there at all, just a background/logo path
+override. All three overwrites happen in `customize_airootfs.sh`
+(post-install, since these are pacman-owned paths — pre-seeding them via
+the airootfs overlay would hit the same file-conflict error
+`grml-zsh-config` did).
+
+Watch for one `set -e` trap that would have been easy to ship broken: a
+bare `[[ -f "$f" ]] && cp ...` as a **standalone statement** (not inside
+an `if`) aborts the whole script under `set -e` the moment the test is
+false — which, for a `for f in *.svg` loop, means the very first
+non-matching glob expansion kills `customize_airootfs.sh` entirely, with
+no error message pointing at why. Rewritten as `if [[ -f "$f" ]]; then
+cp ...; fi`, which `set -e` does not treat the same way.
 
 ## Deferred (not built this session)
 
