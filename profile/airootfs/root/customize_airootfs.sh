@@ -50,15 +50,26 @@ mkinitcpio -P || true
 # package-owned files (whitesur-icon-theme / whitesur-kde-theme), so they
 # get overwritten here post-install rather than shipped via the airootfs
 # overlay (which would hit the same kind of file-conflict pacman error).
-# Wrapping the PNG in a trivial SVG (an <image> element with the PNG
+# Two source images are used, matched to context: the small square Kickoff
+# icon uses just the flame/anvil emblem (no wordmark — illegible that small),
+# while the Plasma splash and SDDM logo, both shown at a larger size, use the
+# full logo with the "FORGE OS" wordmark (same source as the boot splash).
+# Wrapping each PNG in a trivial SVG (an <image> element with the PNG
 # base64-embedded) is needed because several of these are referenced by
 # a hardcoded ".svg" filename.
-FORGE_LOGO_SVG=/tmp/forge-logo.svg
+KICKOFF_ICON_SVG=/tmp/forge-kickoff-icon.svg
 {
-    printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="340" height="330" viewBox="0 0 340 330"><image width="340" height="330" xlink:href="data:image/png;base64,'
-    base64 -w0 /usr/share/pixmaps/forge-os-logo.png
+    printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="512" height="512" viewBox="0 0 512 512"><image width="512" height="512" xlink:href="data:image/png;base64,'
+    base64 -w0 /usr/share/pixmaps/forge-os-kickoff-icon.png
     printf '"/></svg>'
-} > "${FORGE_LOGO_SVG}"
+} > "${KICKOFF_ICON_SVG}"
+
+SPLASH_LOGO_SVG=/tmp/forge-splash-logo.svg
+{
+    printf '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="700" height="708" viewBox="0 0 700 708"><image width="700" height="708" xlink:href="data:image/png;base64,'
+    base64 -w0 /usr/share/pixmaps/forge-os-sddm-logo.png
+    printf '"/></svg>'
+} > "${SPLASH_LOGO_SVG}"
 
 # Kickoff's launcher icon comes from the icon theme's "start-here*" icons,
 # not a per-applet setting, so replace every "start-here" variant WhiteSur
@@ -66,7 +77,7 @@ FORGE_LOGO_SVG=/tmp/forge-logo.svg
 for f in /usr/share/icons/WhiteSur-dark/places/*/start-here*.svg \
          /usr/share/icons/WhiteSur-dark/status/symbolic/start-here-symbolic.svg; do
     if [[ -f "${f}" ]]; then
-        cp "${FORGE_LOGO_SVG}" "${f}"
+        cp "${KICKOFF_ICON_SVG}" "${f}"
     fi
 done
 
@@ -74,7 +85,7 @@ done
 # appearing) — Splash.qml hardcodes "images/logo.svg".
 splash_logo=/usr/share/plasma/look-and-feel/com.github.vinceliuice.WhiteSur-dark/contents/splash/images/logo.svg
 if [[ -f "${splash_logo}" ]]; then
-    cp "${FORGE_LOGO_SVG}" "${splash_logo}"
+    cp "${SPLASH_LOGO_SVG}" "${splash_logo}"
 fi
 
 # SDDM login screen: theme.conf.user is WhiteSur-dark's own designated
@@ -85,7 +96,7 @@ cat > /usr/share/sddm/themes/WhiteSur-dark/theme.conf.user <<'EOF'
 type=image
 background=/usr/share/backgrounds/forge-os/wallpaper.png
 showlogo=shown
-logo=/usr/share/pixmaps/forge-os-logo.png
+logo=/usr/share/pixmaps/forge-os-sddm-logo.png
 EOF
 
-rm -f "${FORGE_LOGO_SVG}"
+rm -f "${KICKOFF_ICON_SVG}" "${SPLASH_LOGO_SVG}"

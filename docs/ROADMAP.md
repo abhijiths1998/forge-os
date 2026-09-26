@@ -21,7 +21,7 @@
 | macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
 | zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
 | Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding is done (same mechanism as the already-verified slideshow/theme config). **Plymouth boot splash (logo + live progress bar) is done and verified live in QEMU** — replaces the scrolling systemd unit list entirely on the live medium. GRUB background is still unverified (only applies post-install through GRUB, which a live-ISO QEMU boot never exercises). The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below |
-| Replace WhiteSur's Apple branding: Kickoff launcher icon, SDDM login screen, Plasma login→desktop splash | User request ("remove apple and add some other logo") | **Kickoff icon: done and verified live in QEMU** — the top-left launcher icon is now the forge-os badge, confirmed by cropping and looking directly at it. **SDDM login background/logo and the Plasma splash screen: config applied via the identical proven mechanism, but not visually confirmed** — the live medium autologins straight past SDDM's screen, and the Plasma splash is too brief to reliably catch in a screenshot. Both need a real install (autologin off) or a manual logout to actually see |
+| Replace WhiteSur's Apple branding: Kickoff launcher icon, SDDM login screen, Plasma login→desktop splash | User request ("remove apple and add some other logo"), later refined to use the second (transparent, flame/anvil) logo everywhere ("current one looks out of place") | **Kickoff icon: done and re-verified live in QEMU** with the new transparent logo — the top-left launcher icon now shows the flame/anvil emblem cleanly, confirmed by cropping and looking directly at it. **SDDM login logo and the Plasma splash screen: updated to the new logo via the identical proven mechanism, but still not visually confirmed** — the live medium autologins straight past SDDM's screen, and the Plasma splash is too brief to reliably catch in a screenshot. Both need a real install (autologin off) or a manual logout to actually see. See "Two logo variants, matched to context" below for why Kickoff and SDDM don't use the identical source image |
 | NetworkManager VPN plugins (OpenVPN, vpnc, OpenConnect, WireGuard) | User request ("do we have network driver/software") | Done — NetworkManager/plasma-nm/iwd/wpa_supplicant/bluez were already present, but without these the Plasma network applet had no way to actually configure a VPN. WireGuard needs no plugin, NM has supported it natively since 1.16 |
 | Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Partially fixed.** The panel itself still renders full-width — `panelLengthMode`/`alignment` in `[PlasmaViews][Panel 10]` did not make it compact despite three attempts, each reasoned from progressively more authoritative KDE source (see below). What *does* work, confirmed by cropping and directly comparing left/right halves of a QEMU screenshot: flanking `panelspacer` applets around `icontasks` moved the icon cluster from crammed-at-the-left (~x=15-290 on a 1280px-wide screen) to roughly centered (~x=560-800). Real improvement over the original complaint, not the fully compact dock that was the actual goal. |
 
@@ -251,6 +251,30 @@ override. All three overwrites happen in `customize_airootfs.sh`
 the airootfs overlay would hit the same file-conflict error
 `grml-zsh-config` did).
 
+**Two logo variants, matched to context, both derived from the same
+transparent source (`branding-source/forge-os-logo-transparent.png`).**
+The user provided a second, better logo (flame/anvil "F" emblem + "FORGE OS"
+wordmark, transparent background) and asked for it to replace the boot
+splash first, then later the SDDM login logo and the Kickoff icon too
+("current one looks out of place"). The boot splash (`plymouth/themes/
+forge-os/logo.png`) uses the full logo with the wordmark, resized — it
+has enough room and confirmed cleanly. For Kickoff and SDDM, using the
+same full logo verbatim would be wrong for one of the two: Kickoff's icon
+renders as small as 16-24px, where the "FORGE OS" text underneath the mark
+is illegible and just adds visual noise. Found the emblem/wordmark split
+point programmatically (summing non-transparent pixels per row with
+Pillow found a clean ~20px all-transparent gap at y=1040 in the trimmed
+1189x1202 source) and cropped there:
+- `forge-os-kickoff-icon.png` (512x512, emblem only, padded to square) —
+  used for the Kickoff `start-here*.svg` overrides.
+- `forge-os-sddm-logo.png` (700x708, full logo with wordmark) — used for
+  SDDM's `theme.conf.user` `logo=` path, since SDDM shows it at a large
+  enough size for the wordmark to read fine, same as the boot splash.
+
+The old square badge-crop (`forge-os-logo.png`, a crop of the *first*
+logo image with an opaque dark background) is no longer referenced
+anywhere and was deleted from `airootfs/usr/share/pixmaps/`.
+
 Watch for one `set -e` trap that would have been easy to ship broken: a
 bare `[[ -f "$f" ]] && cp ...` as a **standalone statement** (not inside
 an `if`) aborts the whole script under `set -e` the moment the test is
@@ -293,12 +317,12 @@ cp ...; fi`, which `set -e` does not treat the same way.
 
 Logo, desktop wallpaper, GRUB background, and a Plymouth boot theme are
 now in place (see the feature table and the verification caveats above).
-Still open: SDDM's login background still uses stock WhiteSur artwork
-rather than forge-os branding (WhiteSur's SDDM theme structure wasn't
-investigated for a clean override point this session), and an
-EndeavourOS-style Welcome app for post-install choices (Flathub opt-in,
-NVIDIA re-check, optional extra codecs/DEs) is still just Plasma's generic
-`plasma-welcome`.
+SDDM's login background and logo are now set to forge-os branding via
+`theme.conf.user`, applied but not yet visually confirmed (autologin
+skips the screen on the live medium — needs a real install with autologin
+off, or a manual logout). Still open: an EndeavourOS-style Welcome app for
+post-install choices (Flathub opt-in, NVIDIA re-check, optional extra
+codecs/DEs) is still just Plasma's generic `plasma-welcome`.
 
 ## Phase 3 — Own package repo
 
