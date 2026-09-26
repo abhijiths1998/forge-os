@@ -133,6 +133,13 @@ gpgconf --homedir /etc/pacman.d/gnupg --kill all 2>/dev/null || true
 # no repo databases: Pamac shows nothing and `pacman -S` fails until the
 # user thinks to run `pacman -Sy`. Best-effort, since an offline install
 # should still finish.
+# /etc/resolv.conf links into /run/systemd/resolve, but Calamares mounts an
+# empty tmpfs on the target's /run, so nothing resolved and this silently
+# failed. The chroot shares the live system's network namespace, so its
+# resolved stub still answers; the file vanishes with that tmpfs.
+if [[ ! -e /etc/resolv.conf ]]; then
+    install -Dm644 /dev/stdin /run/systemd/resolve/stub-resolv.conf <<<'nameserver 127.0.0.53'
+fi
 pacman -Sy --noconfirm || true
 
 # NOPASSWD sudo was a live-session convenience; require a password for real.
@@ -143,6 +150,16 @@ chmod 0440 /etc/sudoers.d/g_wheel
 
 # Live-session-only autologin.
 rm -f /etc/sddm.conf.d/autologin.conf
+
+# With no remembered session SDDM preselects the first one alphabetically,
+# gamescope-session-steam.desktop, so a new install's first login went to
+# Steam Big Picture: a black screen or login loop with Steam not yet set
+# up, and SDDM then remembered it for every login after. Preselect Plasma;
+# SDDM still remembers whatever the user picks from then on.
+install -Dm644 /dev/stdin /var/lib/sddm/state.conf <<'EOF'
+[Last]
+Session=/usr/share/wayland-sessions/plasma.desktop
+EOF
 
 # archiso's "To install Arch Linux follow the installation guide" banner.
 # pam_motd shows it on every login, SDDM included (it lands in the journal

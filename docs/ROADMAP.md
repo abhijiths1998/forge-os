@@ -360,17 +360,26 @@ and 222–327MiB initramfs images overflowing the ESP (now 512MiB minimum,
   `installEFIFallback: true`, so `EFI/BOOT/BOOTX64.EFI` is written by the
   same install as the NVRAM entry. Check both entries boot, e.g. by picking
   the disk itself (not "forge-os") from the firmware boot menu.
-- **Plasma (Wayland) black screen / login loop after SDDM login.** Gamescope
-  logged in fine; Plasma is the only other session (there's no X11 one).
-  Root cause unknown: the journal was volatile then, so nothing survived.
-  After the initramfs changes (no forced NVIDIA modules, no `kms` hook),
-  Plasma Wayland logs in normally on that same machine. The journal is
-  persistent on new installs, so if it recurs, check `journalctl -b -1`
-  and `~/.local/share/sddm/wayland-session.log` straight away.
+- **Black screen / login loop after SDDM login: likely explained.** A QEMU
+  install from the rebuilt ISO showed SDDM preselects "Steam Big Picture"
+  (`gamescope-session-steam.desktop` sorts before `plasma.desktop`) on a
+  fresh install, and remembers it after a failed login, so every retry
+  loops. In QEMU gamescope aborts for lack of Vulkan; on real hardware Steam
+  isn't set up yet for a new user either. `forge-postinstall.sh` now
+  preselects Plasma via `/var/lib/sddm/state.conf`, and Plasma logs in
+  fine that way. Still to confirm on the laptop: that a fresh install goes
+  straight to Plasma, and whether the Steam session works once Steam has
+  been set up from Plasma.
 - **Encrypted and LVM installs.** `forge-postinstall.sh` now adds the
   `encrypt`/`lvm2` hooks and `cryptdevice=` itself; never tested.
 - **snapper.** `snapper create-config /` refuses to run when `/.snapshots`
   already exists, and mount.conf always creates it as `@snapshots`. The
   `|| true` hid that: the first install has no snapper config at all.
-  `forge-postinstall.sh` now writes the config directly; check
-  `snapper list-configs` shows `root`.
+  `forge-postinstall.sh` now writes the config directly; verified in QEMU
+  (`snapper list-configs` shows `root`).
+- **Verified in QEMU (2026-09-26)**: install with `copytoram=y` forced
+  (unpackfs OK), try_remove, kernels + 15MiB initramfs images on a 1GiB ESP
+  (81MiB used), `EFI/boot/bootx64.efi` fallback written, GRUB boots the
+  installed disk, no failed units, TTY login works. Also found and fixed
+  there: `pacman -Sy` in the post-install chroot couldn't resolve DNS, so
+  installs shipped with no repo databases.
