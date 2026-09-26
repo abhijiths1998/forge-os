@@ -50,10 +50,15 @@ package set, so it's slow. A persistent Docker volume
 ## Testing the ISO
 
 ```sh
-qemu-system-x86_64 -enable-kvm -m 4G -smp 4 \
-    -bios /usr/share/OVMF/OVMF_CODE.fd \
-    -cdrom out/forge-os-*.iso
+build/run-qemu.sh live      # boot the newest out/*.iso (UEFI + KVM)
+build/run-qemu.sh install   # same, with a 60G test disk attached for Calamares
+build/run-qemu.sh disk      # boot the installed test disk
+build/run-qemu.sh reset     # wipe the test disk and its UEFI vars
 ```
+
+Needs `qemu-full` (or `qemu-desktop`) and `edk2-ovmf`. The test disk lives
+in `vm/` (gitignored); `MEM`, `CPUS` and `DISK_SIZE` env vars override the
+defaults.
 
 NVIDIA driver behavior, the gamescope session, and secure boot can't be
 verified this way — they need real hardware.

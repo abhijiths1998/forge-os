@@ -345,3 +345,32 @@ push.
 - NVIDIA driver behavior, gamescope session, secure boot, snapper rollback:
   **not verified** — all need real hardware or a real install run, not just
   a build or a QEMU boot.
+
+### First real install (2026-09-26): what broke, and what's still open
+
+The first install to real hardware (Lenovo laptop, RTX 3050, NVIDIA-only
+display) hit ten problems. Fixed in the profile: unpackfs losing its source
+under copytoram, `pacman -Rs` aborting on an uninstalled package, an empty
+`/boot`, the archiso-only `linux.preset`, `mkinitcpio -P || true` hiding
+failures, GRUB unable to read kernels off btrfs (`/boot` is now the ESP),
+and 222–327MiB initramfs images overflowing the ESP (now 512MiB minimum,
+1GiB recommended). Still to check on a fresh install from the rebuilt ISO:
+
+- **grub rescue from the fallback path.** `bootloader.conf` now sets
+  `installEFIFallback: true`, so `EFI/BOOT/BOOTX64.EFI` is written by the
+  same install as the NVRAM entry. Check both entries boot, e.g. by picking
+  the disk itself (not "forge-os") from the firmware boot menu.
+- **Plasma (Wayland) black screen / login loop after SDDM login.** Gamescope
+  logged in fine; Plasma is the only other session (there's no X11 one).
+  Root cause unknown: the journal was volatile then, so nothing survived.
+  After the initramfs changes (no forced NVIDIA modules, no `kms` hook),
+  Plasma Wayland logs in normally on that same machine. The journal is
+  persistent on new installs, so if it recurs, check `journalctl -b -1`
+  and `~/.local/share/sddm/wayland-session.log` straight away.
+- **Encrypted and LVM installs.** `forge-postinstall.sh` now adds the
+  `encrypt`/`lvm2` hooks and `cryptdevice=` itself; never tested.
+- **snapper.** `snapper create-config /` refuses to run when `/.snapshots`
+  already exists, and mount.conf always creates it as `@snapshots`. The
+  `|| true` hid that: the first install has no snapper config at all.
+  `forge-postinstall.sh` now writes the config directly; check
+  `snapper list-configs` shows `root`.
