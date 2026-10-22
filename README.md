@@ -5,6 +5,23 @@ ideas from CachyOS, Nobara, Garuda, Bazzite, and EndeavourOS instead of
 copying any one of them. See `docs/ROADMAP.md` for the feature rationale and
 what's still ahead.
 
+## The look: Forge Glass
+
+A calm pastel "liquid glass" desktop on KDE Plasma 6: a slim floating top
+bar, a compact floating dock, frosted glass windows, menus, panels and
+terminal, Plus Jakarta Sans type, and a light and a dark variant. Press **Super+Space** for the command bar. In a terminal:
+
+```sh
+forge install obs-studio   # repos, Chaotic-AUR, AUR (via pamac)
+forge update               # packages + Flatpaks
+forge theme dark           # or light; no argument toggles
+forge tile on              # auto-tiling (Polonium)
+```
+
+The artwork is generated: `branding-source/glass/generate.py` (wallpapers,
+logo, boot assets) and `colors.py` (colour schemes), then `install.sh`
+copies them into the profile. See `docs/ROADMAP.md` → "Forge Glass revamp".
+
 ## Post-install script (faster path, no ISO)
 
 If a full custom ISO is more than you need right now, `post-install/setup.sh`

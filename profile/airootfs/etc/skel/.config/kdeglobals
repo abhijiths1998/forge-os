@@ -1,9 +1,16 @@
-[General]
-ColorScheme=WhiteSurDark
-Name=WhiteSurDark
-
-[Icons]
-Theme=WhiteSur-dark
-
+# Colours, icons, cursor, wallpaper, window decoration and splash all come
+# from the look-and-feel package below: startplasma copies its defaults into
+# ~/.config/kdedefaults on first login. Fonts aren't part of a look-and-feel
+# package, so they're set here.
 [KDE]
-LookAndFeelPackage=com.github.vinceliuice.WhiteSur-dark
+LookAndFeelPackage=org.forgeos.glass
+
+[General]
+font=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Plus Jakarta Sans,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[WM]
+activeFont=Plus Jakarta Sans,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1

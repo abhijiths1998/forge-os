@@ -1,0 +1,27 @@
+# Darkly: the widget style and window decoration (set in the
+# org.forgeos.glass look-and-feel package). Windows go translucent because
+# the ForgeGlass colour schemes give their backgrounds alpha; KWin's Glass
+# effect does the frosting. CornerRadius matches the window corners in
+# kwinrc ([Round-Corners] / [Effect-blurplus]).
+[Common]
+CornerRadius=10
+ShadowSize=ShadowVeryLarge
+ShadowStrength=90
+
+[Style]
+MenuOpacity=70
+MenuBarOpacity=60
+ToolBarOpacity=60
+TabBarOpacity=60
+DolphinSidebarOpacity=55
+UnifiedTabBarKonsole=true
+TabBarAltStyle=true
+
+# OtherCornerRadius is in units of the decoration's small spacing (2px at
+# 1x scale): 7 -> 14px, the window corner radius in kwinrc.
+[Windeco]
+OtherCornerRadius=7
+TitleAlignment=AlignCenterFullWidth
+DrawTitleBarSeparator=false
+BlurTransparentTitleBar=true
+DrawBorderOnMaximizedWindows=false

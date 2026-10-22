@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# forge-glass-check: run at Plasma login (etc/xdg/autostart). If KWin
+# couldn't load the Glass effect, fall back to the stock blur for this
+# session, so translucent windows are still frosted rather than clear.
+#
+# Glass must be built against the exact running KWin version; after a KWin
+# update it fails to load until kwin-effects-glass is rebuilt to match
+# (KWin logs: Effect "glass" was built for a different version of KWin).
+# Nothing is written to kwinrc: the next login tries Glass again.
+set -uo pipefail
+
+effects() { qdbus6 org.kde.KWin /Effects "org.kde.kwin.Effects.$1" "${@:2}"; }
+
+# KWin loads effects shortly after the session starts.
+for _ in {1..20}; do
+    effects isEffectLoaded glass >/dev/null 2>&1 && break
+    sleep 0.5
+done
+
+[[ "$(effects isEffectLoaded glass 2>/dev/null)" == true ]] && exit 0
+[[ "$(effects loadEffect glass 2>/dev/null)" == true ]] && exit 0
+
+effects loadEffect blur >/dev/null
+echo "forge-glass-check: Glass effect unavailable, using the stock blur" >&2

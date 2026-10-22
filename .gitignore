@@ -3,3 +3,5 @@
 /vm/
 build.log
 image.log
+/branding-source/glass/out/
+__pycache__/

@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+# forge: one command for the everyday stuff on forge-os.
+#
+#   forge install <pkg...>    repo, Chaotic-AUR and AUR packages (via pamac)
+#   forge remove <pkg...>
+#   forge update              system packages + Flatpaks
+#   forge search <query>
+#   forge theme [light|dark]  switch Forge Glass light/dark (toggles if omitted)
+#   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
+#   forge about
+set -uo pipefail
+
+# Forge Glass palette, truecolour.
+c() { printf '\e[38;2;%sm' "$1"; }
+PERI="$(c '138;155;247')" GREEN="$(c '143;211;168')" ROSE="$(c '242;139;155')"
+GREY="$(c '139;144;176')" LILAC="$(c '195;183;238')" BOLD=$'\e[1m' OFF=$'\e[0m'
+
+say()  { printf '%s%s%s %s\n' "${PERI}" "forge" "${OFF}" "$*"; }
+ok()   { printf '%s✓%s %s\n' "${GREEN}" "${OFF}" "$*"; }
+fail() { printf '%s✗%s %s\n' "${ROSE}" "${OFF}" "$*" >&2; exit 1; }
+
+# Run a command and report how long it took, the way the rest of forge does.
+timed() { # verb cmd...
+    local verb="$1"; shift
+    local t0=${EPOCHREALTIME/[.,]/} t1 tenths
+    "$@" || fail "${verb} failed"
+    t1=${EPOCHREALTIME/[.,]/}
+    tenths=$(( (t1 - t0) / 100000 ))
+    ok "${verb} in $(( tenths / 10 )).$(( tenths % 10 )) s"
+}
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+pkg() { # pamac verb, pacman fallback args...
+    local verb="$1"; shift
+    if have pamac; then
+        pamac "${verb}" "$@"
+    else
+        case "${verb}" in
+            install) sudo pacman -S --needed "$@" ;;
+            remove)  sudo pacman -Rns "$@" ;;
+            upgrade) sudo pacman -Syu ;;
+            search)  pacman -Ss "$@" ;;
+        esac
+    fi
+}
+
+kwin_reconfigure() {
+    local q
+    for q in qdbus6 qdbus; do
+        if have "${q}"; then "${q}" org.kde.KWin /KWin reconfigure >/dev/null 2>&1; return; fi
+    done
+}
+
+usage() {
+    cat <<EOF
+${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
+
+  ${PERI}install${OFF} <pkg...>    install packages ${GREY}(repos, Chaotic-AUR, AUR)${OFF}
+  ${PERI}remove${OFF} <pkg...>     remove packages
+  ${PERI}update${OFF}              update everything ${GREY}(packages + Flatpaks)${OFF}
+  ${PERI}search${OFF} <query>      find packages
+  ${PERI}theme${OFF} [light|dark]  switch the Forge Glass look
+  ${PERI}tile${OFF} [on|off]       auto-tiling windows
+  ${PERI}about${OFF}               this system, briefly
+EOF
+}
+
+cmd="${1:-help}"; shift || true
+case "${cmd}" in
+    install|add|i)
+        [[ $# -gt 0 ]] || fail "install what? e.g. ${PERI}forge install obs-studio${OFF}"
+        say "install ${LILAC}$*${OFF}"
+        timed installed pkg install "$@"
+        ;;
+    remove|rm|uninstall)
+        [[ $# -gt 0 ]] || fail "remove what?"
+        say "remove ${LILAC}$*${OFF}"
+        timed removed pkg remove "$@"
+        ;;
+    update|upgrade|up)
+        say "update"
+        timed "packages updated" pkg upgrade
+        if have flatpak && [[ -n "$(flatpak list --app 2>/dev/null)" ]]; then
+            timed "flatpaks updated" flatpak update -y
+        fi
+        ;;
+    search|s)
+        [[ $# -gt 0 ]] || fail "search for what?"
+        pkg search "$@"
+        ;;
+    theme)
+        have plasma-apply-lookandfeel || fail "needs a Plasma session"
+        current="$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null)"
+        want="${1:-}"
+        if [[ -z "${want}" ]]; then
+            [[ "${current}" == "org.forgeos.glass.dark" ]] && want=light || want=dark
+        fi
+        case "${want}" in
+            light) lnf=org.forgeos.glass ;;
+            dark)  lnf=org.forgeos.glass.dark ;;
+            *) fail "theme is ${PERI}light${OFF} or ${PERI}dark${OFF}" ;;
+        esac
+        plasma-apply-lookandfeel -a "${lnf}" >/dev/null || fail "couldn't apply ${lnf}"
+        ok "Forge Glass ${want}"
+        ;;
+    tile)
+        have kwriteconfig6 || fail "needs a Plasma session"
+        current="$(kreadconfig6 --file kwinrc --group Plugins --key poloniumEnabled --default false)"
+        want="${1:-}"
+        if [[ -z "${want}" ]]; then
+            [[ "${current}" == "true" ]] && want=off || want=on
+        fi
+        case "${want}" in
+            on)  kwriteconfig6 --file kwinrc --group Plugins --key poloniumEnabled true ;;
+            off) kwriteconfig6 --file kwinrc --group Plugins --key poloniumEnabled false ;;
+            *) fail "tile is ${PERI}on${OFF} or ${PERI}off${OFF}" ;;
+        esac
+        kwin_reconfigure
+        ok "tiling ${want}"
+        ;;
+    about|info)
+        printf '%sForge%s %sOS%s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \
+            "${GREY}" "$(uname -r)" "$(uname -m)" "${XDG_CURRENT_DESKTOP:-tty}" "${OFF}"
+        printf '%sBuilt hot. Runs cool.%s\n' "${LILAC}" "${OFF}"
+        ;;
+    help|-h|--help) usage ;;
+    *) usage; exit 1 ;;
+esac

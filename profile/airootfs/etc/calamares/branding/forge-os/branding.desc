@@ -32,10 +32,10 @@ images:
     productWelcome:      "forge-os-wallpaper.png"
 
 style:
-   SidebarBackground:        "#1B2430"
-   SidebarText:              "#FFFFFF"
-   SidebarTextCurrent:       "#1B2430"
-   SidebarBackgroundCurrent: "#E8752C"
+   SidebarBackground:        "#F3F2FA"
+   SidebarText:              "#1E2140"
+   SidebarTextCurrent:       "#FFFFFF"
+   SidebarBackgroundCurrent: "#6C7CF0"
 
 slideshow:               "show.qml"
 slideshowAPI: 2

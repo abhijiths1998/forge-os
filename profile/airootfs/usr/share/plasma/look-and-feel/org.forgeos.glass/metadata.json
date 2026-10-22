@@ -1,0 +1,13 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [ { "Name": "forge-os" } ],
+        "Description": "Calm pastel glass: forge-os's default look",
+        "Id": "org.forgeos.glass",
+        "License": "GPLv2+",
+        "Name": "Forge Glass",
+        "Version": "1.0"
+    },
+    "Keywords": "Desktop;Workspace;Appearance;Look and Feel;Glass;forge-os;",
+    "X-Plasma-APIVersion": "2"
+}

@@ -2,8 +2,15 @@
 # (/usr/share/plymouth/themes/script/script.script) — manual angle
 # accumulation per refresh call (not a time-lookup API) for the logo pulse,
 # and the same progress_box/progress_bar Scale() approach for the loading bar.
-Window.SetBackgroundTopColor(0.106, 0.141, 0.188);
-Window.SetBackgroundBottomColor(0.106, 0.141, 0.188);
+# Forge Glass: the light wallpaper behind everything, with the pastel
+# top/bottom colours as a fallback while it loads.
+Window.SetBackgroundTopColor(0.80, 0.85, 0.96);
+Window.SetBackgroundBottomColor(0.93, 0.87, 0.90);
+
+bg.image = Image("background.png");
+bg.image = bg.image.Scale(Window.GetWidth(), Window.GetHeight());
+bg.sprite = Sprite(bg.image);
+bg.sprite.SetPosition(Window.GetX(), Window.GetY(), -10);
 
 logo.image = Image("logo.png");
 logo.sprite = Sprite(logo.image);
@@ -13,7 +20,7 @@ logo.opacity_angle = 0;
 
 fun refresh_callback() {
     logo.opacity_angle += ((2 * 3.14) / 50) * 0.5;
-    min_opacity = 0.5;
+    min_opacity = 0.75;
     opacity = (Math.Cos(logo.opacity_angle) + 1) / 2;
     opacity *= 1 - min_opacity;
     opacity += min_opacity;

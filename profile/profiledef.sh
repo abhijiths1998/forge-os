@@ -24,4 +24,6 @@ file_permissions=(
   ["/usr/local/bin/livecd-sound"]="0:0:755"
   ["/etc/sudoers.d/g_wheel"]="0:0:440"
   ["/usr/local/bin/forge-postinstall.sh"]="0:0:755"
+  ["/usr/local/bin/forge"]="0:0:755"
+  ["/usr/local/bin/forge-glass-check"]="0:0:755"
 )

@@ -18,12 +18,69 @@
 | BORE-scheduler kernel, x86-64-v3 packages | CachyOS | Deferred (see below) |
 | Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Done, **not yet verified** — `gamescope-session-git` + `gamescope-session-steam-git` (Chaotic-AUR, built by Garuda's own packager) add a "Gamescope Session" entry to SDDM's session dropdown. Never actually selected it and booted into it in this session |
 | EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) — Plasma's own generic `plasma-welcome` already runs on first login, but isn't forge-os-specific content |
-| macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
-| zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
+| ~~macOS-style default look (WhiteSur)~~ → **Forge Glass** (pastel liquid-glass look: own look-and-feel package, colour schemes, wallpaper, SDDM theme, splash, Plymouth; Plus Jakarta Sans type; floating top bar + compact centred dock; Super+Space command bar; rounded corners; optional auto-tiling) | User request (revamp after the "Nava OS 1.0" trailer's design language, with original assets) | See "Forge Glass revamp" below |
+| zsh default shell: Oh My Zsh (plugins only) + autosuggestions + syntax-highlighting + completions, Forge Glass prompt (`user ~/path branch ›`) | User request | Prompt replaced agnoster in the Forge Glass revamp; plugins unchanged |
 | Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding is done (same mechanism as the already-verified slideshow/theme config). **Plymouth boot splash (logo + live progress bar) is done and verified live in QEMU** — replaces the scrolling systemd unit list entirely on the live medium. GRUB background is still unverified (only applies post-install through GRUB, which a live-ISO QEMU boot never exercises). The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below |
 | Replace WhiteSur's Apple branding: Kickoff launcher icon, SDDM login screen, Plasma login→desktop splash | User request ("remove apple and add some other logo"), later refined to use the second (transparent, flame/anvil) logo everywhere ("current one looks out of place") | **Kickoff icon: done and re-verified live in QEMU** with the new transparent logo — the top-left launcher icon now shows the flame/anvil emblem cleanly, confirmed by cropping and looking directly at it. **SDDM login logo and the Plasma splash screen: updated to the new logo via the identical proven mechanism, but still not visually confirmed** — the live medium autologins straight past SDDM's screen, and the Plasma splash is too brief to reliably catch in a screenshot. Both need a real install (autologin off) or a manual logout to actually see. See "Two logo variants, matched to context" below for why Kickoff and SDDM don't use the identical source image |
 | NetworkManager VPN plugins (OpenVPN, vpnc, OpenConnect, WireGuard) | User request ("do we have network driver/software") | Done — NetworkManager/plasma-nm/iwd/wpa_supplicant/bluez were already present, but without these the Plasma network applet had no way to actually configure a VPN. WireGuard needs no plugin, NM has supported it natively since 1.16 |
-| Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Partially fixed.** The panel itself still renders full-width — `panelLengthMode`/`alignment` in `[PlasmaViews][Panel 10]` did not make it compact despite three attempts, each reasoned from progressively more authoritative KDE source (see below). What *does* work, confirmed by cropping and directly comparing left/right halves of a QEMU screenshot: flanking `panelspacer` applets around `icontasks` moved the icon cluster from crammed-at-the-left (~x=15-290 on a 1280px-wide screen) to roughly centered (~x=560-800). Real improvement over the original complaint, not the fully compact dock that was the actual goal. |
+| Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Fixed by the Forge Glass revamp**: the panel is now created by a look-and-feel `layout.js` through Plasma's scripting API (`lengthMode = "fit"`, `alignment = "center"`), not a hand-written appletsrc. See below |
+
+## Forge Glass revamp (2026-10-22)
+
+A full visual revamp modelled on the design language of the "Nava OS 1.0"
+trailer (youtube.com/watch?v=v2MOPr2SoD0): pastel "liquid glass", a slim
+top bar, a floating dock, a summoned command bar, a navy terminal, a
+one-word package tool, tiling and workspaces. Nava OS is someone else's
+project, so only the *language* is borrowed. Every asset is forge-os's own:
+the wallpaper is procedurally generated glass **flames** (not their
+mountains), the logo is our flame/anvil emblem re-rendered as a glass tile,
+and the tagline is ours ("Built hot. Runs cool.").
+
+| Trailer element | forge-os implementation |
+|---|---|
+| Pastel liquid glass | `ForgeGlassLight`/`ForgeGlassDark` colour schemes with translucent (alpha) backgrounds; Darkly widget style + window decoration, which turn those into translucent windows, titlebars and menus; `kwin-effects-glass` (replacing the stock blur/contrast) frosts everything translucent with blur, edge refraction and edge lighting; Konsole at 72% opacity; translucent floating panels; Plus Jakarta Sans (shipped in `/usr/share/fonts`, not packaged). GTK/Chromium apps (Brave, Steam, Pamac) stay opaque |
+| Glass wallpaper | `/usr/share/wallpapers/ForgeGlass` (light `images/` + dark `images_dark/`; Plasma picks by scheme) |
+| Top bar + dock | `org.forgeos.glass` look-and-feel `contents/layouts/org.kde.plasma.desktop-layout.js` |
+| Control center | Plasma system tray in the top bar |
+| Command bar | KRunner, `FreeFloating=true`, on Super+Space (`kglobalshortcutsrc`) |
+| Terminal + package tool | `ForgeGlass` Konsole scheme (translucent navy), zsh prompt, `/usr/local/bin/forge` (`install`/`remove`/`update`/`search`/`theme`/`tile`/`about`, on top of pamac) |
+| Tiling, workspaces | `kwin-polonium` (off by default; `forge tile on`), 3 desktops |
+| Lock/login | SDDM theme `forge-glass` (Qt 6: thin clock, `MultiEffect`-blurred glass card, session picker); lock screen uses the ForgeGlass wallpaper |
+| Splash, boot | `org.forgeos.glass` `Splash.qml`; Plymouth `forge-os` theme restyled; Calamares branding + slideshow |
+
+Light/dark: `org.forgeos.glass.dark` shares the layout and splash
+(symlinks) and only swaps scheme + icons. `forge theme dark` switches.
+
+**Assets are generated, not drawn.** `branding-source/glass/generate.py`
+renders the wallpapers, logo tile, emblem, Plymouth lockup and progress
+bar; `colors.py` writes the KDE and Konsole schemes from one palette;
+`install.sh` copies renders into `profile/airootfs`. Re-run all three after
+changing the look. `out/` is gitignored.
+
+**Why a look-and-feel package fixed the two old bugs.** plasmashell builds a
+new user's desktop by running `layouts/org.kde.plasma.desktop-layout.js`
+from the look-and-feel named in `kdeglobals`, and startplasma copies that
+package's `defaults` into `~/.config/kdedefaults` on first login (confirmed
+in this machine's `startplasma-wayland`/`libklookandfeel` strings). Our old
+skel appletsrc pre-empted the layout script, and WhiteSur's look-and-feel
+then won over the wallpaper we'd written. With the appletsrc gone, Plasma
+writes the panel geometry itself. Checked by running a fresh-user
+`plasmashell` in a headless nested `kwin_wayland --virtual`: the
+`plasmashellrc` it saved has the dock at `panelLengthMode=1`, `alignment=132`,
+`floating=1`, `panelOpacity=2`, and the desktop containment's wallpaper
+points at ForgeGlass.
+
+**Kept from before:** `whitesur-icon-theme` (its rounded-square icons fit
+the look; its Apple `start-here` icons are still replaced with our emblem in
+`customize_airootfs.sh`). **Dropped:** `whitesur-gtk-theme`,
+`whitesur-kde-theme`, `mcmojave-cursors-git`, `ttf-meslo-nerd`, and the
+WhiteSur splash/SDDM overrides in `customize_airootfs.sh`.
+
+**Build gotcha:** the WhiteSur `RUN` step in `build/Containerfile` used
+`pacman -S` on top of a weeks-old cached base layer and 404'd on moved
+packages; it now runs `pacman -Syu`.
+
+VM_RESULTS_PLACEHOLDER
 
 ## Things discovered while building this that changed the plan
 
@@ -85,6 +142,9 @@ Dolphin/Brave/Steam/Pamac/Konsole/System Settings pinned. This format is
 easy to get subtly wrong; **verify it actually renders correctly in a
 QEMU boot before trusting it**, and fix forward here if not. (It did,
 first try — confirmed live in QEMU.)
+
+*(Superseded by the Forge Glass revamp above: Plasma now creates the dock
+itself from a layout script. Kept as a record of what didn't work.)*
 
 **Dock centering took three attempts; the third is sourced from KDE's
 actual C++ source, in the right config location this time.**
@@ -168,6 +228,10 @@ pacman refuses to let a package overwrite one — `failed to commit
 transaction (conflicting files)`). Removed it from `packages.x86_64`
 outright, since it's a minimal rescue-shell config we don't need on a
 full desktop system anyway.
+
+*(Root cause found in the Forge Glass revamp above: the skel appletsrc
+skipped the look-and-feel layout script, and WhiteSur's look-and-feel
+defaults then won.)*
 
 **Desktop wallpaper never actually applied — tried twice, root cause not
 found.** `airootfs/usr/share/backgrounds/forge-os/wallpaper.png` exists in

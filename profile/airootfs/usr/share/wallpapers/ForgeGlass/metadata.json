@@ -1,0 +1,8 @@
+{
+    "KPlugin": {
+        "Authors": [ { "Name": "forge-os" } ],
+        "Id": "ForgeGlass",
+        "License": "CC-BY-SA-4.0",
+        "Name": "Forge Glass"
+    }
+}
