@@ -1,0 +1,5 @@
+#!/bin/sh
+# Suspend/hibernate can reset CPU and GPU clock limits; put the saved
+# forge-thermal profile back on resume.
+[ "$1" = post ] && /usr/local/bin/forge-thermal restore
+exit 0

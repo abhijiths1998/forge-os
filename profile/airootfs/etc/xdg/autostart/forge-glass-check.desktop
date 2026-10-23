@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Glass check
+Comment=Falls back to the stock blur if the Glass effect can't load
+Exec=/usr/local/bin/forge-glass-check
+OnlyShowIn=KDE;
+NoDisplay=true
+X-KDE-autostart-phase=2

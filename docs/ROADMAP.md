@@ -10,7 +10,10 @@
 | Calamares installer with branding/slideshow | Garuda / EndeavourOS | Done — see "Calamares isn't packaged anywhere" below for how it's actually built |
 | Minimal, curated package base | EndeavourOS | Done — see "kde-applications-meta was a trap" below |
 | Gaming stack (Steam, Lutris, Heroic, gamemode, mangohud, goverlay, vkBasalt, ProtonUp-Qt, Discord, controller udev rules) | Bazzite / Nobara / CachyOS | Done |
-| zram, ananicy-cpp, irqbalance, reflector, parallel pacman + ILoveCandy | Common across modern spins | Done |
+| zram, ananicy-cpp, irqbalance, reflector, parallel pacman + ILoveCandy | Common across modern spins | Done. ananicy-cpp ran with no rules until `cachyos-ananicy-rules-git` was added |
+| Nobara-style tuning (2026-10-23) | Nobara / Bazzite / CachyOS | Done, **not yet verified on hardware**: AMD/Intel Vulkan (64+32-bit) and VA-API drivers (only NVIDIA's were installed, so games couldn't start on other GPUs), `libva-nvidia-driver`, gstreamer good/bad/ugly/libav codecs, `power-profiles-daemon` (Plasma power profiles), `xpadneo-dkms`; `/etc/sysctl.d/90-forge-os.conf` (split-lock mitigation off, ArchWiki zram swap values) and `/etc/udev/rules.d/60-ioschedulers.rules`. `ntsync-autoload` was already pulled in. Not done: xone (wireless dongle; only a -git package), scx schedulers |
+| Forge Thermal: CPU/GPU clock profiles | User request ("regulate temperature, CPU at 90% by default") | Done, **root paths not yet verified on hardware**: `forge-thermal` caps every cpufreq policy's `scaling_max_freq` and the GPU (NVIDIA `nvidia-smi -lgc`, AMD `power1_cap`, Intel i915/xe max freq) by profile (`/etc/forge-thermal/profiles`: Silent 60/60, Cool 75/80, **Balanced 90/100, the default**, Performance 100/100, plus Custom). `forge-thermal.service` re-applies it at boot (after the display manager, since an NVIDIA clock lock only lasts while the GPU is held open), a system-sleep hook after resume. App: `forge-thermal-gui` (PySide6), CLI: `forge thermal`; polkit `org.forgeos.thermal` needs no password at the machine. Hybrid laptops may lose the NVIDIA cap when the dGPU powers off |
+| macOS-style dock dots | User request | Done: `branding-source/glass/desktoptheme.py` writes the `forge-glass` Plasma theme, which only overrides `widgets/tasks` (dot under running apps, solid when active). Rendered with KSvg offscreen; not yet checked in a built ISO |
 | Default browser (Brave, via Chaotic-AUR) | Common across modern spins | Done |
 | KWallet + KWalletManager (keyring) | KDE default | Done |
 | Pamac as the app store (not Discover), + Flathub remote | Manjaro / Garuda | Done — Pamac browses core/extra/multilib/Chaotic-AUR and Flatpak in one GUI, unlike Discover's more limited pacman/Flatpak-only view. `customize_airootfs.sh` adds the Flathub remote so it isn't empty on first boot |
@@ -18,12 +21,80 @@
 | BORE-scheduler kernel, x86-64-v3 packages | CachyOS | Deferred (see below) |
 | Gamescope session (SteamOS-style boot option) | Bazzite / SteamOS | Done, **not yet verified** — `gamescope-session-git` + `gamescope-session-steam-git` (Chaotic-AUR, built by Garuda's own packager) add a "Gamescope Session" entry to SDDM's session dropdown. Never actually selected it and booted into it in this session |
 | EndeavourOS-style Welcome app | EndeavourOS | Deferred (Phase 2) — Plasma's own generic `plasma-welcome` already runs on first login, but isn't forge-os-specific content |
-| macOS-style default look (WhiteSur theme/icons/decoration/SDDM, McMojave cursors, top menu bar + bottom dock with Pamac/Brave/Steam/etc. pinned, KWin blur+contrast for frosted-glass panels) | User request, mac-alike spins | Done and **verified live in QEMU**: Apple-logo menu, top bar with global menu/systray/clock, traffic-light window buttons, bottom dock with pinned launchers all render correctly. NVIDIA-specific rendering still untested (needs real hardware) |
-| zsh default shell: Oh My Zsh (agnoster theme) + autosuggestions + syntax-highlighting + completions, Nerd Font in Konsole for the theme's glyphs | User request | Done and **verified live in QEMU** — Konsole title bar confirms zsh, the agnoster prompt renders its powerline glyphs correctly, and typing an invalid command visibly triggers syntax-highlighting's red coloring |
+| ~~macOS-style default look (WhiteSur)~~ → **Forge Glass** (pastel liquid-glass look: own look-and-feel package, colour schemes, wallpaper, SDDM theme, splash, Plymouth; Plus Jakarta Sans type; floating top bar + compact centred dock; Super+Space command bar; rounded corners; optional auto-tiling) | User request (revamp after the "Nava OS 1.0" trailer's design language, with original assets) | See "Forge Glass revamp" below |
+| zsh default shell: Oh My Zsh (plugins only) + autosuggestions + syntax-highlighting + completions, Forge Glass prompt (`user ~/path branch ›`) | User request | Prompt replaced agnoster in the Forge Glass revamp; plugins unchanged |
 | Real branding: logo, desktop wallpaper, GRUB background, Plymouth boot splash | User-provided logo image | Calamares installer branding is done (same mechanism as the already-verified slideshow/theme config). **Plymouth boot splash (logo + live progress bar) is done and verified live in QEMU** — replaces the scrolling systemd unit list entirely on the live medium. GRUB background is still unverified (only applies post-install through GRUB, which a live-ISO QEMU boot never exercises). The **desktop wallpaper does not work** — tried twice, confirmed broken by direct visual inspection, root cause not found; see "Desktop wallpaper never actually applied" below |
 | Replace WhiteSur's Apple branding: Kickoff launcher icon, SDDM login screen, Plasma login→desktop splash | User request ("remove apple and add some other logo"), later refined to use the second (transparent, flame/anvil) logo everywhere ("current one looks out of place") | **Kickoff icon: done and re-verified live in QEMU** with the new transparent logo — the top-left launcher icon now shows the flame/anvil emblem cleanly, confirmed by cropping and looking directly at it. **SDDM login logo and the Plasma splash screen: updated to the new logo via the identical proven mechanism, but still not visually confirmed** — the live medium autologins straight past SDDM's screen, and the Plasma splash is too brief to reliably catch in a screenshot. Both need a real install (autologin off) or a manual logout to actually see. See "Two logo variants, matched to context" below for why Kickoff and SDDM don't use the identical source image |
 | NetworkManager VPN plugins (OpenVPN, vpnc, OpenConnect, WireGuard) | User request ("do we have network driver/software") | Done — NetworkManager/plasma-nm/iwd/wpa_supplicant/bluez were already present, but without these the Plasma network applet had no way to actually configure a VPN. WireGuard needs no plugin, NM has supported it natively since 1.16 |
-| Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Partially fixed.** The panel itself still renders full-width — `panelLengthMode`/`alignment` in `[PlasmaViews][Panel 10]` did not make it compact despite three attempts, each reasoned from progressively more authoritative KDE source (see below). What *does* work, confirmed by cropping and directly comparing left/right halves of a QEMU screenshot: flanking `panelspacer` applets around `icontasks` moved the icon cluster from crammed-at-the-left (~x=15-290 on a 1280px-wide screen) to roughly centered (~x=560-800). Real improvement over the original complaint, not the fully compact dock that was the actual goal. |
+| Bottom dock centered instead of full-width | User request ("taskbar needs central, it looks weird") | **Fixed by the Forge Glass revamp**: the panel is now created by a look-and-feel `layout.js` through Plasma's scripting API (`lengthMode = "fit"`, `alignment = "center"`), not a hand-written appletsrc. See below |
+
+## Forge Glass revamp (2026-10-22)
+
+A full visual revamp modelled on the design language of the "Nava OS 1.0"
+trailer (youtube.com/watch?v=v2MOPr2SoD0): pastel "liquid glass", a slim
+top bar, a floating dock, a summoned command bar, a navy terminal, a
+one-word package tool, tiling and workspaces. Nava OS is someone else's
+project, so only the *language* is borrowed. Every asset is forge-os's own:
+the wallpaper is procedurally generated glass **flames** (not their
+mountains), the logo is our flame/anvil emblem re-rendered as a glass tile,
+and the tagline is ours ("Built hot. Runs cool.").
+
+| Trailer element | forge-os implementation |
+|---|---|
+| Pastel liquid glass | `ForgeGlassLight`/`ForgeGlassDark` colour schemes with translucent (alpha) backgrounds; Darkly widget style + window decoration, which turn those into translucent windows, titlebars and menus; `kwin-effects-glass` (replacing the stock blur/contrast) frosts everything translucent with blur, edge refraction and edge lighting; Konsole at 72% opacity; translucent floating panels; Plus Jakarta Sans (shipped in `/usr/share/fonts`, not packaged). GTK/Chromium apps (Brave, Steam, Pamac) stay opaque |
+| Glass wallpaper | `/usr/share/wallpapers/ForgeGlass` (light `images/` + dark `images_dark/`; Plasma picks by scheme) |
+| Top bar + dock | `org.forgeos.glass` look-and-feel `contents/layouts/org.kde.plasma.desktop-layout.js` |
+| Control center | Plasma system tray in the top bar |
+| Command bar | KRunner, `FreeFloating=true`, on Super+Space (`kglobalshortcutsrc`) |
+| Terminal + package tool | `ForgeGlass` Konsole scheme (translucent navy), zsh prompt, `/usr/local/bin/forge` (`install`/`remove`/`update`/`search`/`theme`/`tile`/`about`, on top of pamac) |
+| Tiling, workspaces | `kwin-polonium` (off by default; `forge tile on`), 3 desktops |
+| Lock/login | SDDM theme `forge-glass` (Qt 6: thin clock, `MultiEffect`-blurred glass card, session picker); lock screen uses the ForgeGlass wallpaper |
+| Splash, boot | `org.forgeos.glass` `Splash.qml`; Plymouth `forge-os` theme restyled; Calamares branding + slideshow |
+
+Light/dark: `org.forgeos.glass.dark` shares the layout and splash
+(symlinks) and only swaps scheme + icons. `forge theme dark` switches.
+
+**Assets are generated, not drawn.** `branding-source/glass/generate.py`
+renders the wallpapers, logo tile, emblem, Plymouth lockup and progress
+bar; `colors.py` writes the KDE and Konsole schemes from one palette;
+`desktoptheme.py` writes the Plasma theme (dock dots); `install.sh`
+copies renders into `profile/airootfs`. Re-run them after
+changing the look. `out/` is gitignored.
+
+**Why a look-and-feel package fixed the two old bugs.** plasmashell builds a
+new user's desktop by running `layouts/org.kde.plasma.desktop-layout.js`
+from the look-and-feel named in `kdeglobals`, and startplasma copies that
+package's `defaults` into `~/.config/kdedefaults` on first login (confirmed
+in this machine's `startplasma-wayland`/`libklookandfeel` strings). Our old
+skel appletsrc pre-empted the layout script, and WhiteSur's look-and-feel
+then won over the wallpaper we'd written. With the appletsrc gone, Plasma
+writes the panel geometry itself. Checked by running a fresh-user
+`plasmashell` in a headless nested `kwin_wayland --virtual`: the
+`plasmashellrc` it saved has the dock at `panelLengthMode=1`, `alignment=132`,
+`floating=1`, `panelOpacity=2`, and the desktop containment's wallpaper
+points at ForgeGlass.
+
+**Kept from before:** `whitesur-icon-theme` (its rounded-square icons fit
+the look; its Apple `start-here` icons are still replaced with our emblem in
+`customize_airootfs.sh`). **Dropped:** `whitesur-gtk-theme`,
+`whitesur-kde-theme`, `mcmojave-cursors-git`, `ttf-meslo-nerd`, and the
+WhiteSur splash/SDDM overrides in `customize_airootfs.sh`.
+
+**Build gotcha:** the WhiteSur `RUN` step in `build/Containerfile` used
+`pacman -S` on top of a weeks-old cached base layer and 404'd on moved
+packages; it now runs `pacman -Syu`.
+
+**Verified in a QEMU VM (virtio-gpu with GL, 2026-10-22).** The first boot
+showed Konsole translucent but not blurred: KWin logged `Effect "glass" was
+built for a different version of KWin`, because Chaotic-AUR's
+`kwin-effects-glass-git` targeted KWin 6.8.0 and the ISO shipped 6.8.1.
+`build/Containerfile` now builds it from AUR against the shipped KWin (see
+the comment there), and `forge-glass-check` (an autostart) loads the stock
+blur for the session whenever Glass fails to load. After the fix: Glass
+loads, Konsole and Dolphin are frosted, Plus Jakarta Sans and the Plymouth
+splash are right, and Darkly titlebars are rounded. **Limits:** QtQuick apps
+(Welcome Center) and GTK/Chromium apps (Brave, Steam, Pamac) stay opaque:
+they don't paint translucent backgrounds from the KDE colour scheme.
 
 ## Things discovered while building this that changed the plan
 
@@ -85,6 +156,9 @@ Dolphin/Brave/Steam/Pamac/Konsole/System Settings pinned. This format is
 easy to get subtly wrong; **verify it actually renders correctly in a
 QEMU boot before trusting it**, and fix forward here if not. (It did,
 first try — confirmed live in QEMU.)
+
+*(Superseded by the Forge Glass revamp above: Plasma now creates the dock
+itself from a layout script. Kept as a record of what didn't work.)*
 
 **Dock centering took three attempts; the third is sourced from KDE's
 actual C++ source, in the right config location this time.**
@@ -168,6 +242,10 @@ pacman refuses to let a package overwrite one — `failed to commit
 transaction (conflicting files)`). Removed it from `packages.x86_64`
 outright, since it's a minimal rescue-shell config we don't need on a
 full desktop system anyway.
+
+*(Root cause found in the Forge Glass revamp above: the skel appletsrc
+skipped the look-and-feel layout script, and WhiteSur's look-and-feel
+defaults then won.)*
 
 **Desktop wallpaper never actually applied — tried twice, root cause not
 found.** `airootfs/usr/share/backgrounds/forge-os/wallpaper.png` exists in
@@ -345,3 +423,41 @@ push.
 - NVIDIA driver behavior, gamescope session, secure boot, snapper rollback:
   **not verified** — all need real hardware or a real install run, not just
   a build or a QEMU boot.
+
+### First real install (2026-09-26): what broke, and what's still open
+
+The first install to real hardware (Lenovo laptop, RTX 3050, NVIDIA-only
+display) hit ten problems. Fixed in the profile: unpackfs losing its source
+under copytoram, `pacman -Rs` aborting on an uninstalled package, an empty
+`/boot`, the archiso-only `linux.preset`, `mkinitcpio -P || true` hiding
+failures, GRUB unable to read kernels off btrfs (`/boot` is now the ESP),
+and 222–327MiB initramfs images overflowing the ESP (now 512MiB minimum,
+1GiB recommended). Still to check on a fresh install from the rebuilt ISO:
+
+- **grub rescue from the fallback path.** `bootloader.conf` now sets
+  `installEFIFallback: true`, so `EFI/BOOT/BOOTX64.EFI` is written by the
+  same install as the NVRAM entry. Check both entries boot, e.g. by picking
+  the disk itself (not "forge-os") from the firmware boot menu.
+- **Black screen / login loop after SDDM login: likely explained.** A QEMU
+  install from the rebuilt ISO showed SDDM preselects "Steam Big Picture"
+  (`gamescope-session-steam.desktop` sorts before `plasma.desktop`) on a
+  fresh install, and remembers it after a failed login, so every retry
+  loops. In QEMU gamescope aborts for lack of Vulkan; on real hardware Steam
+  isn't set up yet for a new user either. `forge-postinstall.sh` now
+  preselects Plasma via `/var/lib/sddm/state.conf`, and Plasma logs in
+  fine that way. Still to confirm on the laptop: that a fresh install goes
+  straight to Plasma, and whether the Steam session works once Steam has
+  been set up from Plasma.
+- **Encrypted and LVM installs.** `forge-postinstall.sh` now adds the
+  `encrypt`/`lvm2` hooks and `cryptdevice=` itself; never tested.
+- **snapper.** `snapper create-config /` refuses to run when `/.snapshots`
+  already exists, and mount.conf always creates it as `@snapshots`. The
+  `|| true` hid that: the first install has no snapper config at all.
+  `forge-postinstall.sh` now writes the config directly; verified in QEMU
+  (`snapper list-configs` shows `root`).
+- **Verified in QEMU (2026-09-26)**: install with `copytoram=y` forced
+  (unpackfs OK), try_remove, kernels + 15MiB initramfs images on a 1GiB ESP
+  (81MiB used), `EFI/boot/bootx64.efi` fallback written, GRUB boots the
+  installed disk, no failed units, TTY login works. Also found and fixed
+  there: `pacman -Sy` in the post-install chroot couldn't resolve DNS, so
+  installs shipped with no repo databases.

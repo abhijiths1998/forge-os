@@ -1,18 +1,48 @@
-[DesktopSwitcher]
-LayoutName=org.kde.breeze.desktop
+# Three workspaces in a row; Meta+W (or the overview gesture) shows them all.
+[Desktops]
+Number=3
+Rows=1
 
-[WindowSwitcher]
-LayoutName=org.kde.breeze.desktop
-
-[org.kde.kdecoration2]
-ButtonsOnLeft=XAI
-ButtonsOnRight=
-library=org.kde.kwin.aurorae
-theme=__aurorae__svg__WhiteSur-dark
-
-# Frosted-glass look: WhiteSur's panel/dock backgrounds are drawn with a
-# blur-behind mask, so turning these on is what actually makes them
-# translucent instead of solid.
+# Glass: kwin-effects-glass replaces the stock blur (the two conflict, as
+# does the stock contrast effect) and frosts everything translucent:
+# windows (Darkly + the ForgeGlass colour schemes give them alpha),
+# titlebars, menus, panels and Konsole. Rounded window corners come from
+# kwin-effect-rounded-corners-git. Polonium auto-tiling is installed but
+# off; `forge tile on` turns it on.
 [Plugins]
-blurEnabled=true
-contrastEnabled=true
+blurEnabled=false
+contrastEnabled=false
+glassEnabled=true
+kwin4_effect_shapecornersEnabled=true
+poloniumEnabled=false
+
+# Slider units, as in the effect's settings page. Corner radii match
+# [Round-Corners] Size below and Darkly's CornerRadius (darklyrc), so the
+# frost never pokes out past a rounded corner.
+[Effect-blurplus]
+BlurStrength=9
+DecorationBlurStrength=9
+DockBlurStrength=11
+NoiseStrength=2
+DockNoiseStrength=2
+BlurDecorations=true
+BlurMenus=true
+BlurDocks=true
+Saturation=1.4
+Brightness=1.05
+TopCornerRadius=14
+BottomCornerRadius=14
+MenuCornerRadius=10
+DockCornerRadius=16
+UseDeclaredCornerRadius=false
+EdgeLighting=true
+EdgeLightingDock=true
+RefractionStrength=8
+RefractionEdgeSize=3
+RefractionNormalPow=4
+RefractionRGBFringing=2
+RefractionBevelIntensity=10
+
+[Round-Corners]
+Size=14
+InactiveCornerRadius=14

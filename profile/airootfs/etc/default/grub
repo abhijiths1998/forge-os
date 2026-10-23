@@ -12,4 +12,5 @@ GRUB_GFXMODE=auto
 GRUB_GFXPAYLOAD_LINUX=keep
 GRUB_DISABLE_RECOVERY=true
 GRUB_DISABLE_OS_PROBER=false
-GRUB_BACKGROUND="/usr/share/backgrounds/forge-os/wallpaper.png"
+# On the ESP, not the btrfs root; forge-postinstall.sh copies the wallpaper there.
+GRUB_BACKGROUND="/boot/grub/forge-os-background.png"

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Thermal
+GenericName=CPU and GPU Temperature Profiles
+Comment=Limit CPU and GPU clocks to keep temperatures down
+Exec=/usr/local/bin/forge-thermal-gui
+Icon=indicator-cpufreq
+Categories=Settings;HardwareSettings;
+Keywords=temperature;thermal;cpu;gpu;clock;frequency;fan;heat;
+StartupNotify=true

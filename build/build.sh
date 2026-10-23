@@ -17,7 +17,14 @@ IMAGE_NAME="forge-os-builder"
 PKGCACHE_VOLUME="forge-os-pkgcache"
 
 build_image() {
-    docker build -t "$IMAGE_NAME" -f "$REPO_ROOT/build/Containerfile" "$REPO_ROOT/build"
+    # Arch's current kwin version: a change re-runs the Containerfile step
+    # that builds kwin-effects-glass, which must match KWin exactly.
+    local kwin_version
+    kwin_version="$(curl -fsSL https://archlinux.org/packages/extra/x86_64/kwin/json/ \
+        | python3 -c 'import json, sys; d = json.load(sys.stdin); print("%s:%s-%s" % (d["epoch"], d["pkgver"], d["pkgrel"]))' \
+        || echo unknown)"
+    docker build -t "$IMAGE_NAME" --build-arg KWIN_VERSION="$kwin_version" \
+        -f "$REPO_ROOT/build/Containerfile" "$REPO_ROOT/build"
 }
 
 fix_ownership() {

@@ -1,0 +1,12 @@
+[Unit]
+Description=Apply the forge-thermal CPU/GPU clock profile
+# After the display manager: an NVIDIA clock lock only lasts while
+# something holds the GPU open, and by then the greeter does.
+After=display-manager.service systemd-modules-load.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/forge-thermal restore
+
+[Install]
+WantedBy=graphical.target

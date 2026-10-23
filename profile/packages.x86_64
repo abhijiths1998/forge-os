@@ -144,6 +144,21 @@ nvidia-settings
 egl-wayland
 vulkan-icd-loader
 lib32-vulkan-icd-loader
+libva-nvidia-driver
+# AMD and Intel GPUs: Vulkan (64- and 32-bit, which Proton needs) and
+# hardware video decode. Without these, games don't start on non-NVIDIA
+# machines; mesa alone only brings OpenGL.
+vulkan-radeon
+lib32-vulkan-radeon
+vulkan-intel
+lib32-vulkan-intel
+intel-media-driver
+# Codecs, as Nobara ships them: gstreamer is what KDE apps, Lutris/Wine
+# games' cutscenes and web video in Qt apps play through.
+gst-plugins-good
+gst-plugins-bad
+gst-plugins-ugly
+gst-libav
 
 # KDE Plasma desktop: plasma-meta (shell/workspace) + a curated set of
 # apps, not kde-applications-meta (which drags in the entire KDE
@@ -187,25 +202,35 @@ bluez
 bluez-utils
 kwalletmanager
 
-# macOS-style default look (WhiteSur, github.com/vinceliuice/WhiteSur-*):
-# global theme/color-scheme/window-decoration/SDDM theme, icons, and a
-# matching GTK theme so non-Qt apps (browsers, Pamac) don't clash. Not
-# packaged anywhere (not even Chaotic-AUR) so it's built from AUR the same
-# way as calamares, see build/Containerfile. mcmojave-cursors-git is a
-# separate, already-packaged macOS-style cursor set.
-whitesur-gtk-theme
+# Forge Glass default look (pastel liquid glass; see docs/ROADMAP.md). The
+# theme itself (look-and-feel, colour schemes, wallpaper, SDDM theme,
+# Plymouth) is forge-os's own and ships in the airootfs overlay; these are
+# the pieces it builds on:
+# - whitesur-icon-theme: the rounded-square app icons (built from AUR, see
+#   build/Containerfile; its Apple start-here icons get replaced in
+#   customize_airootfs.sh)
+# - ttf-jetbrains-mono-nerd: terminal type
+# - kwin-effect-rounded-corners-git: rounded window corners
+# - kwin-effects-glass-git: frosted/liquid glass (blur, refraction, edge
+#   lighting) behind every translucent surface; replaces the stock blur
+# - darkly-qt6-git: widget style + window decoration that makes app windows
+#   translucent (the ForgeGlass colour schemes carry the alpha)
+# - kwin-polonium: auto-tiling, off by default (`forge tile on`)
+# The UI font, Plus Jakarta Sans, isn't packaged; it ships in
+# airootfs/usr/share/fonts/plus-jakarta-sans.
 whitesur-icon-theme
-whitesur-kde-theme
-mcmojave-cursors-git
+ttf-jetbrains-mono-nerd
+kwin-effect-rounded-corners-git
+kwin-effects-glass-git
+darkly-qt6-git
+kwin-polonium
 
-# Default shell: zsh + Oh My Zsh + autosuggestions/syntax-highlighting.
-# ttf-meslo-nerd provides the glyphs the "agnoster" theme needs (see
-# /etc/skel/.zshrc and the Konsole default profile).
+# Default shell: zsh + Oh My Zsh (for its plugins; the prompt is our own,
+# see /etc/skel/.zshrc) + autosuggestions/syntax-highlighting.
 oh-my-zsh-git
 zsh-completions
 zsh-autosuggestions
 zsh-syntax-highlighting
-ttf-meslo-nerd
 
 # App store (Pamac, not Discover: native repo browsing across
 # core/extra/multilib/Chaotic-AUR plus Flatpak, in one Manjaro/Garuda-style
@@ -231,6 +256,8 @@ vkbasalt
 lib32-vkbasalt
 discord
 game-devices-udev
+# Xbox One/Series controllers over Bluetooth (rumble, correct mapping)
+xpadneo-dkms
 protonup-qt
 
 # SteamOS-style Big Picture session, selectable from the SDDM login screen
@@ -247,6 +274,11 @@ inotify-tools
 flatpak
 zram-generator
 ananicy-cpp
+# ananicy-cpp ships no rules of its own: without these it runs and does
+# nothing. CachyOS's set covers games, launchers, compilers and desktops.
+cachyos-ananicy-rules-git
+# Power Saver / Balanced / Performance in Plasma's battery applet
+power-profiles-daemon
 irqbalance
 fwupd
 sbctl

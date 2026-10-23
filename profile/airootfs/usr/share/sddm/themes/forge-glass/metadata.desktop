@@ -1,0 +1,12 @@
+[SddmGreeterTheme]
+Name=Forge Glass
+Description=forge-os login: big clock, frosted-glass card
+Author=forge-os
+License=GPL-2.0-or-later
+Type=sddm-theme
+Version=1.0
+MainScript=Main.qml
+ConfigFile=theme.conf
+Theme-Id=forge-glass
+Theme-API=2.0
+QtVersion=6

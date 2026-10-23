@@ -51,29 +51,59 @@ RUN pacman -S --noconfirm --needed \
     && userdel -r builder \
     && rm -rf /tmp/calamares
 
-# macOS-style theming (WhiteSur, https://github.com/vinceliuice/WhiteSur-*):
-# also not on Chaotic-AUR, built from AUR the same way as calamares. These
-# are asset packages (icons/theme files), not compiled C++, so this is fast.
+# WhiteSur icons (https://github.com/vinceliuice/WhiteSur-icon-theme), the
+# app icons Forge Glass uses: not on Chaotic-AUR either, so built from AUR
+# the same way as calamares. An asset package, so this is fast.
 # TERM must be set: WhiteSur's install.sh calls `setterm` for its spinner
 # animation, which fails outright (aborting under set -e) with no TTY/TERM,
 # as Docker RUN steps have.
-RUN pacman -S --noconfirm --needed sassc which gtk3 ncurses \
+RUN pacman -Syu --noconfirm --needed sassc which gtk3 ncurses \
     && useradd -m builder \
     && su builder -c ' \
         set -e; \
         export TERM=xterm; \
         cd /tmp; \
-        for pkg in whitesur-gtk-theme whitesur-icon-theme whitesur-kde-theme; do \
-            git clone --depth 1 "https://aur.archlinux.org/${pkg}.git"; \
-            (cd "${pkg}" && makepkg --noconfirm --skippgpcheck); \
-        done \
+        git clone --depth 1 https://aur.archlinux.org/whitesur-icon-theme.git; \
+        cd whitesur-icon-theme; \
+        makepkg --noconfirm --skippgpcheck \
     ' \
-    && cp /tmp/whitesur-gtk-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
     && cp /tmp/whitesur-icon-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
-    && cp /tmp/whitesur-kde-theme/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
     && repo-add /var/cache/forge-os-local-repo/forge-os-local.db.tar.gz \
         /var/cache/forge-os-local-repo/*.pkg.tar.zst \
     && userdel -r builder \
-    && rm -rf /tmp/whitesur-gtk-theme /tmp/whitesur-icon-theme /tmp/whitesur-kde-theme
+    && rm -rf /tmp/whitesur-icon-theme
+
+# kwin-effects-glass (the Forge Glass frosting). Chaotic-AUR has it, but
+# KWin bakes its exact version into the effect plugin interface and refuses
+# a plugin built against any other ("Effect "glass" was built for a
+# different version of KWin"), and Chaotic's build often lags a KWin point
+# release. So build it here against the KWin the ISO will ship; the local
+# repo is listed first in profile/pacman.conf, so this build wins.
+# build.sh passes KWIN_VERSION (Arch's current kwin) so a KWin update
+# invalidates this layer and the effect is rebuilt to match.
+# pkgrel=100 keeps our package's filename distinct from Chaotic's same-
+# version build (they'd collide in the shared pacman cache volume and fail
+# the checksum), and stops an installed system "upgrading" to Chaotic's
+# build of the same commit; a newer upstream commit still replaces it.
+ARG KWIN_VERSION=unknown
+RUN echo "building kwin-effects-glass against kwin ${KWIN_VERSION}" \
+    && pacman -Syu --noconfirm --needed \
+        kwin kio knotifications kcrash kglobalaccel kcmutils libepoxy \
+        extra-cmake-modules qt6-tools vulkan-headers cmake git \
+    && useradd -m builder \
+    && su builder -c ' \
+        set -e; \
+        cd /tmp; \
+        git clone --depth 1 https://aur.archlinux.org/kwin-effects-glass-git.git; \
+        cd kwin-effects-glass-git; \
+        makepkg --nobuild --noconfirm --skippgpcheck; \
+        sed -i "s/^pkgrel=.*/pkgrel=100/" PKGBUILD; \
+        makepkg --noextract --noconfirm --skippgpcheck \
+    ' \
+    && cp /tmp/kwin-effects-glass-git/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+    && repo-add /var/cache/forge-os-local-repo/forge-os-local.db.tar.gz \
+        /var/cache/forge-os-local-repo/*.pkg.tar.zst \
+    && userdel -r builder \
+    && rm -rf /tmp/kwin-effects-glass-git
 
 WORKDIR /build

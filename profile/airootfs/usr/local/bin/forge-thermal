@@ -1,0 +1,210 @@
+#!/usr/bin/env bash
+# forge-thermal: CPU/GPU clock profiles, to keep temperatures in check.
+#
+#   forge-thermal status          live temps, clocks and the active profile
+#   forge-thermal list            profiles: name, CPU %, GPU %, description
+#   forge-thermal apply <name>    apply a profile and make it the default  (root)
+#   forge-thermal custom <cpu%> <gpu%>   set and apply the Custom profile (root)
+#   forge-thermal restore         re-apply the saved profile (boot, resume) (root)
+#
+# A profile caps the CPU's maximum frequency and the GPU's at a percentage
+# of what the hardware allows (100 = no cap). CPU: every cpufreq policy's
+# scaling_max_freq, which amd-pstate, intel_pstate and acpi-cpufreq all
+# honour. GPU: NVIDIA locked clocks (nvidia-smi -lgc), AMD power cap
+# (amdgpu hwmon power1_cap), Intel max frequency (i915 / xe sysfs).
+#
+# Profiles live in /etc/forge-thermal/profiles/<name>.conf as KEY=value
+# lines (NAME, DESCRIPTION, CPU_PERCENT, GPU_PERCENT); the saved choice is
+# /etc/forge-thermal/current. Polkit (org.forgeos.thermal) lets the active
+# desktop user run the root commands through pkexec without a password, so
+# arguments are validated strictly.
+set -uo pipefail
+
+CONF=/etc/forge-thermal
+PROFILES="${CONF}/profiles"
+CURRENT="${CONF}/current"
+DEFAULT_PROFILE=balanced
+MIN_PERCENT=30   # below this the desktop gets unusably slow
+
+fail() { echo "forge-thermal: $*" >&2; exit 1; }
+need_root() { (( EUID == 0 )) || fail "$1 needs root (try: pkexec forge-thermal $1 ...)"; }
+valid_name() { [[ "$1" =~ ^[a-z0-9][a-z0-9-]{0,31}$ ]]; }
+valid_percent() { [[ "$1" =~ ^[0-9]{1,3}$ ]] && (( $1 >= MIN_PERCENT && $1 <= 100 )); }
+
+# KEY from a profile file, without sourcing it.
+profile_get() { # file key
+    sed -n "s/^$2=//p" "$1" | head -n1 | sed 's/^"\(.*\)"$/\1/'
+}
+
+current_profile() {
+    local p
+    p="$(cat "${CURRENT}" 2>/dev/null)"
+    valid_name "${p}" && [[ -f "${PROFILES}/${p}.conf" ]] && echo "${p}" || echo "${DEFAULT_PROFILE}"
+}
+
+# --- CPU -----------------------------------------------------------------
+cpu_policies() { ls -d /sys/devices/system/cpu/cpufreq/policy* 2>/dev/null; }
+
+cpu_apply() { # percent
+    local pol max min target n=0
+    for pol in $(cpu_policies); do
+        max="$(<"${pol}/cpuinfo_max_freq")" min="$(<"${pol}/cpuinfo_min_freq")"
+        target=$(( max * $1 / 100 ))
+        (( target < min )) && target=${min}
+        echo "${target}" > "${pol}/scaling_max_freq" && n=$((n + 1))
+    done
+    (( n > 0 )) || echo "forge-thermal: no cpufreq policies, CPU left as is" >&2
+}
+
+cpu_temp() { # degrees C, from the first CPU sensor found
+    local h name
+    for h in /sys/class/hwmon/hwmon*; do
+        name="$(<"${h}/name")"
+        case "${name}" in
+            k10temp|zenpower|coretemp|cpu_thermal)
+                [[ -r "${h}/temp1_input" ]] && { echo $(( $(<"${h}/temp1_input") / 1000 )); return; } ;;
+        esac
+    done
+}
+
+# --- GPU -----------------------------------------------------------------
+have_nvidia() { command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1; }
+
+amd_hwmons() { # amdgpu hwmon dirs that have a power cap
+    local h
+    for h in /sys/class/drm/card[0-9]*/device/hwmon/hwmon*; do
+        [[ -f "${h}/power1_cap" && "$(cat "${h}/name" 2>/dev/null)" == amdgpu ]] && echo "${h}"
+    done
+}
+
+intel_freq_dirs() { # dirs holding a max/rp0 pair: i915 card dirs, xe gt freq dirs
+    local d
+    for d in /sys/class/drm/card[0-9]*; do
+        [[ -f "${d}/gt_max_freq_mhz" && -f "${d}/gt_RP0_freq_mhz" ]] && echo "i915 ${d}"
+    done
+    for d in /sys/class/drm/card[0-9]*/device/tile*/gt*/freq0; do
+        [[ -f "${d}/max_freq" && -f "${d}/rp0_freq" ]] && echo "xe ${d}"
+    done
+}
+
+gpu_apply() { # percent
+    local i max cap h def kind d
+    if have_nvidia; then
+        while IFS=', ' read -r i max; do
+            if (( $1 >= 100 )); then
+                nvidia-smi -i "${i}" -rgc >/dev/null
+            else
+                cap=$(( max * $1 / 100 ))
+                nvidia-smi -i "${i}" -lgc "0,${cap}" >/dev/null \
+                    || echo "forge-thermal: NVIDIA GPU ${i} refused a clock cap" >&2
+            fi
+        done < <(nvidia-smi --query-gpu=index,clocks.max.graphics --format=csv,noheader,nounits)
+    fi
+    for h in $(amd_hwmons); do
+        def="$(cat "${h}/power1_cap_default" 2>/dev/null || cat "${h}/power1_cap_max")"
+        echo $(( def * $1 / 100 )) > "${h}/power1_cap"
+    done
+    while read -r kind d; do
+        [[ -n "${kind}" ]] || continue
+        if [[ "${kind}" == i915 ]]; then
+            echo $(( $(<"${d}/gt_RP0_freq_mhz") * $1 / 100 )) > "${d}/gt_max_freq_mhz"
+        else
+            echo $(( $(<"${d}/rp0_freq") * $1 / 100 )) > "${d}/max_freq"
+        fi
+    done < <(intel_freq_dirs)
+}
+
+# Prints gpu_* status lines for the first GPU found.
+gpu_status() {
+    local line h d kind
+    if have_nvidia; then
+        line="$(nvidia-smi --query-gpu=name,temperature.gpu,clocks.gr,clocks.max.graphics \
+            --format=csv,noheader,nounits -i 0 2>/dev/null)"
+        IFS=',' read -r name temp clk max <<<"${line}"
+        echo "gpu_vendor=nvidia"
+        echo "gpu_name=${name# }"
+        echo "gpu_temp_c=${temp// /}"
+        echo "gpu_clock_mhz=${clk// /}"
+        echo "gpu_max_mhz=${max// /}"
+        return
+    fi
+    for h in $(amd_hwmons); do
+        echo "gpu_vendor=amd"
+        echo "gpu_name=AMD Radeon"
+        [[ -r "${h}/temp1_input" ]] && echo "gpu_temp_c=$(( $(<"${h}/temp1_input") / 1000 ))"
+        [[ -r "${h}/freq1_input" ]] && echo "gpu_clock_mhz=$(( $(<"${h}/freq1_input") / 1000000 ))"
+        return
+    done
+    read -r kind d < <(intel_freq_dirs)
+    if [[ -n "${kind:-}" ]]; then
+        echo "gpu_vendor=intel"
+        echo "gpu_name=Intel Graphics"
+        if [[ "${kind}" == i915 ]]; then
+            echo "gpu_clock_mhz=$(<"${d}/gt_act_freq_mhz")"
+            echo "gpu_max_mhz=$(<"${d}/gt_RP0_freq_mhz")"
+        else
+            echo "gpu_clock_mhz=$(<"${d}/act_freq")"
+            echo "gpu_max_mhz=$(<"${d}/rp0_freq")"
+        fi
+    fi
+}
+
+apply_profile() { # name
+    local f="${PROFILES}/$1.conf" cpu gpu
+    [[ -f "${f}" ]] || fail "no profile '$1' (see: forge-thermal list)"
+    cpu="$(profile_get "${f}" CPU_PERCENT)" gpu="$(profile_get "${f}" GPU_PERCENT)"
+    valid_percent "${cpu}" || fail "$1: CPU_PERCENT must be ${MIN_PERCENT}-100"
+    valid_percent "${gpu}" || fail "$1: GPU_PERCENT must be ${MIN_PERCENT}-100"
+    cpu_apply "${cpu}"
+    gpu_apply "${gpu}"
+}
+
+cmd="${1:-status}"; shift || true
+case "${cmd}" in
+    status)
+        p="$(current_profile)" f="${PROFILES}/$(current_profile).conf"
+        echo "profile=${p}"
+        echo "profile_cpu_percent=$(profile_get "${f}" CPU_PERCENT)"
+        echo "profile_gpu_percent=$(profile_get "${f}" GPU_PERCENT)"
+        pol="$(cpu_policies | head -n1)"
+        if [[ -n "${pol}" ]]; then
+            echo "cpu_max_khz=$(<"${pol}/cpuinfo_max_freq")"
+            echo "cpu_cap_khz=$(<"${pol}/scaling_max_freq")"
+            # Average current frequency over all cores.
+            awk '{ s += $1; n++ } END { if (n) printf "cpu_clock_khz=%d\n", s / n }' \
+                /sys/devices/system/cpu/cpufreq/policy*/scaling_cur_freq
+        fi
+        t="$(cpu_temp)"; [[ -n "${t}" ]] && echo "cpu_temp_c=${t}"
+        gpu_status
+        ;;
+    list)
+        for f in "${PROFILES}"/*.conf; do
+            [[ -f "${f}" ]] || continue
+            n="$(basename "${f}" .conf)"
+            printf '%s\t%s\t%s\t%s\t%s\n' "${n}" "$(profile_get "${f}" CPU_PERCENT)" \
+                "$(profile_get "${f}" GPU_PERCENT)" "$(profile_get "${f}" NAME)" "$(profile_get "${f}" DESCRIPTION)"
+        done
+        ;;
+    apply)
+        need_root apply
+        valid_name "${1:-}" || fail "apply which profile? (see: forge-thermal list)"
+        apply_profile "$1" && echo "$1" > "${CURRENT}"
+        ;;
+    custom)
+        need_root custom
+        valid_percent "${1:-}" && valid_percent "${2:-}" || fail "usage: custom <cpu ${MIN_PERCENT}-100> <gpu ${MIN_PERCENT}-100>"
+        cat > "${PROFILES}/custom.conf" <<EOF
+NAME="Custom"
+DESCRIPTION="Your own limits"
+CPU_PERCENT=$1
+GPU_PERCENT=$2
+EOF
+        apply_profile custom && echo custom > "${CURRENT}"
+        ;;
+    restore)
+        need_root restore
+        apply_profile "$(current_profile)"
+        ;;
+    -h|--help|help) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' ;;
+    *) fail "unknown command '${cmd}' (try: forge-thermal help)" ;;
+esac
