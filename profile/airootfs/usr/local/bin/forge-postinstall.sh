@@ -13,11 +13,22 @@ set -euo pipefail
 # own boot directory, so the squashfs unpackfs copied has an empty /boot and
 # GRUB would find nothing to boot. Every Arch kernel package also keeps a
 # copy at /usr/lib/modules/<version>/vmlinuz, named by its pkgbase file.
+#
+# unpackfs copies with `rsync -S`, which turns the kernel's zero-filled
+# last 512 bytes into a hole, and GRUB's btrfs reader stops at a trailing
+# hole ("premature end of file" loading vmlinuz). That breaks any install
+# where /boot is on btrfs, i.e. every BIOS install. So rewrite the source
+# without holes first (mkinitcpio's pacman hook later re-copies it into
+# /boot with install(1), which keeps holes), then copy it the same way.
 kernels=()
 for moddir in /usr/lib/modules/*/; do
     [[ -f "${moddir}pkgbase" && -f "${moddir}vmlinuz" ]] || continue
     pkgbase="$(<"${moddir}pkgbase")"
-    install -Dm644 "${moddir}vmlinuz" "/boot/vmlinuz-${pkgbase}"
+    cp --sparse=never --reflink=never "${moddir}vmlinuz" "${moddir}vmlinuz.dense"
+    mv "${moddir}vmlinuz.dense" "${moddir}vmlinuz"
+    mkdir -p /boot
+    cp --sparse=never --reflink=never "${moddir}vmlinuz" "/boot/vmlinuz-${pkgbase}"
+    chmod 644 "/boot/vmlinuz-${pkgbase}"
     kernels+=("${pkgbase}")
 done
 if (( ${#kernels[@]} == 0 )); then
