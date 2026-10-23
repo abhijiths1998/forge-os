@@ -7,6 +7,7 @@
 #   forge search <query>
 #   forge theme [light|dark]  switch Forge Glass light/dark (toggles if omitted)
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
+#   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
 #   forge about
 set -uo pipefail
 
@@ -62,6 +63,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}search${OFF} <query>      find packages
   ${PERI}theme${OFF} [light|dark]  switch the Forge Glass look
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
+  ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
   ${PERI}about${OFF}               this system, briefly
 EOF
 }
@@ -103,6 +105,22 @@ case "${cmd}" in
         esac
         plasma-apply-lookandfeel -a "${lnf}" >/dev/null || fail "couldn't apply ${lnf}"
         ok "Forge Glass ${want}"
+        ;;
+    thermal|temp)
+        have forge-thermal || fail "forge-thermal is missing"
+        if [[ $# -eq 0 ]]; then
+            declare -A st=()
+            while IFS='=' read -r k v; do st[$k]="$v"; done < <(forge-thermal status)
+            say "thermal ${LILAC}${st[profile]}${OFF} ${GREY}(CPU ${st[profile_cpu_percent]}% · GPU ${st[profile_gpu_percent]}%)${OFF}"
+            [[ -n "${st[cpu_temp_c]:-}" ]] && printf '  CPU  %s°C  %s MHz, limit %s MHz\n' "${st[cpu_temp_c]}" \
+                "$(( ${st[cpu_clock_khz]:-0} / 1000 ))" "$(( ${st[cpu_cap_khz]:-0} / 1000 ))"
+            [[ -n "${st[gpu_temp_c]:-}" ]] && printf '  GPU  %s°C  %s MHz  %s\n' "${st[gpu_temp_c]}" \
+                "${st[gpu_clock_mhz]:-?}" "${GREY}${st[gpu_name]:-}${OFF}"
+            printf '%sprofiles:%s %s\n' "${GREY}" "${OFF}" "$(forge-thermal list | cut -f1 | tr '\n' ' ')"
+        else
+            pkexec /usr/local/bin/forge-thermal apply "$1" || fail "couldn't apply ${1}"
+            ok "thermal profile ${1}"
+        fi
         ;;
     tile)
         have kwriteconfig6 || fail "needs a Plasma session"

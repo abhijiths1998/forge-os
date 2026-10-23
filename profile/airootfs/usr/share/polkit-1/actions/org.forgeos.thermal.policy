@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Lets the user at the machine switch forge-thermal profiles (pkexec
+     forge-thermal ...) without a password, the way power-profiles-daemon
+     lets them switch power profiles. Remote sessions still need admin. -->
+<policyconfig>
+  <vendor>forge-os</vendor>
+  <action id="org.forgeos.thermal">
+    <description>Change CPU and GPU clock limits</description>
+    <message>Authentication is required to change CPU and GPU clock limits</message>
+    <icon_name>indicator-cpufreq</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/forge-thermal</annotate>
+  </action>
+</policyconfig>

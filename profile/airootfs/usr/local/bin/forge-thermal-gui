@@ -1,0 +1,243 @@
+#!/usr/bin/env python3
+"""Forge Thermal: pick a CPU/GPU clock profile and watch temperatures.
+
+A front end for forge-thermal, which does the actual work: `status` and
+`list` run as the user, and changing the profile goes through pkexec
+(polkit action org.forgeos.thermal: no password for the user at the
+machine).
+"""
+import os
+import sys
+
+from PySide6.QtCore import QProcess, Qt, QTimer
+from PySide6.QtGui import QFont, QIcon
+from PySide6.QtWidgets import (
+    QApplication, QButtonGroup, QFrame, QGridLayout, QHBoxLayout, QLabel,
+    QPushButton, QRadioButton, QSlider, QVBoxLayout, QWidget,
+)
+
+HELPER = os.environ.get("FORGE_THERMAL", "/usr/local/bin/forge-thermal")
+REFRESH_MS = 2000
+MIN_PERCENT = 30
+# Forge Glass neutral/negative accents: warm and hot readings.
+WARM, HOT = "#D98A3E", "#D9576E"
+
+
+def run(args):
+    """Run forge-thermal synchronously (status/list are quick)."""
+    p = QProcess()
+    p.start(HELPER, args)
+    p.waitForFinished(5000)
+    return bytes(p.readAllStandardOutput()).decode(errors="replace")
+
+
+def parse_status(text):
+    return dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+
+
+def ghz(khz):
+    return f"{int(khz) / 1e6:.2f} GHz"
+
+
+class Reading(QFrame):
+    """One device card: big temperature, name, current and capped clock."""
+
+    def __init__(self, title):
+        super().__init__()
+        self.setFrameShape(QFrame.StyledPanel)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(16, 12, 16, 12)
+        self.title = QLabel(title)
+        self.title.setStyleSheet("font-weight: 600;")
+        self.temp = QLabel("–")
+        f = QFont(self.font())
+        f.setPointSizeF(f.pointSizeF() * 2.6)
+        f.setWeight(QFont.Light)
+        self.temp.setFont(f)
+        self.detail = QLabel("")
+        self.detail.setWordWrap(True)
+        self.detail.setEnabled(False)  # dimmed secondary text
+        for w in (self.title, self.temp, self.detail):
+            lay.addWidget(w)
+
+    def show_reading(self, name, temp, detail):
+        self.title.setText(name)
+        if temp is None:
+            self.temp.setText("–")
+            self.temp.setStyleSheet("")
+        else:
+            t = int(temp)
+            self.temp.setText(f"{t}°C")
+            self.temp.setStyleSheet(f"color: {HOT};" if t >= 85 else f"color: {WARM};" if t >= 70 else "")
+        self.detail.setText(detail)
+
+
+class Window(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Forge Thermal")
+        self.setWindowIcon(QIcon.fromTheme("indicator-cpufreq"))
+        self.busy = False
+        self.sliders_set = False  # sliders follow the profile until first shown
+        self.profiles = []        # (id, cpu, gpu, name, description)
+        self.radios = {}
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 20, 20, 16)
+        root.setSpacing(14)
+
+        cards = QHBoxLayout()
+        self.cpu = Reading("CPU")
+        self.gpu = Reading("GPU")
+        cards.addWidget(self.cpu)
+        cards.addWidget(self.gpu)
+        root.addLayout(cards)
+
+        heading = QLabel("Profile")
+        heading.setStyleSheet("font-weight: 600;")
+        root.addWidget(heading)
+        self.grid = QGridLayout()
+        self.grid.setHorizontalSpacing(12)
+        self.grid.setVerticalSpacing(2)
+        self.group = QButtonGroup(self)
+        self.group.buttonClicked.connect(self.on_profile_clicked)
+        root.addLayout(self.grid)
+
+        custom = QFrame()
+        custom.setFrameShape(QFrame.StyledPanel)
+        cl = QGridLayout(custom)
+        cl.setContentsMargins(16, 10, 16, 10)
+        cl.addWidget(QLabel("Custom"), 0, 0, 1, 3)
+        self.sliders = {}
+        for row, (key, label) in enumerate((("cpu", "CPU"), ("gpu", "GPU")), start=1):
+            s = QSlider(Qt.Horizontal)
+            s.setRange(MIN_PERCENT, 100)
+            s.setSingleStep(5)
+            s.setPageStep(10)
+            s.setTickInterval(10)
+            value = QLabel()
+            value.setMinimumWidth(44)
+            s.valueChanged.connect(lambda v, l=value: l.setText(f"{v}%"))
+            cl.addWidget(QLabel(label), row, 0)
+            cl.addWidget(s, row, 1)
+            cl.addWidget(value, row, 2)
+            self.sliders[key] = s
+        self.apply_custom = QPushButton("Apply custom")
+        self.apply_custom.clicked.connect(self.on_custom)
+        cl.addWidget(self.apply_custom, 3, 1, 1, 2, Qt.AlignRight)
+        root.addWidget(custom)
+
+        self.message = QLabel("")
+        self.message.setWordWrap(True)
+        self.message.setEnabled(False)
+        root.addWidget(self.message)
+
+        self.load_profiles()
+        self.refresh()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.refresh)
+        self.timer.start(REFRESH_MS)
+        self.resize(560, 0)
+
+    # --- data --------------------------------------------------------------
+    def load_profiles(self):
+        for b in self.group.buttons():
+            self.group.removeButton(b)
+        while self.grid.count():
+            self.grid.takeAt(0).widget().deleteLater()
+        self.radios.clear()
+        self.profiles = []
+        for line in run(["list"]).splitlines():
+            parts = line.split("\t")
+            if len(parts) == 5:
+                self.profiles.append(parts)
+        # Coolest first, custom last.
+        self.profiles.sort(key=lambda p: (p[0] == "custom", int(p[1] or 0) + int(p[2] or 0)))
+        for row, (pid, cpu, gpu, name, desc) in enumerate(self.profiles):
+            r = QRadioButton(name or pid)
+            r.setProperty("profile", pid)
+            self.group.addButton(r)
+            limits = QLabel(f"CPU {cpu}% · GPU {gpu}%")
+            about = QLabel(desc)
+            about.setEnabled(False)
+            self.grid.addWidget(r, row, 0)
+            self.grid.addWidget(limits, row, 1)
+            self.grid.addWidget(about, row, 2)
+            self.radios[pid] = r
+        self.grid.setColumnStretch(2, 1)
+
+    def refresh(self):
+        if self.busy:
+            return
+        s = parse_status(run(["status"]))
+        r = self.radios.get(s.get("profile", ""))
+        if r and not r.isChecked():
+            r.setChecked(True)
+        if not self.sliders["cpu"].isSliderDown() and not self.sliders_set:
+            self.sliders["cpu"].setValue(int(s.get("profile_cpu_percent") or 100))
+            self.sliders["gpu"].setValue(int(s.get("profile_gpu_percent") or 100))
+            self.sliders_set = True
+
+        if "cpu_max_khz" in s:
+            detail = f"{ghz(s.get('cpu_clock_khz', 0))} now · limit {ghz(s['cpu_cap_khz'])} of {ghz(s['cpu_max_khz'])}"
+        else:
+            detail = "No CPU frequency control"
+        self.cpu.show_reading("CPU", s.get("cpu_temp_c"), detail)
+
+        if "gpu_vendor" in s:
+            parts = []
+            if "gpu_clock_mhz" in s:
+                parts.append(f"{s['gpu_clock_mhz']} MHz now")
+            if "gpu_max_mhz" in s:
+                pct = int(s.get("profile_gpu_percent") or 100)
+                cap = int(s["gpu_max_mhz"]) * pct // 100
+                parts.append(f"limit {cap} of {s['gpu_max_mhz']} MHz" if pct < 100 else f"up to {s['gpu_max_mhz']} MHz")
+            self.gpu.show_reading(s.get("gpu_name", "GPU"), s.get("gpu_temp_c"), " · ".join(parts))
+        else:
+            self.gpu.show_reading("GPU", None, "No supported GPU found")
+
+    # --- actions -----------------------------------------------------------
+    def privileged(self, args, done_text):
+        self.busy = True
+        self.setEnabled(False)
+        self.message.setText("Applying…")
+        p = QProcess(self)
+
+        def finished(code, _status):
+            err = bytes(p.readAllStandardError()).decode(errors="replace").strip()
+            self.busy = False
+            self.setEnabled(True)
+            if code == 0:
+                self.message.setText(done_text + (f"\n{err}" if err else ""))
+            elif code in (126, 127):  # pkexec: dismissed / not authorised
+                self.message.setText("Not changed: permission was not granted.")
+            else:
+                self.message.setText(err or "Couldn't apply the profile.")
+            self.load_profiles()
+            self.sliders_set = False
+            self.refresh()
+
+        p.finished.connect(finished)
+        p.start("pkexec", [HELPER] + args)
+
+    def on_profile_clicked(self, button):
+        pid = button.property("profile")
+        name = button.text()
+        self.privileged(["apply", pid], f"{name} applied, and kept after restarts.")
+
+    def on_custom(self):
+        cpu, gpu = self.sliders["cpu"].value(), self.sliders["gpu"].value()
+        self.privileged(["custom", str(cpu), str(gpu)], f"Custom applied: CPU {cpu}%, GPU {gpu}%.")
+
+
+def main():
+    app = QApplication(sys.argv)
+    app.setApplicationName("Forge Thermal")
+    app.setDesktopFileName("org.forgeos.thermal")
+    w = Window()
+    w.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
