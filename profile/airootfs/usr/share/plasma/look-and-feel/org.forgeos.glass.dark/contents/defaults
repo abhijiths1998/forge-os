@@ -8,7 +8,8 @@ ColorScheme=ForgeGlassDark
 Theme=WhiteSur-dark
 
 [plasmarc][Theme]
-name=default
+# Breeze plus macOS-style dock dots (branding-source/glass/desktoptheme.py)
+name=forge-glass
 
 [Wallpaper]
 Image=ForgeGlass

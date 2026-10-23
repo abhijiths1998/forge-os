@@ -1,0 +1,17 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "forge-os"
+            }
+        ],
+        "Category": "",
+        "Description": "Forge Glass: Breeze with macOS-style dots in the dock",
+        "EnabledByDefault": true,
+        "Id": "forge-glass",
+        "License": "LGPL",
+        "Name": "Forge Glass",
+        "Version": "1.0"
+    },
+    "X-Plasma-API": "5.0"
+}
