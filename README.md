@@ -1,25 +1,69 @@
-# forge-os (placeholder name)
+# Forge OS
 
-An Arch-based Linux distro for NVIDIA + gaming + KDE Plasma, cherry-picking
-ideas from CachyOS, Nobara, Garuda, Bazzite, and EndeavourOS instead of
-copying any one of them. See `docs/ROADMAP.md` for the feature rationale and
-what's still ahead.
+*Built hot. Runs cool.*
+
+Forge OS is an Arch-based Linux distro for gaming on KDE Plasma, with
+first-class NVIDIA support. It cherry-picks ideas from CachyOS, Nobara,
+Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
+`docs/ROADMAP.md` for the feature rationale and what's still ahead.
+
+## What you get
+
+- **Gaming, ready to go:** Steam, Lutris, Heroic, Wine, Proton tooling
+  (ProtonUp-Qt, ntsync), GameMode, MangoHud, vkBasalt, Gamescope and a
+  SteamOS-style Big Picture session in the login screen's session list.
+- **Drivers for any GPU:** NVIDIA (open kernel modules), plus AMD and Intel
+  Vulkan (64- and 32-bit) and hardware video decode, gstreamer codecs, and
+  Xbox controllers over Bluetooth (xpadneo).
+- **Tuned like Nobara/Bazzite/CachyOS:** linux-zen kernel, zram swap,
+  ananicy-cpp with CachyOS's rules, irqbalance, split-lock throttling off,
+  per-drive I/O schedulers, Plasma power profiles.
+- **Forge Thermal:** CPU and GPU clock profiles to keep temperatures down,
+  from the app or `forge thermal`. The default, Balanced, runs the CPU at
+  90% of its maximum.
+- **Safe to tinker:** btrfs with snapper snapshots you can boot from GRUB
+  (grub-btrfs).
+- **Installer:** Calamares, for UEFI and legacy BIOS machines.
 
 ## The look: Forge Glass
 
 A calm pastel "liquid glass" desktop on KDE Plasma 6: a slim floating top
 bar, a compact floating dock, frosted glass windows, menus, panels and
-terminal, Plus Jakarta Sans type, and a light and a dark variant. Press **Super+Space** for the command bar. In a terminal:
+terminal, macOS-style dots under running apps in the dock, Plus Jakarta Sans
+type, and a light and a dark variant. Press **Super+Space** for the command
+bar. In a terminal:
 
 ```sh
 forge install obs-studio   # repos, Chaotic-AUR, AUR (via pamac)
 forge update               # packages + Flatpaks
 forge theme dark           # or light; no argument toggles
 forge tile on              # auto-tiling (Polonium)
+forge thermal              # temperatures, clocks and the active profile
+forge thermal cool         # silent, cool, balanced or performance
 ```
 
+## Forge Thermal
+
+Caps the CPU's and GPU's maximum clocks at a share of what the hardware
+allows, so the machine runs cooler and quieter:
+
+| Profile | CPU | GPU | For |
+|---|---|---|---|
+| Silent | 60% | 60% | reading, video |
+| Cool | 75% | 80% | lower temperatures, most of the speed |
+| **Balanced** (default) | 90% | 100% | everyday use |
+| Performance | 100% | 100% | no limits |
+| Custom | 30–100% | 30–100% | your own, set with sliders in the app |
+
+The CPU limit works with amd-pstate, intel_pstate and acpi-cpufreq. On the
+GPU it's a clock lock on NVIDIA, a power cap on AMD and a maximum frequency
+on Intel. The choice is kept across reboots and suspend, and the user at the
+machine can switch without a password. Profiles live in
+`/etc/forge-thermal/profiles/` and are plain `KEY=value` files.
+
 The artwork is generated: `branding-source/glass/generate.py` (wallpapers,
-logo, boot assets) and `colors.py` (colour schemes), then `install.sh`
+logo, boot assets), `colors.py` (colour schemes) and `desktoptheme.py`
+(Plasma theme: dock dots), then `install.sh`
 copies them into the profile. See `docs/ROADMAP.md` → "Forge Glass revamp".
 
 ## Post-install script (faster path, no ISO)
@@ -40,9 +84,8 @@ irqbalance, reflector, linux-zen), and a default browser. Safe to re-run.
 
 ## Building the ISO
 
-Arch's own tooling (`mkarchiso`, `pacstrap`) only runs on Arch Linux. If your
-build machine isn't Arch (this was built from Nobara), everything runs
-inside a Docker container instead:
+Arch's own tooling (`mkarchiso`, `pacstrap`) only runs on Arch Linux, so the
+build runs inside a Docker container and works from any distro:
 
 ```sh
 build/build.sh init    # one-time: seed profile/ from upstream archiso releng
@@ -53,7 +96,8 @@ build/build.sh shell   # interactive shell in the build container, for debugging
 The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
 in the official repos or Chaotic-AUR) and downloads the full KDE + gaming
 package set, so it's slow. A persistent Docker volume
-(`forge-os-pkgcache`) caches downloaded packages across retries.
+(`forge-os-pkgcache`) caches downloaded packages across retries. A full build
+takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
 
 ## Layout
 
@@ -62,6 +106,10 @@ package set, so it's slow. A persistent Docker volume
   `airootfs/` overlay that becomes both the live session and (via Calamares)
   the installed system.
 - `profile/airootfs/etc/calamares/` — the installer configuration.
+- `profile/airootfs/usr/local/bin/` — Forge OS's own tools: `forge`,
+  `forge-thermal` and its app `forge-thermal-gui`, and `forge-postinstall.sh`
+  (run by the installer).
+- `branding-source/` — the logo source and the Forge Glass generators.
 - `docs/ROADMAP.md` — what's built, what's deferred, and why.
 
 ## Testing the ISO

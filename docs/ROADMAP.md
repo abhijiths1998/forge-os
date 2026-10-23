@@ -10,7 +10,10 @@
 | Calamares installer with branding/slideshow | Garuda / EndeavourOS | Done — see "Calamares isn't packaged anywhere" below for how it's actually built |
 | Minimal, curated package base | EndeavourOS | Done — see "kde-applications-meta was a trap" below |
 | Gaming stack (Steam, Lutris, Heroic, gamemode, mangohud, goverlay, vkBasalt, ProtonUp-Qt, Discord, controller udev rules) | Bazzite / Nobara / CachyOS | Done |
-| zram, ananicy-cpp, irqbalance, reflector, parallel pacman + ILoveCandy | Common across modern spins | Done |
+| zram, ananicy-cpp, irqbalance, reflector, parallel pacman + ILoveCandy | Common across modern spins | Done. ananicy-cpp ran with no rules until `cachyos-ananicy-rules-git` was added |
+| Nobara-style tuning (2026-10-23) | Nobara / Bazzite / CachyOS | Done, **not yet verified on hardware**: AMD/Intel Vulkan (64+32-bit) and VA-API drivers (only NVIDIA's were installed, so games couldn't start on other GPUs), `libva-nvidia-driver`, gstreamer good/bad/ugly/libav codecs, `power-profiles-daemon` (Plasma power profiles), `xpadneo-dkms`; `/etc/sysctl.d/90-forge-os.conf` (split-lock mitigation off, ArchWiki zram swap values) and `/etc/udev/rules.d/60-ioschedulers.rules`. `ntsync-autoload` was already pulled in. Not done: xone (wireless dongle; only a -git package), scx schedulers |
+| Forge Thermal: CPU/GPU clock profiles | User request ("regulate temperature, CPU at 90% by default") | Done, **root paths not yet verified on hardware**: `forge-thermal` caps every cpufreq policy's `scaling_max_freq` and the GPU (NVIDIA `nvidia-smi -lgc`, AMD `power1_cap`, Intel i915/xe max freq) by profile (`/etc/forge-thermal/profiles`: Silent 60/60, Cool 75/80, **Balanced 90/100, the default**, Performance 100/100, plus Custom). `forge-thermal.service` re-applies it at boot (after the display manager, since an NVIDIA clock lock only lasts while the GPU is held open), a system-sleep hook after resume. App: `forge-thermal-gui` (PySide6), CLI: `forge thermal`; polkit `org.forgeos.thermal` needs no password at the machine. Hybrid laptops may lose the NVIDIA cap when the dGPU powers off |
+| macOS-style dock dots | User request | Done: `branding-source/glass/desktoptheme.py` writes the `forge-glass` Plasma theme, which only overrides `widgets/tasks` (dot under running apps, solid when active). Rendered with KSvg offscreen; not yet checked in a built ISO |
 | Default browser (Brave, via Chaotic-AUR) | Common across modern spins | Done |
 | KWallet + KWalletManager (keyring) | KDE default | Done |
 | Pamac as the app store (not Discover), + Flathub remote | Manjaro / Garuda | Done — Pamac browses core/extra/multilib/Chaotic-AUR and Flatpak in one GUI, unlike Discover's more limited pacman/Flatpak-only view. `customize_airootfs.sh` adds the Flathub remote so it isn't empty on first boot |
@@ -54,7 +57,8 @@ Light/dark: `org.forgeos.glass.dark` shares the layout and splash
 **Assets are generated, not drawn.** `branding-source/glass/generate.py`
 renders the wallpapers, logo tile, emblem, Plymouth lockup and progress
 bar; `colors.py` writes the KDE and Konsole schemes from one palette;
-`install.sh` copies renders into `profile/airootfs`. Re-run all three after
+`desktoptheme.py` writes the Plasma theme (dock dots); `install.sh`
+copies renders into `profile/airootfs`. Re-run them after
 changing the look. `out/` is gitignored.
 
 **Why a look-and-feel package fixed the two old bugs.** plasmashell builds a
@@ -80,7 +84,17 @@ WhiteSur splash/SDDM overrides in `customize_airootfs.sh`.
 `pacman -S` on top of a weeks-old cached base layer and 404'd on moved
 packages; it now runs `pacman -Syu`.
 
-VM_RESULTS_PLACEHOLDER
+**Verified in a QEMU VM (virtio-gpu with GL, 2026-10-22).** The first boot
+showed Konsole translucent but not blurred: KWin logged `Effect "glass" was
+built for a different version of KWin`, because Chaotic-AUR's
+`kwin-effects-glass-git` targeted KWin 6.8.0 and the ISO shipped 6.8.1.
+`build/Containerfile` now builds it from AUR against the shipped KWin (see
+the comment there), and `forge-glass-check` (an autostart) loads the stock
+blur for the session whenever Glass fails to load. After the fix: Glass
+loads, Konsole and Dolphin are frosted, Plus Jakarta Sans and the Plymouth
+splash are right, and Darkly titlebars are rounded. **Limits:** QtQuick apps
+(Welcome Center) and GTK/Chromium apps (Brave, Steam, Pamac) stay opaque:
+they don't paint translucent backgrounds from the KDE colour scheme.
 
 ## Things discovered while building this that changed the plan
 
