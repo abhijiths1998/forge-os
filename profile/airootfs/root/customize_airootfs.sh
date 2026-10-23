@@ -22,6 +22,7 @@ systemctl enable bluetooth.service
 systemctl enable fstrim.timer
 systemctl enable irqbalance.service
 systemctl enable ananicy-cpp.service
+systemctl enable power-profiles-daemon.service
 systemctl enable fwupd.service
 
 # chaotic-keyring / chaotic-mirrorlist (in packages.x86_64) already installed

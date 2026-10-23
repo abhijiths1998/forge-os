@@ -144,6 +144,21 @@ nvidia-settings
 egl-wayland
 vulkan-icd-loader
 lib32-vulkan-icd-loader
+libva-nvidia-driver
+# AMD and Intel GPUs: Vulkan (64- and 32-bit, which Proton needs) and
+# hardware video decode. Without these, games don't start on non-NVIDIA
+# machines; mesa alone only brings OpenGL.
+vulkan-radeon
+lib32-vulkan-radeon
+vulkan-intel
+lib32-vulkan-intel
+intel-media-driver
+# Codecs, as Nobara ships them: gstreamer is what KDE apps, Lutris/Wine
+# games' cutscenes and web video in Qt apps play through.
+gst-plugins-good
+gst-plugins-bad
+gst-plugins-ugly
+gst-libav
 
 # KDE Plasma desktop: plasma-meta (shell/workspace) + a curated set of
 # apps, not kde-applications-meta (which drags in the entire KDE
@@ -241,6 +256,8 @@ vkbasalt
 lib32-vkbasalt
 discord
 game-devices-udev
+# Xbox One/Series controllers over Bluetooth (rumble, correct mapping)
+xpadneo-dkms
 protonup-qt
 
 # SteamOS-style Big Picture session, selectable from the SDDM login screen
@@ -257,6 +274,11 @@ inotify-tools
 flatpak
 zram-generator
 ananicy-cpp
+# ananicy-cpp ships no rules of its own: without these it runs and does
+# nothing. CachyOS's set covers games, launchers, compilers and desktops.
+cachyos-ananicy-rules-git
+# Power Saver / Balanced / Performance in Plasma's battery applet
+power-profiles-daemon
 irqbalance
 fwupd
 sbctl
