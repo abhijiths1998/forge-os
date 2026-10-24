@@ -32,5 +32,6 @@ file_permissions=(
   ["/usr/local/bin/forge-mind"]="0:0:755"
   ["/usr/local/bin/forge-mind-model"]="0:0:755"
   ["/usr/local/bin/forge-os-release"]="0:0:755"
+  ["/usr/local/bin/forged"]="0:0:755"
   ["/usr/lib/systemd/system-sleep/forge-thermal"]="0:0:755"
 )

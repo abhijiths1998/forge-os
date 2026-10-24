@@ -1,0 +1,9 @@
+[Unit]
+Description=forged: the desktop's state and switches (D-Bus org.forgeos.Forged)
+PartOf=graphical-session.target
+
+[Service]
+Type=dbus
+BusName=org.forgeos.Forged
+ExecStart=/usr/local/bin/forged serve
+Restart=on-failure
