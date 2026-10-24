@@ -108,13 +108,17 @@ class Applier {
   }
 
   /// Konsole: the user's ForgeGlass scheme (the forge-os profile's),
-  /// colours and opacity. A Konsole process never reloads a scheme it has
-  /// loaded and over D-Bus only switches to profiles it read at startup, so
-  /// windows already open keep the old look; new Konsole windows (each its
-  /// own process by default) get the theme.
+  /// colours and opacity.
+  ///
+  /// Written whole and swapped in (a new file renamed over the old one):
+  /// Konsole watches the scheme and reloads it on change, and written in
+  /// place it could catch the file half-written, without the [General]
+  /// section (opacity, blur) that comes last, and turn opaque.
   Future<void> _konsole(ForgeTheme t) async {
     final dir = Directory('$_data/konsole')..createSync(recursive: true);
-    File('${dir.path}/ForgeGlass.colorscheme').writeAsStringSync(konsoleColourScheme(t));
+    final scheme = File('${dir.path}/ForgeGlass.colorscheme');
+    final tmp = File('${scheme.path}.new')..writeAsStringSync(konsoleColourScheme(t), flush: true);
+    tmp.renameSync(scheme.path);
   }
 
   Future<void> all(ForgeTheme t) async {
