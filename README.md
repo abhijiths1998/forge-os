@@ -100,14 +100,20 @@ forge space clean <path>           # clean one of those (home files go to the tr
 Requests are read for the kind of file ("pdf", "screenshots", "videos"), when
 ("around march", "last week", "2 weeks ago"), where ("in downloads"), how big
 ("bigger than 2gb") and where it came from ("from github"); the rest are name
-words. Rules do this instantly. With [Ollama](https://ollama.com) running, a
-local model (qwen3:4b unless `~/.config/forge/mind.conf` says `model=...`)
-reads longer requests too and adds likely name words: "my landlord's letter"
+words. Rules do this instantly. A local model, run by
+[Ollama](https://ollama.com) (qwen3:4b, set in `/etc/forge/mind.conf`, or per
+user in `~/.config/forge/mind.conf`), reads longer requests too and adds likely name words: "my landlord's letter"
 also looks for lease, rent and tenancy. It only adds words (a small model
 guesses dates and file types wrong), takes about a second on a laptop
 RTX 3050, and leaves the GPU the moment a game starts (GameMode). Files are
 ranked by how many words match, typed words first. The Launcher
 (Super+Space) shows these results under the apps.
+
+The ISO carries Ollama (with its Vulkan backend: 40 MB, any GPU, instead of
+CUDA's 6 GB) but not the 2.5 GB model. The installer downloads it
+(`forge-mind-model`), in the time it can spare; if it's offline or the line
+is slow, the first boot with a network finishes the download, resuming
+where it stopped. Until then, requests are read by rules alone.
 
 Cleanup knows what fills a gaming Linux disk: Proton prefixes and shader
 caches of uninstalled Steam games (across every Steam library), the pacman

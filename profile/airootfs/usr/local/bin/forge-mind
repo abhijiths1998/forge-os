@@ -305,18 +305,20 @@ def understand(text, now=None):
     return f
 
 
-# The model, when there is one. Configured in ~/.config/forge/mind.conf
-# (model=..., ollama=http://...) or FORGE_MIND_MODEL; nothing else to set up.
+# The model, when there is one. Configured in /etc/forge/mind.conf, then
+# ~/.config/forge/mind.conf (model=..., ollama=http://...), then
+# FORGE_MIND_MODEL. The installer downloads /etc's (forge-mind-model).
 def model_config():
     conf = {"model": "qwen3:4b", "ollama": "http://127.0.0.1:11434"}
-    try:
-        cfg = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "forge/mind.conf"
-        for line in cfg.read_text().splitlines():
-            k, _, v = line.partition("=")
-            if k.strip() in conf and v.strip():
-                conf[k.strip()] = v.strip()
-    except OSError:
-        pass
+    user = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "forge/mind.conf"
+    for cfg in (Path("/etc/forge/mind.conf"), user):
+        try:
+            for line in cfg.read_text().splitlines():
+                k, _, v = line.partition("=")
+                if k.strip() in conf and v.strip():
+                    conf[k.strip()] = v.strip()
+        except OSError:
+            pass
     conf["model"] = os.environ.get("FORGE_MIND_MODEL", conf["model"])
     return conf
 
