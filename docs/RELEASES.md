@@ -46,7 +46,8 @@ Built so far (2026-10-24, tried on the dev machine, not yet in an ISO):
 `forged` and Forge Control with its top-bar button. Still to do for 2.1:
 picking a Wi-Fi network or Bluetooth device in the panel (today they only
 switch on and off), the Launcher on gtk-layer-shell, and a check on a
-laptop's built-in screen and a real install.
+laptop's built-in screen and a real install. The panel's own
+gtk-layer-shell anchoring works.
 
 - **`forged`:** a system service (D-Bus) that knows the system state and can
   change it: network, Bluetooth, audio, brightness, power and thermal
