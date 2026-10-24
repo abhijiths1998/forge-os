@@ -1,5 +1,8 @@
 # forge-os roadmap
 
+The release plan (2.0 to 3.0, which features ship when) is in
+`docs/RELEASES.md`; this file is the detail and history.
+
 ## Feature cherry-pick map
 
 | Feature | Source of inspiration | Status |

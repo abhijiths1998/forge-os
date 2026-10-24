@@ -7,6 +7,12 @@ first-class NVIDIA support. It cherry-picks ideas from CachyOS, Nobara,
 Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
 `docs/ROADMAP.md` for the feature rationale and what's still ahead.
 
+**Forge OS 2** arrives in steps: 2.0 is the Forge look and the first Forge
+apps, then one theme per release (Control Center, living wallpapers, the
+Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
+everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
+version is set in `forge-os-release` (`forge about` shows it).
+
 ## What you get
 
 - **Gaming, ready to go:** Steam, Lutris, Heroic, Wine, Proton tooling
