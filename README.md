@@ -82,7 +82,7 @@ reaches as much of the system as can take one:
 | GNOME settings (`gsettings`), for older GTK apps | light/dark and the nearest named accent |
 | The terminal prompt and `forge`'s output | `~/.config/forge/theme.sh`; open terminals follow at their next prompt |
 | The login screen | its accent, light/dark and wallpaper (`forge-theme-login`, through polkit) |
-| Konsole | its colour scheme (new windows) |
+| Konsole | its colour scheme (new windows); Forge's Konsole keeps open windows translucent through a light/dark switch |
 
 `forge-theme-sync` does the part KDE doesn't. The Theming Kit runs it, and
 forged runs it whenever KDE's colours change from anywhere else; it follows
@@ -209,6 +209,9 @@ takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.i
 - `apps/` — Forge OS's in-house apps (see "Forge apps"), each with a
   PKGBUILD; `apps/build-packages.sh` builds every one into the local repo
   during `build/build.sh build`, before mkarchiso.
+- `packages/` — Forge's builds of other packages, built the same way:
+  `packages/konsole` is Konsole with a fix (open terminals kept turning
+  opaque when the desktop switched between light and dark), until KDE has it.
 - `branding-source/` — the logo source and the Forge Glass generators.
 - `docs/ROADMAP.md` — what's built, what's deferred, and why.
 
