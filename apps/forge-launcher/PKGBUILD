@@ -1,0 +1,29 @@
+# Forge Launcher: the Meta+Space command bar (Flutter, GTK runner).
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-launcher
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS command bar: apps, files, settings, commands and quick maths"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# Plus Jakarta Sans ships in /usr/share/fonts with the ISO, not as a package.
+depends=('gtk3' 'glib2' 'konsole' 'baloo')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    flutter build linux --release
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-launcher" "${pkgdir}/usr/bin/forge-launcher"
+    install -Dm644 data/org.forgeos.launcher.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.launcher.desktop"
+    install -Dm644 data/org.forgeos.launcher-autostart.desktop \
+        "${pkgdir}/etc/xdg/autostart/org.forgeos.launcher-autostart.desktop"
+}

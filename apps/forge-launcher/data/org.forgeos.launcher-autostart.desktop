@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Launcher
+Comment=Starts the command bar hidden, so Meta+Space opens it instantly
+Exec=forge-launcher --background
+Icon=search
+NoDisplay=true
+X-KDE-autostart-phase=2

@@ -1,0 +1,22 @@
+# Forge Browser: Qt WebEngine browser with built-in ad blocking.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-browser
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS web browser (Qt WebEngine) with built-in ad and tracker blocking"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('qt6-base' 'qt6-webengine' 'xdg-utils')
+makedepends=('cmake' 'ninja')
+options=('!debug')
+
+build() {
+    cmake -S "${startdir}" -B "${srcdir}/build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build "${srcdir}/build"
+}
+
+package() {
+    DESTDIR="${pkgdir}" cmake --install "${srcdir}/build"
+}

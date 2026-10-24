@@ -30,7 +30,7 @@ Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
 A calm pastel "liquid glass" desktop on KDE Plasma 6: a slim floating top
 bar, a compact floating dock, frosted glass windows, menus, panels and
 terminal, macOS-style dots under running apps in the dock, Plus Jakarta Sans
-type, and a light and a dark variant. Press **Super+Space** for the command
+type, and a light and a dark variant. Press **Super+Space** or **Alt+Space** for the command
 bar. In a terminal:
 
 ```sh
@@ -41,6 +41,23 @@ forge tile on              # auto-tiling (Polonium)
 forge thermal              # temperatures, clocks and the active profile
 forge thermal cool         # silent, cool, balanced or performance
 ```
+
+## Forge apps
+
+In-house apps in the Forge Glass look, in `apps/` (each has a README),
+built into the ISO by `apps/build-packages.sh`. The Flutter ones share
+`apps/forge_ui`: the theme model, palette and widgets, so they follow the
+theme set in the Theming Kit:
+
+| App | Replaces | Built with |
+|---|---|---|
+| **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner |
+| **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
+| **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
+| **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
+
+Each is translucent, so KWin's Glass effect frosts it like the rest of the
+desktop. Brave stays installed for sites that need Widevine DRM.
 
 ## Forge Thermal
 
@@ -94,7 +111,7 @@ build/build.sh shell   # interactive shell in the build container, for debugging
 ```
 
 The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
-in the official repos or Chaotic-AUR) and downloads the full KDE + gaming
+in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full KDE + gaming
 package set, so it's slow. A persistent Docker volume
 (`forge-os-pkgcache`) caches downloaded packages across retries. A full build
 takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
@@ -109,6 +126,9 @@ takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
 - `profile/airootfs/usr/local/bin/` — Forge OS's own tools: `forge`,
   `forge-thermal` and its app `forge-thermal-gui`, and `forge-postinstall.sh`
   (run by the installer).
+- `apps/` — Forge OS's in-house apps (see "Forge apps"), each with a
+  PKGBUILD; `apps/build-packages.sh` builds every one into the local repo
+  during `build/build.sh build`, before mkarchiso.
 - `branding-source/` — the logo source and the Forge Glass generators.
 - `docs/ROADMAP.md` — what's built, what's deferred, and why.
 

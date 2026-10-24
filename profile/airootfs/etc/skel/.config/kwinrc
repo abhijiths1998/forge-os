@@ -19,30 +19,47 @@ poloniumEnabled=false
 # Slider units, as in the effect's settings page. Corner radii match
 # [Round-Corners] Size below and Darkly's CornerRadius (darklyrc), so the
 # frost never pokes out past a rounded corner.
+#
+# Liquid glass, kept natural: a clear, saturated blur that runs right to the
+# window's edge, where the background bends gently (RefractionEdgeSize is
+# x10 px, so 25px). Nothing draws a coloured border: no edge lighting, rim
+# light or colour fringing, and the rounded-corners outlines are off. No
+# whole-pane bending or noise and a low bevel, either: stronger, those read
+# as smeared, shaded edges. `forge glass calm|liquid|bold` switches looks;
+# this is liquid.
 [Effect-blurplus]
-BlurStrength=9
-DecorationBlurStrength=9
-DockBlurStrength=11
-NoiseStrength=2
-DockNoiseStrength=2
+BlurStrength=7
+DecorationBlurStrength=7
+DockBlurStrength=8
+NoiseStrength=0
+DockNoiseStrength=0
 BlurDecorations=true
 BlurMenus=true
 BlurDocks=true
-Saturation=1.4
-Brightness=1.05
+Saturation=1.7
+Brightness=1.0
 TopCornerRadius=14
 BottomCornerRadius=14
 MenuCornerRadius=10
-DockCornerRadius=16
+DockCornerRadius=18
 UseDeclaredCornerRadius=false
-EdgeLighting=true
-EdgeLightingDock=true
-RefractionStrength=8
-RefractionEdgeSize=3
+EdgeLighting=false
+EdgeLightingDock=false
+EdgeLightingTooltip=false
+RefractionStrength=10
+RefractionEdgeSize=2.5
 RefractionNormalPow=4
-RefractionRGBFringing=2
-RefractionBevelIntensity=10
+RefractionRGBFringing=0
+RefractionBevelIntensity=7
+BodyRefraction=false
+RimSpecular=false
 
+# Rounded corners only: no outlines (the effect's defaults draw a black and
+# a white one), so the glass runs to the edge.
 [Round-Corners]
 Size=14
 InactiveCornerRadius=14
+OutlineThickness=0
+InactiveOutlineThickness=0
+SecondOutlineThickness=0
+InactiveSecondOutlineThickness=0

@@ -202,6 +202,10 @@ bluez
 bluez-utils
 kwalletmanager
 
+# Forge Theming Kit (apps/forge-themekit, built into the local repo by
+# apps/build-packages.sh): themes and sliders for colour and liquid glass.
+forge-themekit
+
 # Forge Glass default look (pastel liquid glass; see docs/ROADMAP.md). The
 # theme itself (look-and-feel, colour schemes, wallpaper, SDDM theme,
 # Plymouth) is forge-os's own and ships in the airootfs overlay; these are
@@ -225,6 +229,10 @@ kwin-effects-glass-git
 darkly-qt6-git
 kwin-polonium
 
+# Forge Launcher (apps/forge-launcher, built into the local repo by
+# apps/build-packages.sh): the Meta+Space command bar, in place of KRunner.
+forge-launcher
+
 # Default shell: zsh + Oh My Zsh (for its plugins; the prompt is our own,
 # see /etc/skel/.zshrc) + autosuggestions/syntax-highlighting.
 oh-my-zsh-git
@@ -232,12 +240,17 @@ zsh-completions
 zsh-autosuggestions
 zsh-syntax-highlighting
 
-# App store (Pamac, not Discover: native repo browsing across
-# core/extra/multilib/Chaotic-AUR plus Flatpak, in one Manjaro/Garuda-style
-# GUI, rather than KDE's more limited Flatpak/pacman-only Discover)
+# App store: Forge Store (apps/forge-store), in place of the Pamac GUI. It
+# runs on libpamac and the pamac CLI, which `forge install` uses too (native
+# repo browsing across core/extra/multilib/Chaotic-AUR, rather than KDE's
+# more limited Flatpak/pacman-only Discover).
+forge-store
 pamac
 
-# Default browser
+# Default browser: Forge Browser (apps/forge-browser), with built-in ad
+# blocking. Brave stays for sites that need Widevine DRM (Netflix, Spotify
+# web), which Qt WebEngine doesn't ship.
+forge-browser
 brave-bin
 
 # Gaming stack

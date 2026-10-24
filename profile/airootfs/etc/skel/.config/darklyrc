@@ -9,11 +9,11 @@ ShadowSize=ShadowVeryLarge
 ShadowStrength=90
 
 [Style]
-MenuOpacity=70
-MenuBarOpacity=60
-ToolBarOpacity=60
-TabBarOpacity=60
-DolphinSidebarOpacity=55
+MenuOpacity=58
+MenuBarOpacity=48
+ToolBarOpacity=48
+TabBarOpacity=48
+DolphinSidebarOpacity=42
 UnifiedTabBarKonsole=true
 TabBarAltStyle=true
 

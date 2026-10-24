@@ -106,4 +106,18 @@ RUN echo "building kwin-effects-glass against kwin ${KWIN_VERSION}" \
     && userdel -r builder \
     && rm -rf /tmp/kwin-effects-glass-git
 
+# Toolchains and build dependencies for the Forge apps (apps/), which
+# apps/build-packages.sh builds at ISO build time: Flutter (Chaotic-AUR) and
+# GTK for the launcher and store, libpamac for the store, Qt WebEngine for
+# the browser. A layer of its own so a Flutter or Qt update only redoes this.
+# flutter-bin and pamac are Chaotic-AUR packages, so this container's own
+# pacman.conf gets that repo too (the keyring and mirrorlist are set up above).
+RUN grep -q "^\[chaotic-aur\]" /etc/pacman.conf \
+        || printf "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n" \
+            >> /etc/pacman.conf \
+    && pacman -Syu --noconfirm --needed \
+        flutter-bin cmake ninja clang pkgconf gtk3 pamac \
+        qt6-base qt6-webengine glycin libjxl \
+    && pacman -Scc --noconfirm
+
 WORKDIR /build

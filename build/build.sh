@@ -56,6 +56,8 @@ case "$cmd" in
     build)
         build_image
         mkdir -p "$REPO_ROOT/out" "$REPO_ROOT/work"
+        # The Forge apps (apps/) are built into the local repo first, in the
+        # same container run, so mkarchiso finds them there.
         # Named volume for pacman's package cache: each `docker run --rm` is
         # a fresh container, so without this every retry re-downloads the
         # entire (large: KDE + gaming stack) package set from scratch.
@@ -64,7 +66,8 @@ case "$cmd" in
             -v "$PKGCACHE_VOLUME:/var/cache/pacman/pkg" \
             -w /build \
             "$IMAGE_NAME" \
-            mkarchiso -v -w /build/work -o /build/out /build/profile
+            bash -c "/build/apps/build-packages.sh \
+                && mkarchiso -v -w /build/work -o /build/out /build/profile"
         fix_ownership
         echo "ISO written to out/"
         ;;
