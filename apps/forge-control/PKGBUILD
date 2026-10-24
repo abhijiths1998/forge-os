@@ -1,0 +1,38 @@
+# Forge Control: the Control Center, a glass panel under the top bar
+# (Flutter, GTK runner), and its top-bar button (a Plasma widget). The state
+# and switches come from forged (/usr/local/bin/forged, in the ISO profile).
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-control
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Control Center: Wi-Fi, Bluetooth, sound, brightness, power and cooling"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# Plus Jakarta Sans ships in /usr/share/fonts with the ISO, not as a package.
+depends=('gtk3' 'glib2' 'gtk-layer-shell' 'python-dbus' 'python-gobject'
+         'networkmanager' 'bluez-utils' 'wireplumber' 'libpulse'
+         'power-profiles-daemon' 'upower')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    flutter build linux --release
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-control" "${pkgdir}/usr/bin/forge-control"
+    install -Dm644 data/org.forgeos.control.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.control.desktop"
+    install -Dm644 data/org.forgeos.control-autostart.desktop \
+        "${pkgdir}/etc/xdg/autostart/org.forgeos.control-autostart.desktop"
+    local plasmoid="${pkgdir}/usr/share/plasma/plasmoids/org.forgeos.control"
+    install -Dm644 data/plasmoid/metadata.json "${plasmoid}/metadata.json"
+    install -Dm644 data/plasmoid/contents/ui/main.qml "${plasmoid}/contents/ui/main.qml"
+    install -Dm644 data/plasmoid/contents/icons/forge-control.svg \
+        "${plasmoid}/contents/icons/forge-control.svg"
+}

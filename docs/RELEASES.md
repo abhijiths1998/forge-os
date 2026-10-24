@@ -12,7 +12,7 @@ not only in the live session or on the dev machine.
 | Version | Theme | Status |
 |---|---|---|
 | 2.0 | The Forge look and the first Forge apps | Built, not yet released |
-| 2.1 | Control Center | Planned |
+| 2.1 | Control Center | In progress: forged and the panel built |
 | 2.2 | Living desktop: wallpapers | Planned |
 | 2.3 | Forge Assistant | Planned |
 | 2.4 | Safe updates and the Game Hub | Planned |
@@ -41,6 +41,12 @@ the model download in the installer and on first boot; the items in
 ROADMAP's "Verification status" that are still open.
 
 ## 2.1: Control Center
+
+Built so far (2026-10-24, tried on the dev machine, not yet in an ISO):
+`forged` and Forge Control with its top-bar button. Still to do for 2.1:
+picking a Wi-Fi network or Bluetooth device in the panel (today they only
+switch on and off), the Launcher on gtk-layer-shell, and a check on a
+laptop's built-in screen and a real install.
 
 - **`forged`:** a system service (D-Bus) that knows the system state and can
   change it: network, Bluetooth, audio, brightness, power and thermal

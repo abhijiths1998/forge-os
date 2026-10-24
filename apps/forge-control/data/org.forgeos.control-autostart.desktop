@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Control
+Comment=Starts the Control Center hidden, so the top-bar button opens it instantly
+Exec=forge-control --background
+Icon=preferences-system
+NoDisplay=true
+X-KDE-autostart-phase=2

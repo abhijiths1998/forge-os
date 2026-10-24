@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Control Center
+GenericName=Quick Settings
+Comment=Wi-Fi, Bluetooth, sound, brightness, power and cooling at a glance
+Exec=forge-control
+Icon=preferences-system
+Categories=Settings;
+Keywords=wifi;bluetooth;volume;sound;brightness;power;thermal;dark;quiet;do not disturb;control center;quick settings;
+StartupNotify=false

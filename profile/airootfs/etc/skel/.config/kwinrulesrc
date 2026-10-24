@@ -4,8 +4,8 @@
 # The window asks GTK for no decoration, but KWin adds one anyway without
 # this. Placement 5 is KWin's "Centered"; rule 2 is "Force".
 [General]
-count=1
-rules=forge-launcher
+count=2
+rules=forge-launcher,forge-control
 
 [forge-launcher]
 Description=Forge Launcher
@@ -15,6 +15,28 @@ types=1
 noborder=true
 noborderrule=2
 placement=5
+placementrule=2
+above=true
+aboverule=2
+skiptaskbar=true
+skiptaskbarrule=2
+skippager=true
+skippagerrule=2
+skipswitcher=true
+skipswitcherrule=2
+
+# Forge Control (the Control Center): the same, but placed under the mouse
+# (placement 7), which is the top-bar button that opens it. With
+# gtk-layer-shell the window anchors itself under the top bar instead and
+# this rule doesn't apply to it.
+[forge-control]
+Description=Forge Control
+wmclass=org.forgeos.control
+wmclassmatch=1
+types=1
+noborder=true
+noborderrule=2
+placement=7
 placementrule=2
 above=true
 aboverule=2

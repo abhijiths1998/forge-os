@@ -9,8 +9,9 @@
 //
 // Shared by org.forgeos.glass and org.forgeos.glass.dark (symlinked).
 
-// --- Top bar: launcher + app menu on the left, clock in the middle, tray on
-// the right. Plasma centres whatever sits between two expanding spacers.
+// --- Top bar: launcher + app menu on the left, clock in the middle, Forge
+// Control and the tray on the right. Plasma centres whatever sits between two
+// expanding spacers.
 var bar = new Panel;
 bar.location = "top";
 bar.height = 2 * Math.ceil(gridUnit * 1.6 / 2);
@@ -34,6 +35,7 @@ clock.writeConfig("dateFormat", "custom");
 clock.writeConfig("customDateFormat", "ddd, MMM d");
 
 bar.addWidget("org.kde.plasma.panelspacer");
+bar.addWidget("org.forgeos.control");
 bar.addWidget("org.kde.plasma.systemtray");
 
 // --- Dock: floating, only as wide as its icons, centred.
