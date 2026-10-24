@@ -1,8 +1,8 @@
-# Super+Space opens Forge Launcher, the command bar (forge-launcher, started
-# hidden at login from /etc/xdg/autostart). KRunner keeps Alt+Space and
-# Alt+F2.
+# Super+Space and Alt+Space open Forge Launcher, the command bar
+# (forge-launcher, started hidden at login from /etc/xdg/autostart).
+# KRunner keeps Alt+F2.
 [services][org.forgeos.launcher.desktop]
-_launch=Meta+Space
+_launch=Meta+Space\tAlt+Space
 
 [services][org.kde.krunner.desktop]
-_launch=Alt+Space\tAlt+F2
+_launch=Alt+F2

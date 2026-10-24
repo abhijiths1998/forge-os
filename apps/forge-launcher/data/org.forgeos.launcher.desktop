@@ -9,4 +9,4 @@ Categories=Utility;
 Keywords=search;run;launcher;krunner;spotlight;calculator;
 NoDisplay=true
 StartupNotify=false
-X-KDE-Shortcuts=Meta+Space
+X-KDE-Shortcuts=Meta+Space,Alt+Space
