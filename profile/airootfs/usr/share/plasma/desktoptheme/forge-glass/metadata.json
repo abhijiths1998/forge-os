@@ -6,7 +6,7 @@
             }
         ],
         "Category": "",
-        "Description": "Forge Glass: Breeze with macOS-style dots in the dock",
+        "Description": "Forge Glass: Breeze with a macOS-style dock",
         "EnabledByDefault": true,
         "Id": "forge-glass",
         "License": "LGPL",
