@@ -11,9 +11,10 @@ and the Dynamic Island build on it later. It reads each part from the
 service that owns it and listens to that service's signals, so the state is
 live whoever changes it (a volume key, KDE's own applets, `forge theme`):
 
-  wifi         NetworkManager           set: on | off
-  bluetooth    BlueZ                    set: on | off
+  wifi         NetworkManager           set: on | off       (+ nearby networks)
+  bluetooth    BlueZ                    set: on | off       (+ paired devices)
   volume       PipeWire (wpctl)         set: 0-100 | mute | unmute
+  output       PipeWire (pactl)         set: an output's name (volume's outputs)
   brightness   KDE ScreenBrightness     set: 0-100
   power        power-profiles-daemon    set: power-saver | balanced | performance
   thermal      forge-thermal            set: a profile name
@@ -23,7 +24,14 @@ live whoever changes it (a volume key, KDE's own applets, `forge theme`):
   battery      UPower                   (read only)
   media        MPRIS players            (forged media ...)
 
+Things that take a while (joining a network, connecting a device) go
+through `forged do <action> [arg] [extra]`, which answers once it's done:
+
+  wifi-connect <ssid> [password]   wifi-disconnect   wifi-rescan
+  bt-connect <address>             bt-disconnect <address>
+
 D-Bus: State() -> s (JSON), Set(s key, s value) -> s (an error, or ""),
+Do(s action, s arg, s extra) -> s (an error, or "", when done),
 Media(s action) -> b, and the signal Changed(s state), sent with the whole
 state whenever any part of it changes.
 """
@@ -49,6 +57,22 @@ def run(*cmd, timeout=3):
         return ""
 
 
+def start_capture(cmd, done):
+    """Run a command in the background; done(returncode, stderr) once it exits."""
+    from gi.repository import GLib
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    except OSError as e:
+        done(127, str(e))
+        return
+    GLib.child_watch_add(p.pid, lambda _pid, status: done(p.wait(), p.stderr.read().strip()))
+
+
+def nm_fields(line):
+    """nmcli -t fields: split on ':' but not '\\:', then unescape."""
+    return [f.replace("\\:", ":") for f in re.split(r"(?<!\\):", line)]
+
+
 def start(*cmd, done=None):
     """Run a command in the background; done() once it exits."""
     from gi.repository import GLib
@@ -66,6 +90,8 @@ class Desktop:
     def __init__(self, session, system):
         self.session, self.system = session, system
         self.dnd_cookie = None
+        self.wifi_busy = None      # the SSID being joined
+        self.bt_busy = set()       # addresses being connected or disconnected
 
     def _props(self, bus, name, path, iface):
         import dbus
@@ -80,15 +106,25 @@ class Desktop:
                          "org.freedesktop.NetworkManager")
         if nm is None:
             return {"available": False}
-        ssid, signal = None, None
-        # nmcli escapes ':' in fields as '\:'.
-        for line in run("nmcli", "-t", "-f", "ACTIVE,SIGNAL,SSID", "device", "wifi", "list", "--rescan", "no").splitlines():
-            active, sig, name = (re.split(r"(?<!\\):", line, maxsplit=2) + ["", ""])[:3]
-            if active == "yes":
-                ssid, signal = name.replace("\\:", ":"), int(sig or 0)
-                break
+        # Saved Wi-Fi connections, by name (NetworkManager names them by SSID).
+        known = {f[0] for f in map(nm_fields, run("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show").splitlines())
+                 if len(f) == 2 and f[1] == "802-11-wireless"}
+        networks = {}
+        for f in map(nm_fields, run("nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list",
+                                    "--rescan", "no").splitlines()):
+            if len(f) != 4 or not f[1]:
+                continue  # hidden networks have no name to show
+            inuse, ssid, sig, sec = f[0] == "*", f[1], int(f[2] or 0), f[3]
+            old = networks.get(ssid)  # one row per name, its strongest access point
+            networks[ssid] = {"ssid": ssid, "signal": max(sig, old["signal"] if old else 0),
+                              "secure": sec not in ("", "--"), "known": ssid in known,
+                              "active": inuse or bool(old and old["active"])}
+        ranked = sorted(networks.values(), key=lambda n: (not n["active"], not n["known"], -n["signal"]))
+        current = next((n for n in ranked if n["active"]), None)
         return {"available": bool(nm["WirelessHardwareEnabled"]), "enabled": bool(nm["WirelessEnabled"]),
-                "ssid": ssid, "signal": signal, "wired": str(nm.get("PrimaryConnectionType", "")) == "802-3-ethernet"}
+                "ssid": current and current["ssid"], "signal": current and current["signal"],
+                "wired": str(nm.get("PrimaryConnectionType", "")) == "802-3-ethernet",
+                "busy": self.wifi_busy, "networks": ranked[:15]}
 
     def _bluez(self):
         import dbus
@@ -104,18 +140,47 @@ class Desktop:
         if not adapters:
             return {"available": False}
         powered = bool(adapters[0]["Powered"])
-        connected = [str(i["org.bluez.Device1"].get("Alias", "")) for i in objects.values()
-                     if "org.bluez.Device1" in i and i["org.bluez.Device1"].get("Connected")]
-        return {"available": True, "enabled": powered, "connected": connected}
+        devices = []
+        for i in objects.values():
+            d = i.get("org.bluez.Device1")
+            if not d or not (d.get("Paired") or d.get("Connected")):
+                continue
+            battery = i.get("org.bluez.Battery1", {}).get("Percentage")
+            address = str(d.get("Address", ""))
+            devices.append({"name": str(d.get("Alias") or d.get("Name") or address), "address": address,
+                            "connected": bool(d.get("Connected")), "icon": str(d.get("Icon", "")),
+                            "battery": int(battery) if battery is not None else None,
+                            "busy": address in self.bt_busy})
+        devices.sort(key=lambda d: (not d["connected"], d["name"].lower()))
+        return {"available": True, "enabled": powered, "devices": devices,
+                "connected": [d["name"] for d in devices if d["connected"]]}
 
     def volume(self):
         out = run("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
         m = re.search(r"Volume:\s*([\d.]+)", out)
         if not m:
             return {"available": False}
-        name = re.search(r'node\.description = "([^"]*)"', run("wpctl", "inspect", "@DEFAULT_AUDIO_SINK@"))
+        try:
+            sinks = json.loads(run("pactl", "-f", "json", "list", "sinks") or "[]")
+        except ValueError:
+            sinks = []
+        default = run("pactl", "get-default-sink").strip()
+        outputs = []
+        for sink in sinks:
+            props = sink.get("properties", {})
+            port = next((p for p in sink.get("ports", []) if p.get("name") == sink.get("active_port")), {})
+            bus = props.get("device.bus", "")
+            # Plain names: the port ("Speakers", "Headphones", "HDMI / DisplayPort")
+            # for built-in sound, the product for Bluetooth and USB devices.
+            label = (props.get("device.description") if bus in ("bluetooth", "usb") or not port
+                     else port.get("description")) or sink.get("description", sink["name"])
+            kind = ("bluetooth" if bus == "bluetooth" else "usb" if bus == "usb"
+                    else "hdmi" if "hdmi" in port.get("name", "") else
+                    "headphones" if "headphone" in port.get("name", "") else "speaker")
+            outputs.append({"name": sink["name"], "label": label, "kind": kind, "default": sink["name"] == default})
+        device = next((o["label"] for o in outputs if o["default"]), None)
         return {"available": True, "level": round(float(m[1]) * 100), "muted": "MUTED" in out,
-                "device": name[1] if name else None}
+                "device": device, "outputs": outputs}
 
     def _display(self):
         import dbus
@@ -242,6 +307,10 @@ class Desktop:
                 start("wpctl", "set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", f"{int(value) / 100:.2f}", done=done)
             else:
                 return "volume is 0-150, mute or unmute"
+        elif key == "output":
+            if value not in [o["name"] for o in self.volume().get("outputs", [])]:
+                return "no such output; see volume.outputs"
+            start("pactl", "set-default-sink", value, done=done)
         elif key == "brightness":
             path = self._display()
             if not (value.isdigit() and int(value) <= 100) or not path:
@@ -279,6 +348,60 @@ class Desktop:
         else:
             return f"no {key}; try: wifi bluetooth volume brightness power thermal dark tiling dnd"
         return ""
+
+    def do(self, action, arg, extra, finish, changed):
+        """A slow action; finish(error or "") when it's done. changed(part) as it goes."""
+        import dbus
+
+        if action == "wifi-connect":
+            ssid, password = arg, extra
+            if not ssid:
+                return finish("which network?")
+            known = any(n["ssid"] == ssid and n["known"] for n in self.wifi().get("networks", []))
+            if known and not password:
+                cmd = ["nmcli", "--wait", "20", "connection", "up", "id", ssid]
+            else:
+                cmd = ["nmcli", "--wait", "20", "device", "wifi", "connect", ssid] + (["password", password] if password else [])
+            self.wifi_busy = ssid
+            changed("wifi")
+
+            def joined(rc, err):
+                self.wifi_busy = None
+                changed("wifi")
+                if rc == 0:
+                    return finish("")
+                if "Secrets were required" in err or "password" in err.lower() or "802-11-wireless-security" in err:
+                    return finish("needs-password")
+                finish(err.split("Error: ", 1)[-1] or "couldn't join " + ssid)
+            start_capture(cmd, joined)
+        elif action == "wifi-disconnect":
+            dev = next((f[0] for f in map(nm_fields, run("nmcli", "-t", "-f", "DEVICE,TYPE", "device").splitlines())
+                        if len(f) == 2 and f[1] == "wifi"), None)
+            if not dev:
+                return finish("no Wi-Fi device")
+            start_capture(["nmcli", "device", "disconnect", dev], lambda rc, err: (changed("wifi"), finish(err if rc else "")))
+        elif action == "wifi-rescan":
+            # Results arrive over the next few seconds; NetworkManager's signals bring them in.
+            start_capture(["nmcli", "device", "wifi", "rescan"], lambda rc, err: (changed("wifi"), finish("")))
+        elif action in ("bt-connect", "bt-disconnect"):
+            path = next((p for p, i in self._bluez().items()
+                         if str(i.get("org.bluez.Device1", {}).get("Address", "")) == arg), None)
+            if not path:
+                return finish("no such device")
+            self.bt_busy.add(arg)
+            changed("bluetooth")
+
+            def done(err=""):
+                self.bt_busy.discard(arg)
+                changed("bluetooth")
+                finish(err)
+            device = self.system.get_object("org.bluez", path)
+            getattr(device, "Connect" if action == "bt-connect" else "Disconnect")(
+                dbus_interface="org.bluez.Device1", timeout=30,
+                reply_handler=lambda: done(),
+                error_handler=lambda e: done(e.get_dbus_message() or str(e)))
+        else:
+            finish(f"no {action}; try: wifi-connect wifi-disconnect wifi-rescan bt-connect bt-disconnect")
 
     def media_action(self, action):
         import dbus
@@ -341,6 +464,11 @@ def serve():
             if not err and part:
                 self.refresh(part)
             return err
+
+        @dbus.service.method(IFACE, in_signature="sss", out_signature="s",
+                             async_callbacks=("reply", "error"))
+        def Do(self, action, arg, extra, reply, error):
+            desk.do(str(action), str(arg), str(extra), lambda err: reply(err), lambda part: self.refresh(part))
 
         @dbus.service.method(IFACE, in_signature="s", out_signature="b")
         def Media(self, action):
@@ -405,7 +533,8 @@ def main(argv):
     if cmd == "serve":
         serve()
         return True
-    if cmd not in ("state", "set", "media") or (cmd == "set" and len(args) != 2) or (cmd == "media" and len(args) != 1):
+    if cmd not in ("state", "set", "media", "do") or (cmd == "set" and len(args) != 2) \
+            or (cmd == "media" and len(args) != 1) or (cmd == "do" and not 1 <= len(args) <= 3):
         print(__doc__.strip())
         return cmd in ("help", "-h", "--help")
     import dbus
@@ -415,6 +544,12 @@ def main(argv):
         return True
     if cmd == "media":
         return bool(proxy.Media(args[0], dbus_interface=IFACE))
+    if cmd == "do":
+        args += [""] * (3 - len(args))
+        err = str(proxy.Do(*args, dbus_interface=IFACE, timeout=60))
+        if err:
+            print(f"forged: {err}", file=sys.stderr)
+        return not err
     err = str(proxy.Set(args[0], args[1], dbus_interface=IFACE))
     if err:
         print(f"forged: {err}", file=sys.stderr)
