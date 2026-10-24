@@ -1,0 +1,12 @@
+# Forge Browser opens web links and pages (Brave stays installed for sites
+# that need Widevine DRM).
+[Default Applications]
+text/html=org.forgeos.browser.desktop
+application/xhtml+xml=org.forgeos.browser.desktop
+x-scheme-handler/http=org.forgeos.browser.desktop
+x-scheme-handler/https=org.forgeos.browser.desktop
+
+[Added Associations]
+text/html=org.forgeos.browser.desktop;
+x-scheme-handler/http=org.forgeos.browser.desktop;
+x-scheme-handler/https=org.forgeos.browser.desktop;

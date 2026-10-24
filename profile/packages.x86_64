@@ -243,7 +243,10 @@ zsh-syntax-highlighting
 forge-store
 pamac
 
-# Default browser
+# Default browser: Forge Browser (apps/forge-browser), with built-in ad
+# blocking. Brave stays for sites that need Widevine DRM (Netflix, Spotify
+# web), which Qt WebEngine doesn't ship.
+forge-browser
 brave-bin
 
 # Gaming stack

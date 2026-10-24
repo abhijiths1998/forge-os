@@ -49,7 +49,7 @@ var tasks = dock.addWidget("org.kde.plasma.icontasks");
 tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
-    "applications:brave-browser.desktop",
+    "applications:org.forgeos.browser.desktop",
     "applications:steam.desktop",
     "applications:org.forgeos.store.desktop",
     "applications:org.kde.konsole.desktop",
