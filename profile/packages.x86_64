@@ -236,9 +236,11 @@ zsh-completions
 zsh-autosuggestions
 zsh-syntax-highlighting
 
-# App store (Pamac, not Discover: native repo browsing across
-# core/extra/multilib/Chaotic-AUR plus Flatpak, in one Manjaro/Garuda-style
-# GUI, rather than KDE's more limited Flatpak/pacman-only Discover)
+# App store: Forge Store (apps/forge-store), in place of the Pamac GUI. It
+# runs on libpamac and the pamac CLI, which `forge install` uses too (native
+# repo browsing across core/extra/multilib/Chaotic-AUR, rather than KDE's
+# more limited Flatpak/pacman-only Discover).
+forge-store
 pamac
 
 # Default browser

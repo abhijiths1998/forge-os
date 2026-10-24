@@ -51,7 +51,7 @@ tasks.writeConfig("launchers", [
     "applications:org.kde.dolphin.desktop",
     "applications:brave-browser.desktop",
     "applications:steam.desktop",
-    "applications:org.manjaro.pamac.manager.desktop",
+    "applications:org.forgeos.store.desktop",
     "applications:org.kde.konsole.desktop",
     "applications:systemsettings.desktop",
 ]);
