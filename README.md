@@ -45,13 +45,16 @@ forge thermal cool         # silent, cool, balanced or performance
 ## Forge apps
 
 In-house apps in the Forge Glass look, in `apps/` (each has a README),
-built into the ISO by `apps/build-packages.sh`:
+built into the ISO by `apps/build-packages.sh`. The Flutter ones share
+`apps/forge_ui`: the theme model, palette and widgets, so they follow the
+theme set in the Theming Kit:
 
 | App | Replaces | Built with |
 |---|---|---|
 | **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner |
 | **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
 | **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
+| **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
 
 Each is translucent, so KWin's Glass effect frosts it like the rest of the
 desktop. Brave stays installed for sites that need Widevine DRM.

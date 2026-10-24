@@ -5,7 +5,9 @@
 #   forge remove <pkg...>
 #   forge update              system packages + Flatpaks
 #   forge search <query>
-#   forge theme [light|dark]  switch Forge Glass light/dark (toggles if omitted)
+#   forge theme [light|dark|<theme>|list]
+#                             Forge Glass light/dark (toggles if omitted), or any
+#                             Theming Kit theme
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
 #   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
@@ -88,7 +90,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}remove${OFF} <pkg...>     remove packages
   ${PERI}update${OFF}              update everything ${GREY}(packages + Flatpaks)${OFF}
   ${PERI}search${OFF} <query>      find packages
-  ${PERI}theme${OFF} [light|dark]  switch the Forge Glass look
+  ${PERI}theme${OFF} [light|dark|name] switch the look ${GREY}(forge theme list)${OFF}
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
@@ -120,6 +122,32 @@ case "${cmd}" in
         pkg search "$@"
         ;;
     theme)
+        # With the Theming Kit, every theme goes through it, so the Forge
+        # apps' colours (~/.config/forge/theme.json) stay in step.
+        if have forge-themekit; then
+            want="${1:-}"
+            if [[ "${want}" == list ]]; then
+                forge-themekit --list 2>/dev/null | while IFS=$'\t' read -r id name; do
+                    printf '  %s%-20s%s %s\n' "${PERI}" "${id}" "${OFF}" "${name}"
+                done
+                exit 0
+            fi
+            if [[ -z "${want}" ]]; then
+                grep -q '"dark": false' "${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.json" 2>/dev/null \
+                    && want=dark || want=light
+                [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.json" ]] || {
+                    [[ "$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)" == *Light* ]] \
+                        && want=dark || want=light; }
+            fi
+            case "${want}" in
+                light) want=forge-glass-light ;;
+                dark)  want=forge-glass ;;
+            esac
+            forge-themekit --apply "${want}" >/dev/null 2>&1 \
+                || fail "no theme ${PERI}${want}${OFF} ${GREY}(forge theme list)${OFF}"
+            ok "theme ${want}"
+            exit 0
+        fi
         have plasma-apply-lookandfeel || fail "needs a Plasma session"
         current="$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null)"
         want="${1:-}"

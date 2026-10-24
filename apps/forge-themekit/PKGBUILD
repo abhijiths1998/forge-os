@@ -1,0 +1,27 @@
+# Forge Theming Kit: themes, colour and liquid glass (Flutter, forge_ui).
+# Built from this directory, next to ../forge_ui, by apps/build-packages.sh
+# during the ISO build.
+pkgname=forge-themekit
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Theming Kit: presets and sliders for colour and liquid glass"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'kconfig' 'qt6-tools' 'plasma-workspace' 'kwin-effects-glass-git')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    flutter build linux --release
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-themekit" "${pkgdir}/usr/bin/forge-themekit"
+    install -Dm644 data/org.forgeos.themekit.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.themekit.desktop"
+}

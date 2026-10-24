@@ -24,6 +24,13 @@ work="$(mktemp -d)"
 chown builder: "${work}"
 trap 'rm -rf "${work}"' EXIT
 
+# Shared Flutter code the apps use by relative path (path: ../forge_ui).
+if [ -d "${REPO_ROOT}/apps/forge_ui" ]; then
+    cp -r "${REPO_ROOT}/apps/forge_ui" "${work}/forge_ui"
+    rm -rf "${work}/forge_ui/.dart_tool"
+    chown -R builder: "${work}/forge_ui"
+fi
+
 for pkgbuild in "${pkgbuilds[@]}"; do
     app="$(basename "$(dirname "${pkgbuild}")")"
     echo "==> building ${app}"

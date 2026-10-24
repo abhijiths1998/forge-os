@@ -42,6 +42,7 @@ and the tagline is ours ("Built hot. Runs cool.").
 | Trailer element | forge-os implementation |
 |---|---|
 | Pastel liquid glass | `ForgeGlassLight`/`ForgeGlassDark` colour schemes with translucent (alpha) backgrounds; Darkly widget style + window decoration, which turn those into translucent windows, titlebars and menus; `kwin-effects-glass` (replacing the stock blur/contrast) frosts everything translucent: a clear, saturated blur, glass that runs right to the edge with the background bent gently there and no coloured border (`forge glass calm|liquid|bold` switches looks); Konsole at 64% opacity; translucent floating panels; Plus Jakarta Sans (shipped in `/usr/share/fonts`, not packaged). GTK/Chromium apps (Brave, Steam, Pamac) stay opaque |
+| Theming | Forge Theming Kit (`apps/forge-themekit`, 2026-10-24): built-in themes and sliders for colour and the liquid glass, applied live; themes as JSON (`~/.config/forge/theme.json`, `themes/`); `forge theme <name>`. Shared Flutter code in `apps/forge_ui` |
 | Glass wallpaper | `/usr/share/wallpapers/ForgeGlass` (light `images/` + dark `images_dark/`; Plasma picks by scheme) |
 | Top bar + dock | `org.forgeos.glass` look-and-feel `contents/layouts/org.kde.plasma.desktop-layout.js` |
 | Control center | Plasma system tray in the top bar |

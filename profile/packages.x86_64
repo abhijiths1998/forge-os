@@ -202,6 +202,10 @@ bluez
 bluez-utils
 kwalletmanager
 
+# Forge Theming Kit (apps/forge-themekit, built into the local repo by
+# apps/build-packages.sh): themes and sliders for colour and liquid glass.
+forge-themekit
+
 # Forge Glass default look (pastel liquid glass; see docs/ROADMAP.md). The
 # theme itself (look-and-feel, colour schemes, wallpaper, SDDM theme,
 # Plymouth) is forge-os's own and ships in the airootfs overlay; these are
