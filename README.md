@@ -94,7 +94,7 @@ build/build.sh shell   # interactive shell in the build container, for debugging
 ```
 
 The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
-in the official repos or Chaotic-AUR) and downloads the full KDE + gaming
+in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full KDE + gaming
 package set, so it's slow. A persistent Docker volume
 (`forge-os-pkgcache`) caches downloaded packages across retries. A full build
 takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
@@ -109,6 +109,9 @@ takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
 - `profile/airootfs/usr/local/bin/` — Forge OS's own tools: `forge`,
   `forge-thermal` and its app `forge-thermal-gui`, and `forge-postinstall.sh`
   (run by the installer).
+- `apps/` — Forge OS's in-house apps, each with a PKGBUILD;
+  `apps/build-packages.sh` builds every one into the local repo during
+  `build/build.sh build`, before mkarchiso.
 - `branding-source/` — the logo source and the Forge Glass generators.
 - `docs/ROADMAP.md` — what's built, what's deferred, and why.
 
