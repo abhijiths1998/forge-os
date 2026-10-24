@@ -233,6 +233,11 @@ kwin-polonium
 # apps/build-packages.sh): the Meta+Space command bar, in place of KRunner.
 forge-launcher
 
+# Forge Control (apps/forge-control): the Control Center, and the top bar's
+# Forge widgets (its button, Wi-Fi, Bluetooth, Sound, Battery), which the
+# Forge Glass layout puts there.
+forge-control
+
 # Default shell: zsh + Oh My Zsh (for its plugins; the prompt is our own,
 # see /etc/skel/.zshrc) + autosuggestions/syntax-highlighting.
 oh-my-zsh-git
