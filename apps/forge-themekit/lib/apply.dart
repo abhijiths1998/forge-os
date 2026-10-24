@@ -92,12 +92,20 @@ class Applier {
       'DolphinSidebarOpacity': (m - 16).clamp(0, 100),
     });
 
-    // Konsole: the user's copy of the ForgeGlass scheme overrides the system's.
-    final konsole = Directory('$_data/konsole')..createSync(recursive: true);
-    File('${konsole.path}/ForgeGlass.colorscheme').writeAsStringSync(konsoleColourScheme(t));
+    await _konsole(t);
 
     // For the Forge apps (launcher, store...): they read this for colours.
     t.writeTo(ForgeTheme.currentFile);
+  }
+
+  /// Konsole: the user's ForgeGlass scheme (the forge-os profile's),
+  /// colours and opacity. A Konsole process never reloads a scheme it has
+  /// loaded and over D-Bus only switches to profiles it read at startup, so
+  /// windows already open keep the old look; new Konsole windows (each its
+  /// own process by default) get the theme.
+  Future<void> _konsole(ForgeTheme t) async {
+    final dir = Directory('$_data/konsole')..createSync(recursive: true);
+    File('${dir.path}/ForgeGlass.colorscheme').writeAsStringSync(konsoleColourScheme(t));
   }
 
   Future<void> all(ForgeTheme t) async {
