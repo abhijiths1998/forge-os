@@ -121,8 +121,10 @@ The KDE base stays; the apps people use every day are Forge apps.
 - **Forge Files:** a file manager with the Assistant built in (search by
   what you remember, storage and cleanup in place).
 - **Forge Settings**, and Forge versions of the rest of the everyday apps
-  (terminal, screenshots, media player, text editor, system monitor),
-  replacing the KDE ones one by one.
+  (terminal, media player, text editor, system monitor), replacing the KDE
+  ones one by one. Screenshots came early: **Forge Shot** (2026-10-24), in
+  place of Spectacle on the Print keys; screen recording is still
+  Spectacle's.
 - **Welcome app:** first-boot choices (Flathub, NVIDIA check, codecs,
   the model).
 

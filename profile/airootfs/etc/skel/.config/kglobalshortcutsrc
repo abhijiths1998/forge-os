@@ -6,3 +6,20 @@ _launch=Meta+Space\tAlt+Space
 
 [services][org.kde.krunner.desktop]
 _launch=Alt+F2
+
+# Forge Shot takes the screenshot keys (see its desktop file): Print and
+# Meta+Shift+S an area, Shift+Print the whole screen, Meta+Print a window.
+# Spectacle keeps only its recording shortcuts.
+[services][org.forgeos.shot.desktop]
+_launch=Print\tMeta+Shift+S
+full=Shift+Print
+window=Meta+Print
+
+[services][org.kde.spectacle.desktop]
+_launch=none
+ActiveWindowScreenShot=none
+CurrentMonitorScreenShot=none
+FullScreenScreenShot=none
+OpenWithoutScreenshot=none
+RectangularRegionScreenShot=none
+WindowUnderCursorScreenShot=none

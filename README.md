@@ -61,6 +61,7 @@ theme set in the Theming Kit:
 | **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
 | **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
 | **Forge Control**: the Control Center, a glass panel from the top bar: Wi-Fi, Bluetooth, quiet, dark mode, tiling, brightness, volume, power and cooling profiles, now playing; `forged state` / `forged set` | Plasma's tray popups, in one place | Flutter (forge_ui) + `forged` (Python, D-Bus) |
+| **Forge Shot**: screenshots on the Print keys: an area on the frozen screen (loupe, handles), a window or the whole screen; a thumbnail after; an editor (arrows, boxes, text, highlighter, pixelate, numbered steps, crop); copy, save, copy the text in it | Spectacle (kept for recording) | Flutter (forge_ui) + KWin ScreenShot2 |
 | **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
 
 Each is translucent, so KWin's Glass effect frosts it like the rest of the
