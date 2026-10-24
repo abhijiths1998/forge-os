@@ -27,7 +27,7 @@ class Palette {
   final Color accent;
   final Color onAccent;
 
-  /// Hairline around the card, like the glass edge lighting elsewhere.
+  /// Hairline between the search field and the results.
   final Color rim;
   final Color hover;
 

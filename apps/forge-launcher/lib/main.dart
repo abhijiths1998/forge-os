@@ -171,8 +171,8 @@ class _LauncherAppState extends State<LauncherApp> {
         body: Container(
           decoration: BoxDecoration(
             color: p.surface,
+            // No outline: the glass runs to the edge, like every window.
             borderRadius: BorderRadius.circular(_radius),
-            border: Border.all(color: p.rim),
           ),
           child: Column(
             children: [

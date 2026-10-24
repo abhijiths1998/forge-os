@@ -7,6 +7,7 @@
 #   forge search <query>
 #   forge theme [light|dark]  switch Forge Glass light/dark (toggles if omitted)
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
+#   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
 #   forge about
 set -uo pipefail
@@ -53,6 +54,32 @@ kwin_reconfigure() {
     done
 }
 
+# Glass looks: settings for KWin's Glass effect ([Effect-blurplus] in
+# kwinrc). They differ in how much the background bends near the edges: calm
+# is plain frosted glass with only a hint of it, liquid (the default, as in
+# /etc/skel/.config/kwinrc) bends it gently, bold more, and inside the pane
+# too. None draws a coloured border: the glass runs right to the edge.
+declare -A GLASS=(
+    [calm]="BlurStrength=11 DecorationBlurStrength=11 DockBlurStrength=11 Saturation=1.8
+            RefractionEdgeSize=1.2 RefractionStrength=5 RefractionBevelIntensity=5
+            RefractionRGBFringing=0 BodyRefraction=false RimSpecular=false"
+    [liquid]="BlurStrength=7 DecorationBlurStrength=7 DockBlurStrength=8 Saturation=1.7
+              RefractionEdgeSize=2.5 RefractionStrength=10 RefractionBevelIntensity=7
+              RefractionRGBFringing=0 BodyRefraction=false RimSpecular=false"
+    [bold]="BlurStrength=6 DecorationBlurStrength=6 DockBlurStrength=8 Saturation=1.7
+            RefractionEdgeSize=3 RefractionStrength=12 RefractionBevelIntensity=8
+            RefractionRGBFringing=0 BodyRefraction=true BodyRefractionReach=30
+            BodyRefractionStrength=12 RimSpecular=false"
+)
+
+# Reload the Glass effect so new settings show at once.
+glass_reload() {
+    have qdbus6 || return
+    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
+    qdbus6 org.kde.KWin /Effects unloadEffect glass >/dev/null 2>&1
+    qdbus6 org.kde.KWin /Effects loadEffect glass >/dev/null 2>&1
+}
+
 usage() {
     cat <<EOF
 ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
@@ -63,6 +90,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}search${OFF} <query>      find packages
   ${PERI}theme${OFF} [light|dark]  switch the Forge Glass look
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
+  ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
   ${PERI}about${OFF}               this system, briefly
 EOF
@@ -136,6 +164,21 @@ case "${cmd}" in
         esac
         kwin_reconfigure
         ok "tiling ${want}"
+        ;;
+    glass)
+        have kwriteconfig6 || fail "needs a Plasma session"
+        current="$(kreadconfig6 --file forgerc --group Glass --key preset --default liquid)"
+        if [[ $# -eq 0 ]]; then
+            say "glass ${LILAC}${current}${OFF} ${GREY}(calm, liquid, bold)${OFF}"
+            exit 0
+        fi
+        [[ -n "${GLASS[$1]:-}" ]] || fail "glass is ${PERI}calm${OFF}, ${PERI}liquid${OFF} or ${PERI}bold${OFF}"
+        for kv in ${GLASS[$1]}; do
+            kwriteconfig6 --file kwinrc --group Effect-blurplus --key "${kv%%=*}" "${kv#*=}"
+        done
+        kwriteconfig6 --file forgerc --group Glass --key preset "$1"
+        glass_reload
+        ok "glass $1"
         ;;
     about|info)
         printf '%sForge%s %sOS%s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \

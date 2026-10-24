@@ -20,40 +20,46 @@ poloniumEnabled=false
 # [Round-Corners] Size below and Darkly's CornerRadius (darklyrc), so the
 # frost never pokes out past a rounded corner.
 #
-# Liquid glass: a lighter blur than plain frost so the background stays
-# readable through the glass, strong edge refraction with a little colour
-# fringing, body refraction (the whole pane bends what's behind it, not just
-# the rim) and a specular highlight on the rim.
+# Liquid glass, kept natural: a clear, saturated blur that runs right to the
+# window's edge, where the background bends gently (RefractionEdgeSize is
+# x10 px, so 25px). Nothing draws a coloured border: no edge lighting, rim
+# light or colour fringing, and the rounded-corners outlines are off. No
+# whole-pane bending or noise and a low bevel, either: stronger, those read
+# as smeared, shaded edges. `forge glass calm|liquid|bold` switches looks;
+# this is liquid.
 [Effect-blurplus]
-BlurStrength=8
-DecorationBlurStrength=8
-DockBlurStrength=10
-NoiseStrength=1
-DockNoiseStrength=1
+BlurStrength=7
+DecorationBlurStrength=7
+DockBlurStrength=8
+NoiseStrength=0
+DockNoiseStrength=0
 BlurDecorations=true
 BlurMenus=true
 BlurDocks=true
-Saturation=1.6
-Brightness=1.06
+Saturation=1.7
+Brightness=1.0
 TopCornerRadius=14
 BottomCornerRadius=14
 MenuCornerRadius=10
 DockCornerRadius=18
 UseDeclaredCornerRadius=false
-EdgeLighting=true
-EdgeLightingDock=true
-EdgeLightingTooltip=true
-RefractionStrength=14
-RefractionEdgeSize=5
+EdgeLighting=false
+EdgeLightingDock=false
+EdgeLightingTooltip=false
+RefractionStrength=10
+RefractionEdgeSize=2.5
 RefractionNormalPow=4
-RefractionRGBFringing=4
-RefractionBevelIntensity=13
-BodyRefraction=true
-BodyRefractionReach=40
-BodyRefractionStrength=30
-RimSpecular=true
-RimSpecularScale=12
+RefractionRGBFringing=0
+RefractionBevelIntensity=7
+BodyRefraction=false
+RimSpecular=false
 
+# Rounded corners only: no outlines (the effect's defaults draw a black and
+# a white one), so the glass runs to the edge.
 [Round-Corners]
 Size=14
 InactiveCornerRadius=14
+OutlineThickness=0
+InactiveOutlineThickness=0
+SecondOutlineThickness=0
+InactiveSecondOutlineThickness=0
