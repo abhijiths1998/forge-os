@@ -2,9 +2,9 @@
 //
 // Typing searches apps, Forge actions (theme, tiling, thermal, updates),
 // power actions and a calculator all at once; files come in a moment later
-// from Baloo. Two prefixes switch modes: `>` runs a shell command in
-// Konsole, `?` searches the web. Anything else can fall through to a web
-// search, which is always the last row.
+// from Forge Mind (or Baloo, without it). Two prefixes switch modes: `>`
+// runs a shell command in Konsole, `?` searches the web. Anything else can
+// fall through to a web search, which is always the last row.
 import 'dart:convert';
 import 'dart:io';
 
@@ -318,10 +318,44 @@ class Sources {
       (q.contains('://') ||
           RegExp(r'^[\w\-]+(\.[\w\-]+)*\.[a-z]{2,}(/\S*)?$').hasMatch(q));
 
-  /// Files from Baloo (KDE's file index), if it's running.
-  Future<List<Result>> files(String raw) async {
+  /// Files for a query: from Forge Mind, which understands requests like
+  /// "the pdf from march", or else from Baloo (KDE's file index). `deep`
+  /// asks Forge Mind to let its local model read the request too; it
+  /// returns nothing when no model answered, so the first results stay.
+  Future<List<Result>> files(String raw, {bool deep = false}) async {
     final query = raw.trim();
     if (query.length < 3 || '>?'.contains(query[0])) return [];
+    final mind = await _mindFiles(query, deep);
+    if (mind != null || deep) return mind ?? [];
+    return _balooFiles(query);
+  }
+
+  /// Forge Mind's answer over D-Bus (org.forgeos.Mind.Ask), or null if it
+  /// isn't there. busctl prints the reply as JSON: {"data": ["<json>"]}.
+  Future<List<Result>?> _mindFiles(String query, bool deep) async {
+    try {
+      final r = await Process.run('busctl', [
+        '--user', '--json=short', 'call', 'org.forgeos.Mind',
+        '/org/forgeos/Mind', 'org.forgeos.Mind', 'Ask', 'sb', query,
+        deep ? 'true' : 'false',
+      ]).timeout(Duration(seconds: deep ? 10 : 2));
+      if (r.exitCode != 0) return null;
+      final data = jsonDecode(r.stdout as String)['data'] as List;
+      final reply = jsonDecode(data.first as String) as Map<String, dynamic>;
+      if (deep && reply['by'] != 'model') return [];
+      final home = Platform.environment['HOME'] ?? '';
+      return [
+        for (final f in (reply['results'] as List).take(5))
+          _fileResult(f['path'] as String, home,
+              when: DateTime.fromMillisecondsSinceEpoch(
+                  ((f['mtime'] as num) * 1000).round())),
+      ];
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Result>> _balooFiles(String query) async {
     try {
       final r = await Process.run('baloosearch6', ['-l', '5', query])
           .timeout(const Duration(seconds: 2));
@@ -332,21 +366,64 @@ class Sources {
             .split('\n')
             .map((l) => l.trim())
             .where((l) => l.startsWith('/')))
-          Result(
-            kind: Kind.file,
-            title: path.split('/').last,
-            subtitle: path.startsWith(home)
-                ? '~${path.substring(home.length)}'
-                : path,
-            iconName: FileSystemEntity.isDirectorySync(path)
-                ? 'folder'
-                : 'text-x-generic',
-            score: 10,
-            run: () => openUrl(path),
-          ),
+          _fileResult(path, home),
       ];
     } catch (_) {
       return [];
     }
+  }
+
+  /// A file row: its name, then its folder and (from Forge Mind) date.
+  Result _fileResult(String path, String home, {DateTime? when}) {
+    final dir = path.substring(0, path.lastIndexOf('/').clamp(0, path.length));
+    final where =
+        dir.startsWith(home) ? '~${dir.substring(home.length)}' : dir;
+    return Result(
+      kind: Kind.file,
+      title: path.split('/').last,
+      subtitle: when == null ? where : '$where · ${_date(when)}',
+      iconName:
+          FileSystemEntity.isDirectorySync(path) ? 'folder' : _fileIcon(path),
+      score: 10,
+      run: () => openUrl(path),
+    );
+  }
+
+  static const _months = [
+    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', //
+    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+  ];
+
+  static String _date(DateTime d) {
+    final day = '${d.day} ${_months[d.month - 1]}';
+    return d.year == DateTime.now().year ? day : '$day ${d.year}';
+  }
+
+  static const _icons = {
+    'application-pdf': ['pdf'],
+    'image-x-generic': [
+      'png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'avif', 'bmp', 'svg', //
+    ],
+    'video-x-generic': ['mp4', 'mkv', 'webm', 'mov', 'avi'],
+    'audio-x-generic': ['mp3', 'flac', 'ogg', 'opus', 'm4a', 'wav'],
+    'x-office-document': ['doc', 'docx', 'odt', 'rtf'],
+    'x-office-spreadsheet': ['xls', 'xlsx', 'ods', 'csv'],
+    'x-office-presentation': ['ppt', 'pptx', 'odp'],
+    'package-x-generic': ['zip', 'tar', 'gz', 'xz', 'zst', '7z', 'rar'],
+    'application-x-cd-image': ['iso', 'img'],
+    'text-x-script': [
+      'sh', 'py', 'dart', 'js', 'ts', 'c', 'cpp', 'h', 'rs', 'go', //
+    ],
+  };
+
+  /// A themed icon for the file's type, by extension.
+  static String _fileIcon(String path) {
+    final name = path.split('/').last;
+    final dot = name.lastIndexOf('.');
+    final ext = dot > 0 ? name.substring(dot + 1).toLowerCase() : '';
+    for (final e in _icons.entries) {
+      if (e.value.contains(ext)) return e.key;
+    }
+    return 'text-x-generic';
   }
 }

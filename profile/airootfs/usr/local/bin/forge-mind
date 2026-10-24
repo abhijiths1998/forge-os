@@ -3,14 +3,19 @@
 
   forge-mind index            (re)index $HOME: metadata, download origin, names
   forge-mind search <words>   find files by name/path words (FTS5, ranked)
+  forge-mind ask <request>    find files from a request in plain words
+                              ("the pdf from march", "big videos in downloads");
+                              --deep lets the local model (Ollama) read it too
   forge-mind stats            what's using the disk, Forge-aware
   forge-mind cleanup          cleanup candidates with sizes and reasons (no deletes)
   forge-mind clean <path...>  clean candidates from that list (files go to the trash)
   forge-mind serve            D-Bus service org.forgeos.Mind on the session bus
-  add --json to search/stats/cleanup for machine-readable output
+  add --json to search/ask/stats/cleanup for machine-readable output
 
 Everything here is deterministic; a model only ever turns a request into
-these calls and explains the results. Indexing pauses while GameMode is
+these calls and explains the results. The model is optional: Ollama with
+qwen3:4b by default (~/.config/forge/mind.conf: model=, ollama=), and
+without it, requests are understood by rules. Indexing pauses while GameMode is
 active, so it never competes with a game. The index lives in
 $XDG_DATA_HOME/forge-mind/index.db (SQLite, FTS5). Snapshot sizes need
 btrfs quotas (forge-postinstall.sh runs `snapper setup-quota`).
@@ -133,6 +138,324 @@ def search(words):
     rows = db().execute("""SELECT f.path, f.size, f.mtime, f.origin FROM names n JOIN files f USING(path)
                            WHERE names MATCH ? ORDER BY rank LIMIT 30""", (q,)).fetchall()
     return [dict(zip(("path", "size", "mtime", "origin"), r)) for r in rows]
+
+
+# --- understanding requests ----------------------------------------------
+# A request like "the pdf from march" or "big videos in downloads" becomes
+# filters: kinds of file, a time range, a place, a size, a download site and
+# name words. Rules handle the common phrasings instantly; a local model
+# (Ollama, optional) handles the rest and adds synonyms for the name words.
+IMAGE = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".heic", ".avif", ".bmp", ".svg"]
+KINDS = {
+    "pdf": [".pdf"],
+    "image": IMAGE,
+    "screenshot": IMAGE,
+    "video": [".mp4", ".mkv", ".webm", ".mov", ".avi"],
+    "audio": [".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav"],
+    "document": [".pdf", ".doc", ".docx", ".odt", ".txt", ".md", ".rtf"],
+    "spreadsheet": [".xls", ".xlsx", ".ods", ".csv"],
+    "presentation": [".ppt", ".pptx", ".odp"],
+    "archive": [".zip", ".tar", ".gz", ".xz", ".zst", ".7z", ".rar"],
+    "disk-image": [".iso", ".img"],
+    "code": [".py", ".sh", ".dart", ".js", ".ts", ".c", ".cpp", ".h", ".rs", ".go", ".java"],
+    "installer": [".appimage", ".deb", ".rpm", ".exe", ".msi", ".flatpakref"],
+    "ebook": [".epub", ".mobi"],
+    "font": [".ttf", ".otf"],
+}
+KIND_WORDS = {
+    "pdf": "pdf", "image": "image", "photo": "image", "picture": "image", "pic": "image",
+    "wallpaper": "image", "screenshot": "screenshot", "video": "video", "movie": "video",
+    "clip": "video", "recording": "video", "music": "audio", "song": "audio", "audio": "audio",
+    "track": "audio", "document": "document", "doc": "document", "spreadsheet": "spreadsheet",
+    "sheet": "spreadsheet", "excel": "spreadsheet", "csv": "spreadsheet",
+    "presentation": "presentation", "slide": "presentation", "deck": "presentation",
+    "archive": "archive", "zip": "archive", "iso": "disk-image", "code": "code",
+    "script": "code", "installer": "installer", "appimage": "installer", "ebook": "ebook",
+    "book": "ebook", "epub": "ebook", "font": "font",
+}
+PLACES = {"downloads": "Downloads", "desktop": "Desktop", "documents": "Documents",
+          "pictures": "Pictures", "videos": "Videos", "music": "Music", "games": "Games"}
+SITES = {"github", "gitlab", "reddit", "google", "drive", "discord", "telegram", "whatsapp",
+         "youtube", "steam", "nexusmods", "itch", "dropbox", "mega", "archive"}
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
+          "september", "october", "november", "december"]
+STOP = set("""a an the my me i i'm im that this those these it its file files thing things stuff
+    which where wheres where's what whats what's with of for to on in at from around about
+    sent got had have was is were find show search look open get me some any all one ones
+    called named saved downloaded download made took taken there here and or please can you
+    near roughly sometime ago when may might something anything someone somebody""".split())
+EXTS = {e for exts in KINDS.values() for e in exts}
+DAY = 86400
+
+
+def _month_start(year, month):
+    return time.mktime((year, month, 1, 0, 0, 0, 0, 0, -1))
+
+
+def _month_range(year, month):
+    end_y, end_m = (year + 1, 1) if month == 12 else (year, month + 1)
+    return _month_start(year, month), _month_start(end_y, end_m)
+
+
+MONTH_ABBR = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+              "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def month_of(t, prev, nxt):
+    """1-12 if t names a month here. "may" only counts where it can't be the verb."""
+    if t == "may":
+        return 5 if prev in ("in", "from", "around", "about", "since", "of", "early", "late") \
+            or re.fullmatch(r"(19|20)\d\d", nxt) else None
+    if t in MONTHS:
+        return MONTHS.index(t) + 1
+    return MONTH_ABBR.get(t)
+
+
+def understand(text, now=None):
+    """Filters for a request, by rules. Unknown words are kept as name words."""
+    now = now or time.time()
+    lt = time.localtime(now)
+    today = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    f = {"words": [], "also": [], "kinds": [], "after": None, "before": None, "place": None,
+         "origin": None, "min_size": None, "max_size": None, "exts": [], "downloaded": False}
+    toks = re.findall(r"[\w.+'-]+", text.lower())
+    i = 0
+
+    def span(a, b, widen=0):
+        f["after"], f["before"] = a - widen, b + widen
+
+    while i < len(toks):
+        t, nxt = toks[i], toks[i + 1] if i + 1 < len(toks) else ""
+        prev = toks[i - 1] if i else ""
+        around = prev in ("around", "about", "roughly", "near")
+        singular = t[:-1] if t.endswith("s") and len(t) > 3 else t
+        if t == "today":
+            span(today, now + DAY)
+        elif t == "yesterday":
+            span(today - DAY, today)
+        elif t in ("recent", "recently", "latest", "new", "newest"):
+            span(now - 30 * DAY, now + DAY)
+        elif t in ("this", "last", "past") and nxt in ("week", "month", "year"):
+            unit = {"week": 7, "month": 30, "year": 365}[nxt] * DAY
+            if t == "this":
+                start = {"week": today - lt.tm_wday * DAY,
+                         "month": _month_start(lt.tm_year, lt.tm_mon),
+                         "year": _month_start(lt.tm_year, 1)}[nxt]
+                span(start, now + DAY)
+            elif t == "past":
+                span(now - unit, now + DAY)
+            elif nxt == "month":
+                y, m = (lt.tm_year - 1, 12) if lt.tm_mon == 1 else (lt.tm_year, lt.tm_mon - 1)
+                span(*_month_range(y, m))
+            elif nxt == "year":
+                span(*(_month_start(lt.tm_year - 1, 1), _month_start(lt.tm_year, 1)))
+            else:
+                span(today - (lt.tm_wday + 7) * DAY, today - lt.tm_wday * DAY)
+            i += 1
+        elif t.isdigit() and nxt.rstrip("s") in ("day", "week", "month", "year") and \
+                toks[i + 2:i + 3] == ["ago"]:
+            unit = {"day": 1, "week": 7, "month": 30, "year": 365}[nxt.rstrip("s")] * DAY
+            at = now - int(t) * unit
+            span(at - unit / 2, at + unit / 2)
+            i += 2
+        elif (month := month_of(t, prev, nxt)):
+            year = int(nxt) if re.fullmatch(r"(19|20)\d\d", nxt) else \
+                lt.tm_year if month <= lt.tm_mon else lt.tm_year - 1
+            a, b = _month_range(year, month)
+            span(a, b, 15 * DAY if around else 0)
+            if nxt == str(year):
+                i += 1
+        elif re.fullmatch(r"(19|20)\d\d", t) and prev in ("in", "from", "during", "since", "around"):
+            a, b = _month_start(int(t), 1), _month_start(int(t) + 1, 1)
+            span(a, now + DAY if prev == "since" else b, 60 * DAY if around else 0)
+        elif singular in KIND_WORDS or t in KIND_WORDS:
+            kind = KIND_WORDS.get(t) or KIND_WORDS[singular]
+            if kind not in f["kinds"]:
+                f["kinds"].append(kind)
+            if kind == "screenshot":
+                f["words"].append("screenshot")
+        elif ("." + t in EXTS or "." + singular in EXTS) and t not in KIND_WORDS:
+            f["exts"].append("." + t if "." + t in EXTS else "." + singular)
+        elif t in ("downloaded", "download", "downloads") and prev not in ("in", "on", "from", "under"):
+            f["downloaded"] = True
+        elif t in PLACES and prev in ("in", "on", "from", "under"):
+            f["place"] = PLACES[t]
+        elif prev == "from" and (t in SITES or "." in t):
+            f["origin"] = t
+        elif t in ("big", "large", "bigger", "largest", "biggest"):
+            f["min_size"] = 100 * 1024**2
+        elif t in ("huge", "massive"):
+            f["min_size"] = 1024**3
+        elif t in ("small", "tiny", "little"):
+            f["max_size"] = 1024**2
+        elif m := re.fullmatch(r"(\d+(?:\.\d+)?)(kb|mb|gb)", t):
+            size = float(m[1]) * {"kb": 1024, "mb": 1024**2, "gb": 1024**3}[m[2]]
+            before = toks[i - 2] if prev == "than" and i >= 2 else prev
+            key = "max_size" if before in ("under", "below", "smaller", "less") else "min_size"
+            f["min_size" if key == "max_size" else "max_size"] = None
+            f[key] = int(size)
+        elif t in ("smaller", "less", "under", "below") and nxt in ("than",) or t == "than":
+            pass
+        elif t not in STOP:
+            f["words"].append(t.strip("'"))
+        i += 1
+    f["words"] = [w for w in dict.fromkeys(f["words"]) if w]
+    return f
+
+
+# The model, when there is one. Configured in ~/.config/forge/mind.conf
+# (model=..., ollama=http://...) or FORGE_MIND_MODEL; nothing else to set up.
+def model_config():
+    conf = {"model": "qwen3:4b", "ollama": "http://127.0.0.1:11434"}
+    try:
+        cfg = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "forge/mind.conf"
+        for line in cfg.read_text().splitlines():
+            k, _, v = line.partition("=")
+            if k.strip() in conf and v.strip():
+                conf[k.strip()] = v.strip()
+    except OSError:
+        pass
+    conf["model"] = os.environ.get("FORGE_MIND_MODEL", conf["model"])
+    return conf
+
+
+FILTER_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "words": {"type": "array", "items": {"type": "string"}},
+        "kinds": {"type": "array", "items": {"type": "string", "enum": list(KINDS)}},
+        "after": {"type": ["string", "null"]},
+        "before": {"type": ["string", "null"]},
+        "place": {"type": ["string", "null"], "enum": [*PLACES.values(), None]},
+        "origin": {"type": ["string", "null"]},
+        "min_size_mb": {"type": ["number", "null"]},
+        "max_size_mb": {"type": ["number", "null"]},
+    },
+    "required": ["words", "kinds", "after", "before", "place", "origin", "min_size_mb", "max_size_mb"],
+}
+
+MODEL_PROMPT = """You turn a request for a file on a Linux desktop into search filters.
+Today is {today}. Only the file's name and folder are searchable, so for "words" give
+the words likely to appear in the file NAME: the request's key words plus 2-5 close
+synonyms or related terms (a landlord's letter: lease, rent, tenancy, landlord).
+Leave out filler words and words already covered by another filter.
+kinds: types of file asked for. after/before: dates (YYYY-MM-DD) bounding when the file
+was made or changed; for "around" a month, widen by two weeks each side. place: a home
+folder only if one is named. origin: a website it was downloaded from, if named
+(e.g. "github"). Sizes in MB only when asked. Use null and [] for anything not asked."""
+
+
+def model_filters(text, timeout=8):
+    """Filters from the local model, or None when there's none (or it fails)."""
+    import urllib.request
+    if gamemode_active():
+        return None
+    conf = model_config()
+    body = json.dumps({
+        "model": conf["model"], "stream": False, "think": False, "keep_alive": "5m",
+        "format": FILTER_SCHEMA, "options": {"temperature": 0},
+        "messages": [{"role": "system", "content": MODEL_PROMPT.format(today=time.strftime("%Y-%m-%d (%A)"))},
+                     {"role": "user", "content": text}],
+    }).encode()
+    try:
+        req = urllib.request.Request(conf["ollama"] + "/api/chat", body, {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = json.loads(json.loads(r.read())["message"]["content"])
+    except (OSError, ValueError, KeyError):
+        return None
+
+    def date(s):
+        try:
+            return time.mktime(time.strptime(s, "%Y-%m-%d"))
+        except (TypeError, ValueError):
+            return None
+
+    mb = lambda v: int(v * 1024**2) if isinstance(v, (int, float)) and v > 0 else None
+    words = [w.lower() for w in raw.get("words", []) if isinstance(w, str) and w.strip()]
+    return {"words": [t for w in words for t in re.findall(r"\w+", w) if t not in STOP][:12],
+            "kinds": [k for k in raw.get("kinds", []) if k in KINDS],
+            "after": date(raw.get("after")),
+            "before": date(raw.get("before")) and date(raw.get("before")) + DAY,
+            "place": raw.get("place") if raw.get("place") in PLACES.values() else None,
+            "origin": (raw.get("origin") or "").lower() or None,
+            "min_size": mb(raw.get("min_size_mb")), "max_size": mb(raw.get("max_size_mb"))}
+
+
+def _conditions(f, kinds=True):
+    where, args = [], []
+    exts = sorted({e for k in f["kinds"] for e in KINDS.get(k, [])} | set(f.get("exts", []))) if kinds else []
+    if exts:
+        where.append(f"f.ext IN ({','.join('?' * len(exts))})")
+        args += exts
+    for key, op in (("after", ">="), ("before", "<")):
+        if f.get(key):
+            where.append(f"f.mtime {op} ?")
+            args.append(f[key])
+    if f.get("place"):
+        where.append("f.path LIKE ?")
+        args.append(f"{HOME}/{f['place']}/%")
+    if f.get("downloaded") and not f.get("place"):
+        where.append("(f.origin IS NOT NULL OR f.path LIKE ?)")
+        args.append(f"{HOME}/Downloads/%")
+    if f.get("origin"):
+        where.append("f.origin LIKE ?")
+        args.append(f"%{f['origin']}%")
+    if f.get("min_size"):
+        where.append("f.size >= ?")
+        args.append(f["min_size"])
+    if f.get("max_size"):
+        where.append("f.size <= ?")
+        args.append(f["max_size"])
+    return " AND ".join(where) or "1", args
+
+
+def find(f, limit=30):
+    """Files matching filters f, with whether the match is loose. Name words rank
+    results (any may match) and the other filters must hold. Then, looser: the
+    name words without the kind of file (scripts often have no extension), and
+    last, everything the filters alone allow, newest first. The user's own files
+    rank above those in hidden app folders."""
+    cols = "f.path, f.size, f.mtime, f.origin"
+    hidden = f"instr(substr(f.path, {len(str(HOME)) + 1}), '/.') > 0"
+    con, rows, loose = db(), [], False
+    # Typed words match as prefixes (they may be half-typed); the model's
+    # extra words ("also") only as whole words, so "fan" doesn't find "fancy".
+    phrase = lambda w: '"' + w.replace('"', "") + '"'
+    if f["words"] or f.get("also"):
+        q = " OR ".join([phrase(w) + "*" for w in f["words"]] + [phrase(w) for w in f.get("also", [])])
+        for strict in (True, False):
+            cond, args = _conditions(f, kinds=strict)
+            rows = con.execute(f"""SELECT {cols} FROM names n JOIN files f USING(path)
+                                   WHERE names MATCH ? AND {cond} ORDER BY {hidden}, rank LIMIT ?""",
+                               [q, *args, limit]).fetchall()
+            if rows or not (f["kinds"] or f.get("exts")):
+                break
+            loose = True
+    cond, args = _conditions(f)
+    if not rows and cond != "1":
+        loose = bool(f["words"] or f.get("also"))
+        rows = con.execute(f"SELECT {cols} FROM files f WHERE {cond} AND {user_file_sql()} "
+                           f"ORDER BY f.mtime DESC LIMIT ?", [*args, limit]).fetchall()
+    return [dict(zip(("path", "size", "mtime", "origin"), r)) for r in rows], loose
+
+
+def ask(text, deep=False):
+    """Find files for a request in plain words. deep: let the local model read it too."""
+    f, by = understand(text), "rules"
+    if deep and len(text.split()) >= 2:
+        m = model_filters(text)
+        if m:
+            # Rules are exact about dates and kinds when they caught them; the model
+            # fills in the rest. For name words it's the better judge: typed words
+            # it kept stay, filler it dropped goes, and its synonyms are added.
+            for k in ("kinds", "after", "before", "place", "origin", "min_size", "max_size"):
+                if not f[k]:
+                    f[k] = m[k]
+            f["words"] = [w for w in f["words"] if w in m["words"]]
+            f["also"] = [w for w in m["words"] if w not in f["words"]]
+            by = "model"
+    results, loose = find(f)
+    return {"filters": f, "by": by, "loose": loose, "results": results}
 
 
 # --- storage -------------------------------------------------------------
@@ -299,34 +622,60 @@ def serve():
 
     DBusGMainLoop(set_as_default=True)
     iface = "org.forgeos.Mind"
+    # It exits after a while unused; D-Bus starts it again on the next call,
+    # so an update takes effect without anyone restarting it.
+    idle_exit = 600
+    last_call = [time.monotonic()]
+    loop = GLib.MainLoop()
+
+    def exit_if_idle():
+        busy = Mind.indexing and Mind.indexing.poll() is None
+        if not busy and time.monotonic() - last_call[0] > idle_exit:
+            loop.quit()
+        return True
+
+    def method(*sig, **kw):
+        """dbus.service.method, noting each call for the idle exit."""
+        def wrap(fn):
+            @functools.wraps(fn)
+            def called(*a):
+                last_call[0] = time.monotonic()
+                return fn(*a)
+            return dbus.service.method(iface, *sig, **kw)(called)
+        return wrap
 
     class Mind(dbus.service.Object):
         """Every method returns JSON, the same as `forge-mind <cmd> --json`."""
         indexing = None
 
-        @dbus.service.method(iface, in_signature="s", out_signature="s")
+        @method(in_signature="s", out_signature="s")
         def Search(self, query):
             return json.dumps(search(query.split()))
 
-        @dbus.service.method(iface, out_signature="s")
+        @method(in_signature="sb", out_signature="s")
+        def Ask(self, text, deep):
+            """{"filters", "by": "rules"|"model", "loose", "results"}; see ask()."""
+            return json.dumps(ask(str(text), bool(deep)))
+
+        @method(out_signature="s")
         def Stats(self):
             return json.dumps(stats())
 
-        @dbus.service.method(iface, out_signature="s")
+        @method(out_signature="s")
         def Cleanup(self):
             return json.dumps(candidates())
 
-        @dbus.service.method(iface, in_signature="as", out_signature="s")
+        @method(in_signature="as", out_signature="s")
         def Clean(self, paths):
             return json.dumps(clean([str(p) for p in paths]))
 
-        @dbus.service.method(iface, out_signature="b")
+        @method(out_signature="b")
         def Index(self):
             """Start a re-index in the background; false if one is already running."""
-            if self.indexing and self.indexing.poll() is None:
+            if Mind.indexing and Mind.indexing.poll() is None:
                 return False
-            self.indexing = subprocess.Popen([sys.argv[0], "index"])
-            GLib.child_watch_add(self.indexing.pid, lambda *_: self.IndexFinished())
+            Mind.indexing = subprocess.Popen([sys.argv[0], "index"])
+            GLib.child_watch_add(Mind.indexing.pid, lambda *_: self.IndexFinished())
             return True
 
         @dbus.service.signal(iface)
@@ -336,13 +685,14 @@ def serve():
     bus = dbus.SessionBus()
     name = dbus.service.BusName(iface, bus, do_not_queue=True)  # noqa: F841 (held while running)
     Mind(bus, "/org/forgeos/Mind")
-    GLib.MainLoop().run()
+    GLib.timeout_add_seconds(60, exit_if_idle)
+    loop.run()
 
 
 # --- CLI -----------------------------------------------------------------
 def main(argv):
-    as_json = "--json" in argv
-    argv = [a for a in argv if a != "--json"]
+    as_json, deep = "--json" in argv, "--deep" in argv
+    argv = [a for a in argv if a not in ("--json", "--deep")]
     cmd, args = (argv[0], argv[1:]) if argv else ("help", [])
     if cmd == "index":
         print(f"indexed {index()} files")
@@ -352,6 +702,27 @@ def main(argv):
             print(json.dumps(rows, indent=1))
         for r in [] if as_json else rows:
             print(f"{human(r['size']):>9}  {time.strftime('%Y-%m-%d', time.localtime(r['mtime']))}  {r['path']}"
+                  + (f"  ← {r['origin']}" if r["origin"] else ""))
+    elif cmd == "ask" and args:
+        a = ask(" ".join(args), deep)
+        if as_json:
+            print(json.dumps(a, indent=1))
+            return True
+        f = a["filters"]
+        day = lambda t: time.strftime("%Y-%m-%d", time.localtime(t))
+        print("understood (" + a["by"] + "): " + ", ".join(filter(None, [
+            f["kinds"] and "/".join(f["kinds"]),
+            f["after"] and f"from {day(f['after'])}", f["before"] and f"until {day(f['before'] - 1)}",
+            f["exts"] and "/".join(e[1:] for e in f["exts"]),
+            f["place"] and f"in ~/{f['place']}", f["origin"] and f"downloaded from {f['origin']}",
+            f["downloaded"] and not f["origin"] and "downloaded",
+            f["min_size"] and f"over {human(f['min_size'])}", f["max_size"] and f"under {human(f['max_size'])}",
+            (f["words"] or f["also"]) and "named like " + " ".join(f["words"] + f["also"])]))
+              or "nothing to go on")
+        if a["loose"]:
+            print("nothing matched all of it; closest:")
+        for r in a["results"][:15]:
+            print(f"{human(r['size']):>9}  {day(r['mtime'])}  {r['path']}"
                   + (f"  ← {r['origin']}" if r["origin"] else ""))
     elif cmd == "stats":
         s = stats()

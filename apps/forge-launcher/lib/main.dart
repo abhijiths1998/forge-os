@@ -68,20 +68,40 @@ class _LauncherAppState extends State<LauncherApp> {
       _selected = 0;
     });
     _resize();
-    // Files are slower (a Baloo query): add them once typing pauses, just
-    // above the web search row.
+    // Files are slower (a Forge Mind or Baloo query): add them once typing
+    // pauses, just above the web search row. A request of a few words then
+    // gets a deeper look from the local model, if there is one, whose files
+    // replace the first ones.
     _fileTimer = Timer(const Duration(milliseconds: 180), () async {
       final files = await _sources.files(text);
-      if (files.isEmpty || id != _searchId) return;
-      setState(() {
-        final web = _results.isNotEmpty && _results.last.kind == Kind.web
-            ? _results.removeLast()
-            : null;
-        _results.addAll(files);
-        if (web != null) _results.add(web);
+      if (id != _searchId) return;
+      _showFiles(files);
+      if (text.trim().split(RegExp(r'\s+')).length < 3) return;
+      _fileTimer = Timer(const Duration(milliseconds: 700), () async {
+        final deeper = await _sources.files(text, deep: true);
+        if (id == _searchId) _showFiles(deeper);
       });
-      _resize();
     });
+  }
+
+  void _showFiles(List<Result> files) {
+    if (files.isEmpty) return;
+    setState(() {
+      final selected = _selected > 0 && _selected < _results.length
+          ? _results[_selected]
+          : null;
+      _results.removeWhere((r) => r.kind == Kind.file);
+      final web = _results.isNotEmpty && _results.last.kind == Kind.web
+          ? _results.removeLast()
+          : null;
+      _results.addAll(files);
+      if (web != null) _results.add(web);
+      // A row picked with the arrow keys stays picked, unless it was a
+      // file; otherwise the top row is, as when results first come in.
+      final keep = selected == null ? -1 : _results.indexOf(selected);
+      _selected = keep >= 0 ? keep : 0;
+    });
+    _resize();
   }
 
   void _resize() {

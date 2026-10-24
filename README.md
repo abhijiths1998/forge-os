@@ -91,11 +91,20 @@ into its calls and explains the results, so nothing is guessed and nothing
 leaves the machine.
 
 ```sh
-forge find lease pdf       # files by name and path words
-forge space                # disk, Steam libraries, snapshots, biggest folders
-forge space cleanup        # what could go, with sizes and reasons
-forge space clean <path>   # clean one of those (home files go to the trash)
+forge find the pdf from march      # files, from a request in plain words
+forge space                        # disk, Steam libraries, snapshots, biggest folders
+forge space cleanup                # what could go, with sizes and reasons
+forge space clean <path>           # clean one of those (home files go to the trash)
 ```
+
+Requests are read for the kind of file ("pdf", "screenshots", "videos"), when
+("around march", "last week", "2 weeks ago"), where ("in downloads"), how big
+("bigger than 2gb") and where it came from ("from github"); the rest are name
+words. Rules do this instantly. With [Ollama](https://ollama.com) running, a
+local model (qwen3:4b unless `~/.config/forge/mind.conf` says `model=...`)
+reads longer requests too and adds likely name words: "my landlord's letter"
+also looks for lease, rent and tenancy. It never runs during a game. The
+Launcher (Super+Space) shows these results under the apps.
 
 Cleanup knows what fills a gaming Linux disk: Proton prefixes and shader
 caches of uninstalled Steam games (across every Steam library), the pacman
@@ -105,8 +114,9 @@ accepts paths the cleanup list currently names.
 
 The index (SQLite, FTS5) lives in `~/.local/share/forge-mind/` and is
 refreshed by a user timer at idle priority; it waits while GameMode is
-active. Apps use it over D-Bus (`org.forgeos.Mind`: `Search`, `Stats`,
-`Cleanup`, `Clean`, `Index`, all returning JSON), which starts it on demand.
+active. Apps use it over D-Bus (`org.forgeos.Mind`: `Ask`, `Search`,
+`Stats`, `Cleanup`, `Clean`, `Index`, all returning JSON), which starts it on
+demand; it exits after ten idle minutes.
 
 ## Post-install script (faster path, no ISO)
 
