@@ -19,17 +19,22 @@ poloniumEnabled=false
 # Slider units, as in the effect's settings page. Corner radii match
 # [Round-Corners] Size below and Darkly's CornerRadius (darklyrc), so the
 # frost never pokes out past a rounded corner.
+#
+# Liquid glass: a lighter blur than plain frost so the background stays
+# readable through the glass, strong edge refraction with a little colour
+# fringing, body refraction (the whole pane bends what's behind it, not just
+# the rim) and a specular highlight on the rim.
 [Effect-blurplus]
-BlurStrength=9
-DecorationBlurStrength=9
-DockBlurStrength=11
-NoiseStrength=2
-DockNoiseStrength=2
+BlurStrength=8
+DecorationBlurStrength=8
+DockBlurStrength=10
+NoiseStrength=1
+DockNoiseStrength=1
 BlurDecorations=true
 BlurMenus=true
 BlurDocks=true
-Saturation=1.4
-Brightness=1.05
+Saturation=1.6
+Brightness=1.06
 TopCornerRadius=14
 BottomCornerRadius=14
 MenuCornerRadius=10
@@ -37,11 +42,17 @@ DockCornerRadius=16
 UseDeclaredCornerRadius=false
 EdgeLighting=true
 EdgeLightingDock=true
-RefractionStrength=8
-RefractionEdgeSize=3
+EdgeLightingTooltip=true
+RefractionStrength=14
+RefractionEdgeSize=5
 RefractionNormalPow=4
-RefractionRGBFringing=2
-RefractionBevelIntensity=10
+RefractionRGBFringing=4
+RefractionBevelIntensity=13
+BodyRefraction=true
+BodyRefractionReach=40
+BodyRefractionStrength=30
+RimSpecular=true
+RimSpecularScale=12
 
 [Round-Corners]
 Size=14
