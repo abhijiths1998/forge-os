@@ -83,6 +83,31 @@ logo, boot assets), `colors.py` (colour schemes) and `desktoptheme.py`
 (Plasma theme: dock dots), then `install.sh`
 copies them into the profile. See `docs/ROADMAP.md` → "Forge Glass revamp".
 
+## Forge Mind
+
+The local file index and storage analyser that Forge's AI features are
+built on (`forge-mind`). It's deterministic: a model only turns a request
+into its calls and explains the results, so nothing is guessed and nothing
+leaves the machine.
+
+```sh
+forge find lease pdf       # files by name and path words
+forge space                # disk, Steam libraries, snapshots, biggest folders
+forge space cleanup        # what could go, with sizes and reasons
+forge space clean <path>   # clean one of those (home files go to the trash)
+```
+
+Cleanup knows what fills a gaming Linux disk: Proton prefixes and shader
+caches of uninstalled Steam games (across every Steam library), the pacman
+cache, AUR build files, node_modules, unused Flatpak runtimes, big files
+untouched for a year, and identical files (checked by hash). `clean` only
+accepts paths the cleanup list currently names.
+
+The index (SQLite, FTS5) lives in `~/.local/share/forge-mind/` and is
+refreshed by a user timer at idle priority; it waits while GameMode is
+active. Apps use it over D-Bus (`org.forgeos.Mind`: `Search`, `Stats`,
+`Cleanup`, `Clean`, `Index`, all returning JSON), which starts it on demand.
+
 ## Post-install script (faster path, no ISO)
 
 If a full custom ISO is more than you need right now, `post-install/setup.sh`

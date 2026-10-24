@@ -11,6 +11,8 @@
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
 #   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
+#   forge find <words>        find files in the Forge Mind index
+#   forge space [cleanup]     what's using the disk, and what could go
 #   forge about
 set -uo pipefail
 
@@ -94,6 +96,8 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
+  ${PERI}find${OFF} <words>         find files ${GREY}(Forge Mind index)${OFF}
+  ${PERI}space${OFF} [cleanup]     what's using the disk, and what could go
   ${PERI}about${OFF}               this system, briefly
 EOF
 }
@@ -207,6 +211,20 @@ case "${cmd}" in
         kwriteconfig6 --file forgerc --group Glass --key preset "$1"
         glass_reload
         ok "glass $1"
+        ;;
+    find)
+        have forge-mind || fail "forge-mind is missing"
+        [[ $# -gt 0 ]] || fail "find what?"
+        forge-mind search "$@"
+        ;;
+    space|disk)
+        have forge-mind || fail "forge-mind is missing"
+        case "${1:-}" in
+            "")      forge-mind stats ;;
+            cleanup) forge-mind cleanup ;;
+            clean)   shift; forge-mind clean "$@" ;;
+            *) fail "space is ${PERI}cleanup${OFF} or ${PERI}clean${OFF} <path...>" ;;
+        esac
         ;;
     about|info)
         printf '%sForge%s %sOS%s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \

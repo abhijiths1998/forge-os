@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+"""forge-mind: the local file index and storage analyser behind Forge's AI.
+
+  forge-mind index            (re)index $HOME: metadata, download origin, names
+  forge-mind search <words>   find files by name/path words (FTS5, ranked)
+  forge-mind stats            what's using the disk, Forge-aware
+  forge-mind cleanup          cleanup candidates with sizes and reasons (no deletes)
+  forge-mind clean <path...>  clean candidates from that list (files go to the trash)
+  forge-mind serve            D-Bus service org.forgeos.Mind on the session bus
+  add --json to search/stats/cleanup for machine-readable output
+
+Everything here is deterministic; a model only ever turns a request into
+these calls and explains the results. Indexing pauses while GameMode is
+active, so it never competes with a game. The index lives in
+$XDG_DATA_HOME/forge-mind/index.db (SQLite, FTS5). Snapshot sizes need
+btrfs quotas (forge-postinstall.sh runs `snapper setup-quota`).
+"""
+import functools
+import hashlib
+import json
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+DATA = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "forge-mind"
+DB = DATA / "index.db"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache"))
+STEAM_ROOT = HOME / ".local/share/Steam"
+# Not indexed: noise (VCS, build trees, caches) and things analysed on their own.
+SKIP_NAMES = {".git", "node_modules", "__pycache__", ".dart_tool", ".venv"}
+SKIP_PATHS = {HOME / p for p in (".cache", ".local/share/Steam", ".local/share/Trash", ".npm",
+                                 ".pub-cache", ".cargo/registry", ".rustup", ".var", ".mozilla",
+                                 ".config/BraveSoftware", ".local/share/forge-mind", ".wine")}
+OLD_DAYS = 365
+BIG = 500 * 1024**2
+DUP_MIN = 10 * 1024**2
+
+
+def gamemode_active():
+    try:
+        out = subprocess.run(["gamemoded", "-s"], capture_output=True, text=True, timeout=3).stdout
+        return "is active" in out
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def du(path):
+    """Bytes on disk under path (allocated blocks, no symlinks followed)."""
+    total = 0
+    try:
+        if path.is_symlink():
+            return 0
+        if path.is_file():
+            return path.stat().st_blocks * 512
+        for root, _, files in os.walk(path):
+            for f in files:
+                try:
+                    total += os.lstat(os.path.join(root, f)).st_blocks * 512
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def skipped(root, name):
+    return name in SKIP_NAMES or Path(root, name) in SKIP_PATHS
+
+
+# --- index ---------------------------------------------------------------
+def db():
+    DATA.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS files(
+            path TEXT PRIMARY KEY, size INTEGER, mtime REAL, atime REAL,
+            ext TEXT, origin TEXT, seen INTEGER);
+        CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(
+            path UNINDEXED, words, tokenize='unicode61');
+    """)
+    return con
+
+
+def origin(path):
+    """Where a download came from (browsers save it as an xattr)."""
+    try:
+        return os.getxattr(path, "user.xdg.origin.url").decode(errors="replace")
+    except OSError:
+        return None
+
+
+def index():
+    con, stamp, n, checked = db(), int(time.time()), 0, 0.0
+    for root, dirs, files in os.walk(HOME):
+        dirs[:] = [d for d in dirs if not skipped(root, d)]
+        if time.monotonic() - checked > 10:
+            while gamemode_active():
+                time.sleep(30)
+            checked = time.monotonic()
+        for f in files:
+            p = os.path.join(root, f)
+            try:
+                st = os.lstat(p)
+            except OSError:
+                continue
+            con.execute("INSERT OR REPLACE INTO files VALUES(?,?,?,?,?,?,?)",
+                        (p, st.st_size, st.st_mtime, st.st_atime, Path(f).suffix.lower(), origin(p), stamp))
+            n += 1
+    con.execute("DELETE FROM files WHERE seen < ?", (stamp,))
+    con.execute("DELETE FROM names")
+    con.execute("INSERT INTO names(path, words) SELECT path, replace(replace(replace(replace("
+                "substr(path, ?), '/', ' '), '_', ' '), '-', ' '), '.', ' ') FROM files", (len(str(HOME)) + 2,))
+    con.commit()
+    return n
+
+
+def search(words):
+    q = " ".join('"' + w.replace('"', "") + '"*' for w in words)
+    rows = db().execute("""SELECT f.path, f.size, f.mtime, f.origin FROM names n JOIN files f USING(path)
+                           WHERE names MATCH ? ORDER BY rank LIMIT 30""", (q,)).fetchall()
+    return [dict(zip(("path", "size", "mtime", "origin"), r)) for r in rows]
+
+
+# --- storage -------------------------------------------------------------
+def steam_libraries():
+    """Every Steam library's steamapps folder (libraryfolders.vdf lists the extra drives)."""
+    libs = {STEAM_ROOT / "steamapps"}
+    try:
+        vdf = (STEAM_ROOT / "steamapps/libraryfolders.vdf").read_text(errors="replace")
+        libs |= {Path(m) / "steamapps" for m in re.findall(r'"path"\s+"([^"]+)"', vdf)}
+    except OSError:
+        pass
+    return sorted(lib for lib in libs if lib.is_dir())
+
+
+def steam_installed_ids():
+    return {m.stem.split("_", 1)[1] for lib in steam_libraries() for m in lib.glob("appmanifest_*.acf")}
+
+
+def file_hash(path):
+    h = hashlib.blake2b(digest_size=16)
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def user_file_sql():
+    """SQL condition: the path is a file of the user's own, not inside a hidden
+    (app-owned) folder like ~/.local or ~/.config, which only apps should prune."""
+    return f"instr(substr(path, {len(str(HOME)) + 1}), '/.') = 0"
+
+
+@functools.cache
+def in_repo(directory):
+    """True inside a git work tree: copies there are build outputs, not clutter."""
+    d = Path(directory)
+    return (d / ".git").exists() or (d != HOME and d.parent != d and in_repo(d.parent))
+
+
+def duplicates():
+    """Groups of identical user files (same size, then same hash), largest first.
+    Hard links share one copy on disk, so each inode counts once."""
+    groups = []
+    for size, paths in db().execute(f"""SELECT size, group_concat(path, char(10)) FROM files
+                                        WHERE size >= ? AND {user_file_sql()}
+                                        GROUP BY size HAVING count(*) > 1
+                                        ORDER BY size DESC""", (DUP_MIN,)):
+        by_hash, inodes = {}, set()
+        for p in paths.split("\n"):
+            if in_repo(os.path.dirname(p)):
+                continue
+            try:
+                st = os.stat(p)
+                if (st.st_dev, st.st_ino) in inodes:
+                    continue
+                inodes.add((st.st_dev, st.st_ino))
+                by_hash.setdefault(file_hash(p), []).append(p)
+            except OSError:
+                pass
+        groups += [(size, sorted(ps, key=len)) for ps in by_hash.values() if len(ps) > 1]
+    return groups
+
+
+def candidates():
+    """Cleanup candidates as dicts: category, path, bytes, reason. Nothing is deleted here."""
+    out = []
+
+    def add(category, path, size, reason):
+        out.append({"category": category, "path": str(path), "bytes": size, "reason": reason})
+
+    installed = steam_installed_ids()
+    for kind, lib in ((k, lib) for lib in steam_libraries() for k in ("compatdata", "shadercache")):
+        for d in (lib / kind).glob("*"):
+            if d.name.isdigit() and d.name not in installed and d.name != "0":
+                add("steam", d, du(d), f"{kind} for uninstalled game {d.name}")
+    for d, why in [(Path("/var/cache/pacman/pkg"), "pacman package cache (keeps the installed version)"),
+                   (HOME / ".local/share/Trash", "trash"),
+                   (CACHE / "yay", "AUR build files"), (CACHE / "paru", "AUR build files"),
+                   (CACHE / "pamac", "pamac build files"),
+                   (CACHE / "thumbnails", "thumbnails (regenerated when needed)")]:
+        size = du(d) if d.exists() else 0
+        if size > 50 * 1024**2:
+            add("system" if str(d).startswith("/var") else "cache", d, size, why)
+    for root, dirs, _ in os.walk(HOME):
+        if "node_modules" in dirs:
+            p = Path(root) / "node_modules"
+            add("dev", p, du(p), "node_modules (npm install restores it)")
+        dirs[:] = [d for d in dirs if not skipped(root, d)]
+    if DB.exists():
+        cutoff = time.time() - OLD_DAYS * 86400
+        for p, size in db().execute(f"SELECT path, size FROM files WHERE size > ? AND atime < ? "
+                                    f"AND mtime < ? AND {user_file_sql()}", (BIG, cutoff, cutoff)):
+            add("old", p, size, f"big file not opened in {OLD_DAYS}+ days")
+        for size, (keep, *copies) in duplicates():
+            for p in copies:
+                add("duplicate", p, size, f"identical to {keep}")
+    if shutil.which("flatpak"):
+        unused = subprocess.run(["flatpak", "uninstall", "--unused", "--assumeno"],
+                                capture_output=True, text=True).stdout
+        if any(line.strip()[:1].isdigit() for line in unused.splitlines()):
+            add("flatpak", "flatpak:unused", 0, "unused Flatpak runtimes")
+    return sorted(out, key=lambda c: -c["bytes"])
+
+
+def snapshots():
+    """Snapper snapshots of /, with the space each holds exclusively when quotas are on."""
+    try:
+        r = subprocess.run(["snapper", "--jsonout", "list"], capture_output=True, text=True, timeout=30)
+        snaps = [s for s in json.loads(r.stdout).get("root", []) if s.get("number")]
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    used = [s.get("used-space") for s in snaps]
+    return {"count": len(snaps),
+            "bytes": sum(u for u in used if isinstance(u, int)) if any(isinstance(u, int) for u in used) else None,
+            "oldest": snaps[0].get("date") if snaps else None}
+
+
+def stats():
+    usage = shutil.disk_usage("/")
+    homes = sorted(((du(p), p.name) for p in HOME.iterdir() if p.is_dir() and not p.is_symlink()), reverse=True)
+    return {"disk": {"total": usage.total, "used": usage.used, "free": usage.free},
+            "home_top": [{"dir": n, "bytes": s} for s, n in homes[:10]],
+            "steam": sum(du(lib) for lib in steam_libraries()),
+            "snapshots": snapshots()}
+
+
+def clean(paths):
+    """Clean the given candidates. Home files go to the trash (restorable); only
+    paths `cleanup` currently lists are accepted, so this can't remove arbitrary files."""
+    allowed = {c["path"]: c for c in candidates()}
+    done = []
+    for p in paths:
+        c = allowed.get(p)
+        if not c:
+            print(f"forge-mind: {p} isn't a cleanup candidate, skipped", file=sys.stderr)
+            continue
+        if p == "/var/cache/pacman/pkg":
+            cmd = ["pkexec", "paccache", "-rk1"]
+        elif p == "flatpak:unused":
+            cmd = ["flatpak", "uninstall", "--unused", "-y"]
+        elif p == str(HOME / ".local/share/Trash"):
+            # Emptied directly: `gio trash --empty` needs gvfs's trash backend running.
+            for sub in ("files", "info", "expunged"):
+                shutil.rmtree(Path(p) / sub, ignore_errors=True)
+                (Path(p) / sub).mkdir(exist_ok=True)
+            done.append(c)
+            continue
+        elif Path(p).is_relative_to(HOME):
+            cmd = ["gio", "trash", "--", p]
+        else:
+            print(f"forge-mind: {p} needs cleaning by hand", file=sys.stderr)
+            continue
+        if subprocess.run(cmd).returncode == 0:
+            done.append(c)
+    return done
+
+
+# --- D-Bus ---------------------------------------------------------------
+def serve():
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+    iface = "org.forgeos.Mind"
+
+    class Mind(dbus.service.Object):
+        """Every method returns JSON, the same as `forge-mind <cmd> --json`."""
+        indexing = None
+
+        @dbus.service.method(iface, in_signature="s", out_signature="s")
+        def Search(self, query):
+            return json.dumps(search(query.split()))
+
+        @dbus.service.method(iface, out_signature="s")
+        def Stats(self):
+            return json.dumps(stats())
+
+        @dbus.service.method(iface, out_signature="s")
+        def Cleanup(self):
+            return json.dumps(candidates())
+
+        @dbus.service.method(iface, in_signature="as", out_signature="s")
+        def Clean(self, paths):
+            return json.dumps(clean([str(p) for p in paths]))
+
+        @dbus.service.method(iface, out_signature="b")
+        def Index(self):
+            """Start a re-index in the background; false if one is already running."""
+            if self.indexing and self.indexing.poll() is None:
+                return False
+            self.indexing = subprocess.Popen([sys.argv[0], "index"])
+            GLib.child_watch_add(self.indexing.pid, lambda *_: self.IndexFinished())
+            return True
+
+        @dbus.service.signal(iface)
+        def IndexFinished(self):
+            pass
+
+    bus = dbus.SessionBus()
+    name = dbus.service.BusName(iface, bus, do_not_queue=True)  # noqa: F841 (held while running)
+    Mind(bus, "/org/forgeos/Mind")
+    GLib.MainLoop().run()
+
+
+# --- CLI -----------------------------------------------------------------
+def main(argv):
+    as_json = "--json" in argv
+    argv = [a for a in argv if a != "--json"]
+    cmd, args = (argv[0], argv[1:]) if argv else ("help", [])
+    if cmd == "index":
+        print(f"indexed {index()} files")
+    elif cmd == "search" and args:
+        rows = search(args)
+        if as_json:
+            print(json.dumps(rows, indent=1))
+        for r in [] if as_json else rows:
+            print(f"{human(r['size']):>9}  {time.strftime('%Y-%m-%d', time.localtime(r['mtime']))}  {r['path']}"
+                  + (f"  ← {r['origin']}" if r["origin"] else ""))
+    elif cmd == "stats":
+        s = stats()
+        if as_json:
+            print(json.dumps(s, indent=1))
+            return True
+        d = s["disk"]
+        print(f"disk  {human(d['used'])} used of {human(d['total'])}, {human(d['free'])} free")
+        if s["steam"]:
+            print(f"steam {human(s['steam'])}")
+        snap = s["snapshots"]
+        if snap:
+            held = human(snap["bytes"]) if snap["bytes"] is not None else "size unknown (no btrfs quotas)"
+            print(f"snapshots {snap['count']}, {held}")
+        print("home:")
+        for h in s["home_top"]:
+            print(f"  {human(h['bytes']):>9}  {h['dir']}")
+    elif cmd == "cleanup":
+        c = candidates()
+        if as_json:
+            print(json.dumps(c, indent=1))
+            return True
+        for x in c:
+            print(f"{human(x['bytes']):>9}  {x['category']:<10} {x['path']}\n{'':>11}{x['reason']}")
+        print(f"\n{human(sum(x['bytes'] for x in c))} reclaimable. Nothing was deleted "
+              f"(forge-mind clean <path> cleans one).")
+    elif cmd == "clean" and args:
+        done = clean(args)
+        print(f"cleaned {len(done)}, {human(sum(c['bytes'] for c in done))} "
+              "(home files are in the trash until you empty it)")
+        return len(done) == len(args)
+    elif cmd == "serve":
+        serve()
+    else:
+        print(__doc__.strip())
+        return cmd in ("help", "-h", "--help")
+    return True
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main(sys.argv[1:]) else 1)

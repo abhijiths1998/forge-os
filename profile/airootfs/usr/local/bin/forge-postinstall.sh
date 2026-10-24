@@ -188,6 +188,10 @@ if [[ "$(findmnt -no FSTYPE /)" == btrfs ]] && command -v snapper >/dev/null 2>&
     install -Dm640 /usr/share/snapper/config-templates/default /etc/snapper/configs/root
     sed -i 's|^SUBVOLUME=.*|SUBVOLUME="/"|' /etc/snapper/configs/root
     sed -i 's|^SNAPPER_CONFIGS=.*|SNAPPER_CONFIGS="root"|' /etc/conf.d/snapper
+    # Let admins (wheel) list snapshots without root, so forge-mind can show
+    # them, and turn on btrfs quotas so snapper reports the space each holds.
+    sed -i 's|^ALLOW_GROUPS=.*|ALLOW_GROUPS="wheel"|; s|^SYNC_ACL=.*|SYNC_ACL="yes"|' /etc/snapper/configs/root
+    snapper -c root setup-quota 2>/dev/null || true
     chmod 750 /.snapshots
     systemctl enable snapper-timeline.timer snapper-cleanup.timer 2>/dev/null || true
     systemctl enable grub-btrfsd.service 2>/dev/null || true
