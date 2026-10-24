@@ -1,6 +1,6 @@
 # Forge Control: the Control Center, a glass panel under the top bar
-# (Flutter, GTK runner), and the top-bar widgets: its button and the
-# battery (Plasma widgets). The state
+# (Flutter, GTK runner), and the top-bar widgets that replace the tray's:
+# its button, Wi-Fi, Bluetooth, Sound and the battery (Plasma widgets). The state
 # and switches come from forged (/usr/local/bin/forged, in the ISO profile).
 # Built from this directory by apps/build-packages.sh during the ISO build.
 pkgname=forge-control
@@ -31,9 +31,13 @@ package() {
         "${pkgdir}/usr/share/applications/org.forgeos.control.desktop"
     install -Dm644 data/org.forgeos.control-autostart.desktop \
         "${pkgdir}/etc/xdg/autostart/org.forgeos.control-autostart.desktop"
-    # The top-bar widgets: the Control Center's button and the battery.
+    # The top-bar widgets (the Control Center's button, Wi-Fi, Bluetooth,
+    # Sound and the battery) and the QML module they share (org.forgeos.panel).
     local file
     while IFS= read -r -d '' file; do
         install -Dm644 "${file}" "${pkgdir}/usr/share/plasma/${file#data/}"
     done < <(find data/plasmoids -type f -print0)
+    while IFS= read -r -d '' file; do
+        install -Dm644 "${file}" "${pkgdir}/usr/lib/qt6/${file#data/}"
+    done < <(find data/qml -type f -print0)
 }

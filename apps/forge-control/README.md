@@ -12,7 +12,19 @@ frosts it.
   own service, so the panel stays right whoever changes something: a volume
   key, KDE's applets, `forge theme`.
 - **Top-bar widgets** (`data/plasmoids`, Plasma widgets the look-and-feel
-  layout puts in the top bar for new users):
+  layout puts in the top bar for new users, in place of the tray's own;
+  they share the QML module `org.forgeos.panel` in `data/qml`, installed to
+  `/usr/lib/qt6/qml`, which talks to forged over D-Bus):
+  - `org.forgeos.wifi`, `org.forgeos.bluetooth`, `org.forgeos.volume`:
+    Wi-Fi, Bluetooth and Sound, each with a popup like the battery's. Wi-Fi:
+    the switch, nearby networks (saved and strongest first), joining one
+    with its password asked in place, leaving the one in use. Bluetooth:
+    the switch and paired devices with their battery, connected with a
+    click. Sound: the volume and mute, and the output (speakers,
+    headphones, HDMI, Bluetooth); scrolling on its icon changes the volume,
+    a middle click mutes. The tray stays, slim, for apps' icons; Plasma's
+    items are hidden in its overflow, not switched off (volume keys and
+    notification pop-ups live in them);
   - `org.forgeos.control`, the Control Center's button, just left of the tray;
   - `org.forgeos.battery`, **Forge Battery**, at the right end: a
     macOS-style battery with the percentage written inside it, in a

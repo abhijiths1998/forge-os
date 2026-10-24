@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Forge OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Bluetooth in the top bar",
+        "Icon": " devices, connecting and the switch:preferences-system-bluetooth",
+        "Id": "org.forgeos.bluetooth",
+        "License": "GPL-3.0-or-later",
+        "Name": "Forge Bluetooth",
+        "Version": "1.0",
+        "Website": "https://github.com/abhijiths1998/forge-os"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

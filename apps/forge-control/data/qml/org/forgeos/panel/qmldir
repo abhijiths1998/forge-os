@@ -1,0 +1,8 @@
+module org.forgeos.panel
+Forged 1.0 Forged.qml
+BarButton 1.0 BarButton.qml
+PopupHeader 1.0 PopupHeader.qml
+ForgeSwitch 1.0 ForgeSwitch.qml
+ListRow 1.0 ListRow.qml
+SectionLabel 1.0 SectionLabel.qml
+FooterLink 1.0 FooterLink.qml

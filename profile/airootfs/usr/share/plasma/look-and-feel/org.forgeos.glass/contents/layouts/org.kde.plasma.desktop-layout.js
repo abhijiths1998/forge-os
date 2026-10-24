@@ -9,8 +9,9 @@
 //
 // Shared by org.forgeos.glass and org.forgeos.glass.dark (symlinked).
 
-// --- Top bar: launcher + app menu on the left, clock in the middle, Forge
-// Control, the tray and Forge Battery on the right. Plasma centres whatever sits between two
+// --- Top bar: launcher + app menu on the left, clock in the middle; on the
+// right Forge Control, a slim tray (apps' icons), Wi-Fi, Bluetooth, Sound
+// and the battery. Plasma centres whatever sits between two
 // expanding spacers.
 var bar = new Panel;
 bar.location = "top";
@@ -36,11 +37,24 @@ clock.writeConfig("customDateFormat", "ddd, MMM d");
 
 bar.addWidget("org.kde.plasma.panelspacer");
 bar.addWidget("org.forgeos.control");
+// The tray stays for apps' own icons (Steam, Discord...). Plasma's items move
+// to its overflow: Forge's Wi-Fi, Bluetooth, Sound and Battery show those
+// instead, but Plasma's must keep running (the volume keys and notification
+// pop-ups live in them), so they're hidden, not switched off.
 var tray = bar.addWidget("org.kde.plasma.systemtray");
-// Forge Battery (next) shows the battery; Plasma's own moves to the tray's
-// overflow, where its power settings stay a click away.
 tray.currentConfigGroup = ["General"];
-tray.writeConfig("hiddenItems", ["org.kde.plasma.battery"]);
+tray.writeConfig("hiddenItems", [
+    "org.kde.kdeconnect", "org.kde.plasma.vault", "org.kde.kscreen", "org.kde.kupapplet",
+    "org.kde.plasma.battery", "org.kde.plasma.bluetooth", "org.kde.plasma.brightness",
+    "org.kde.plasma.cameraindicator", "org.kde.plasma.clipboard", "org.kde.plasma.devicenotifier",
+    "org.kde.plasma.dwellclicker", "org.kde.plasma.keyboardindicator", "org.kde.plasma.keyboardlayout",
+    "org.kde.plasma.manage-inputmethod", "org.kde.plasma.mediacontroller",
+    "org.kde.plasma.networkmanagement", "org.kde.plasma.notifications", "org.kde.plasma.printmanager",
+    "org.kde.plasma.volume", "org.kde.plasma.weather",
+]);
+bar.addWidget("org.forgeos.wifi");
+bar.addWidget("org.forgeos.bluetooth");
+bar.addWidget("org.forgeos.volume");
 bar.addWidget("org.forgeos.battery");
 
 // --- Dock: floating, only as wide as its icons, centred.
