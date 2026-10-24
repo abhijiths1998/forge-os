@@ -59,6 +59,10 @@ gtk-layer-shell anchoring works.
   do-not-disturb and now playing (Flutter, `forge_ui`).
 - **Forge Battery:** the top bar's battery, macOS-style, the percentage
   written inside it, and a popup with its details and style.
+- **One theme everywhere:** `forge-theme-sync` takes the theme where KDE's
+  colour scheme doesn't reach: the login screen, the terminal prompt and
+  `forge`, GNOME's settings, Flatpak apps; forged runs it on any theme
+  change.
 - **Forge Wi-Fi, Bluetooth and Sound:** the tray's own icons replaced, each
   with a popup like the battery's: networks and joining them, paired
   devices, volume and outputs. The tray stays, slim, for apps' icons.
@@ -117,8 +121,10 @@ The KDE base stays; the apps people use every day are Forge apps.
 - **Forge Files:** a file manager with the Assistant built in (search by
   what you remember, storage and cleanup in place).
 - **Forge Settings**, and Forge versions of the rest of the everyday apps
-  (terminal, screenshots, media player, text editor, system monitor),
-  replacing the KDE ones one by one.
+  (terminal, media player, text editor, system monitor), replacing the KDE
+  ones one by one. Screenshots came early: **Forge Shot** (2026-10-24), in
+  place of Spectacle on the Print keys; screen recording is still
+  Spectacle's.
 - **Welcome app:** first-boot choices (Flathub, NVIDIA check, codecs,
   the model).
 

@@ -45,6 +45,10 @@ systemctl enable fwupd.service
 # optional flatpak support; add the Flathub remote system-wide so that's
 # actually populated from first boot.
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+# Breeze for GTK 3 Flatpak apps, so they can take the desktop's colours
+# (forge-theme-sync lets them read the colours.css KDE writes). Best effort:
+# a slow mirror mustn't fail the build.
+flatpak install -y --noninteractive --system flathub org.gtk.Gtk3theme.Breeze 2>/dev/null || true
 
 # --- Boot splash for the live medium ---
 # plymouth (in packages.x86_64) is already installed and the "plymouth"

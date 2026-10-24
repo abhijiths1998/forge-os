@@ -2,8 +2,9 @@
 //   glass  - KWin's Glass and rounded-corners effects (kwinrc) and Darkly's
 //            window corners: cheap, so sliders apply them as they move;
 //   colours - a KDE colour scheme, icons for light or dark, Darkly's menu
-//            opacities, Konsole's scheme and ~/.config/forge/theme.json:
-//            every app repaints, so this waits for a slider's release.
+//            opacities, Konsole's scheme, ~/.config/forge/theme.json, and
+//            forge-theme-sync for the rest (login screen, shell, GNOME,
+//            Flatpak): every app repaints, so this waits for a slider's release.
 import 'dart:io';
 
 import 'package:forge_ui/forge_ui.dart';
@@ -96,16 +97,27 @@ class Applier {
 
     // For the Forge apps (launcher, store...): they read this for colours.
     t.writeTo(ForgeTheme.currentFile);
+
+    // Everywhere KDE's colour scheme doesn't reach: the login screen, the
+    // shell's prompt, GNOME's settings, Flatpak apps (forge-theme-sync).
+    try {
+      await Process.run('forge-theme-sync', []);
+    } catch (_) {
+      // not installed: the rest of the theme still applied
+    }
   }
 
   /// Konsole: the user's ForgeGlass scheme (the forge-os profile's),
-  /// colours and opacity. A Konsole process never reloads a scheme it has
-  /// loaded and over D-Bus only switches to profiles it read at startup, so
-  /// windows already open keep the old look; new Konsole windows (each its
-  /// own process by default) get the theme.
+  /// colours and opacity. A Konsole process never re-reads a scheme it has
+  /// loaded (checked with inotify), so windows already open keep their
+  /// colours; new windows get the theme. Open windows turning opaque on a
+  /// light/dark switch was Konsole itself (packages/konsole has the fix).
+  /// Written whole and renamed into place, so no reader ever sees half.
   Future<void> _konsole(ForgeTheme t) async {
     final dir = Directory('$_data/konsole')..createSync(recursive: true);
-    File('${dir.path}/ForgeGlass.colorscheme').writeAsStringSync(konsoleColourScheme(t));
+    final scheme = File('${dir.path}/ForgeGlass.colorscheme');
+    final tmp = File('${scheme.path}.new')..writeAsStringSync(konsoleColourScheme(t), flush: true);
+    tmp.renameSync(scheme.path);
   }
 
   Future<void> all(ForgeTheme t) async {

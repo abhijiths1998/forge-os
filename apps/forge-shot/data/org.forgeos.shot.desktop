@@ -1,0 +1,25 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Shot
+GenericName=Screenshot
+Comment=Capture an area, a window or the whole screen, then mark it up, copy it or read its text
+# The real binary, not the /usr/bin link: KWin only lets the program whose
+# desktop file lists ScreenShot2 below take screenshots, matching it by Exec.
+Exec=/usr/lib/forge-shot/forge-shot region
+Icon=applets-screenshooter
+Categories=Utility;
+Keywords=screenshot;screen;capture;snip;snipping;print;area;window;annotate;markup;ocr;text;
+StartupNotify=false
+X-KDE-DBUS-Restricted-Interfaces=org.kde.KWin.ScreenShot2
+X-KDE-Shortcuts=Print,Meta+Shift+S
+Actions=full;window;
+
+[Desktop Action full]
+Name=Whole Screen
+Exec=/usr/lib/forge-shot/forge-shot full
+X-KDE-Shortcuts=Shift+Print
+
+[Desktop Action window]
+Name=A Window
+Exec=/usr/lib/forge-shot/forge-shot window
+X-KDE-Shortcuts=Meta+Print

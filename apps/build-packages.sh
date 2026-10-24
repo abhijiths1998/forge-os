@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build the Forge apps (every apps/*/PKGBUILD) into the build container's
-# local repo, so mkarchiso can install them like any other package
+# Build the Forge apps (every apps/*/PKGBUILD) and Forge's builds of other
+# packages (every packages/*/PKGBUILD: Konsole with a fix) into the build
+# container's local repo, so mkarchiso installs them like any other package
 # (profile/pacman.conf lists that repo first).
 #
 # Runs inside the forge-os-builder container, as root, with the repo at
@@ -13,9 +14,9 @@ shopt -s nullglob
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCAL_REPO=/var/cache/forge-os-local-repo
 
-pkgbuilds=("${REPO_ROOT}"/apps/*/PKGBUILD)
+pkgbuilds=("${REPO_ROOT}"/apps/*/PKGBUILD "${REPO_ROOT}"/packages/*/PKGBUILD)
 if [ ${#pkgbuilds[@]} -eq 0 ]; then
-    echo "==> no apps to build"
+    echo "==> nothing to build"
     exit 0
 fi
 
@@ -31,7 +32,7 @@ if [ -d "${REPO_ROOT}/apps/forge_ui" ]; then
     chown -R builder: "${work}/forge_ui"
 fi
 
-# Every app built here must be in the ISO's package list too, or mkarchiso
+# Everything built here must be in the ISO's package list too, or mkarchiso
 # quietly leaves it out (forge-control once was).
 missing=()
 for pkgbuild in "${pkgbuilds[@]}"; do
@@ -46,7 +47,7 @@ fi
 for pkgbuild in "${pkgbuilds[@]}"; do
     app="$(basename "$(dirname "${pkgbuild}")")"
     echo "==> building ${app}"
-    cp -r "${REPO_ROOT}/apps/${app}" "${work}/${app}"
+    cp -r "$(dirname "${pkgbuild}")" "${work}/${app}"
     rm -rf "${work}/${app}/build" "${work}/${app}/.dart_tool"
     chown -R builder: "${work}/${app}"
     # The flutter-bin SDK is owned by another uid; git (which flutter runs)

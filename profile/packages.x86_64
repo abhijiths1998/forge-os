@@ -238,6 +238,10 @@ forge-launcher
 # Forge Glass layout puts there.
 forge-control
 
+# Forge Shot (apps/forge-shot): screenshots, in place of Spectacle on the
+# Print keys (Spectacle stays, for screen recording).
+forge-shot
+
 # Default shell: zsh + Oh My Zsh (for its plugins; the prompt is our own,
 # see /etc/skel/.zshrc) + autosuggestions/syntax-highlighting.
 oh-my-zsh-git

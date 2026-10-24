@@ -1,0 +1,33 @@
+# Forge Shot: the screenshot tool. Pick an area on the frozen screen, a
+# window or the whole screen; then copy it, save it, mark it up or copy the
+# text in it (Flutter, GTK runner; screenshots through KWin's ScreenShot2).
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-shot
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS screenshot tool: areas, windows, the screen; markup, copy, text"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# Plus Jakarta Sans ships in /usr/share/fonts with the ISO, not as a package.
+depends=('gtk3' 'glib2' 'gtk-layer-shell' 'wl-clipboard' 'tesseract' 'tesseract-data-eng'
+         'xdg-user-dirs')
+optdepends=('kdialog: Save as…' 'dolphin: Show in folder')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    # Icon tree-shaking keeps too few of the app's icons (the tool buttons
+    # came out as other glyphs), so the whole icon font ships.
+    flutter build linux --release --no-tree-shake-icons
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-shot" "${pkgdir}/usr/bin/forge-shot"
+    install -Dm644 data/org.forgeos.shot.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.shot.desktop"
+}

@@ -45,6 +45,9 @@ from pathlib import Path
 
 HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+# Forge's other tools (forge, forge-thermal, forge-theme-sync) live beside
+# forged; looked up there first, so a copy in ~/.local/bin uses its siblings.
+TOOLS = f"{Path(__file__).resolve().parent}:{os.environ.get('PATH', '/usr/bin')}"
 IFACE = "org.forgeos.Forged"
 PATH = "/org/forgeos/Forged"
 
@@ -73,9 +76,15 @@ def nm_fields(line):
     return [f.replace("\\:", ":") for f in re.split(r"(?<!\\):", line)]
 
 
+def tool(name):
+    """A command by name, Forge's own tools first (see TOOLS)."""
+    return shutil.which(name, path=TOOLS) or name
+
+
 def start(*cmd, done=None):
     """Run a command in the background; done() once it exits."""
     from gi.repository import GLib
+    cmd = (tool(cmd[0]), *cmd[1:])
     try:
         p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
@@ -217,10 +226,10 @@ class Desktop:
                 "charging": int(p["State"]) in (1, 4), "minutes_left": int(p["TimeToEmpty"]) // 60 or None}
 
     def thermal(self):
-        if not shutil.which("forge-thermal"):
+        if not shutil.which("forge-thermal", path=TOOLS):
             return {"available": False}
-        status = dict(line.split("=", 1) for line in run("forge-thermal", "status").splitlines() if "=" in line)
-        profiles = [line.split("\t")[0] for line in run("forge-thermal", "list").splitlines() if line.strip()]
+        status = dict(line.split("=", 1) for line in run(tool("forge-thermal"), "status").splitlines() if "=" in line)
+        profiles = [line.split("\t")[0] for line in run(tool("forge-thermal"), "list").splitlines() if line.strip()]
         return {"available": bool(profiles), "profile": status.get("profile"), "profiles": profiles,
                 "cpu_temp": int(status["cpu_temp_c"]) if status.get("cpu_temp_c", "").isdigit() else None}
 
@@ -514,12 +523,29 @@ def serve():
             return True
         GLib.io_add_watch(sub.stdout, GLib.IO_IN | GLib.IO_HUP, on_pactl)
 
-    # Theme and tiling live in config files.
+    # Theme and tiling live in config files. A new theme, from the Theming
+    # Kit or System Settings alike, also goes everywhere KDE's colours don't
+    # reach (forge-theme-sync), once the writes settle.
+    theme_sync = [None]
+
+    def sync_theme():
+        theme_sync[0] = None
+        if shutil.which("forge-theme-sync", path=TOOLS):
+            start("forge-theme-sync")
+        return False
+
+    def theme_changed(part):
+        forged.refresh(part)
+        if part == "dark":
+            if theme_sync[0] is not None:
+                GLib.source_remove(theme_sync[0])
+            theme_sync[0] = GLib.timeout_add_seconds(2, sync_theme)
+
     monitors = []
     for path, part in ((CONFIG / "forge/theme.json", "dark"), (CONFIG / "kdeglobals", "dark"),
                        (CONFIG / "kwinrc", "tiling")):
         m = Gio.File.new_for_path(str(path)).monitor_file(Gio.FileMonitorFlags.NONE, None)
-        m.connect("changed", lambda *_, part=part: forged.refresh(part))
+        m.connect("changed", lambda *_, part=part: theme_changed(part))
         monitors.append(m)
     # Wi-Fi signal and temperatures drift without a signal worth listening to.
     GLib.timeout_add_seconds(30, lambda: forged.refresh("wifi", "thermal") or True)

@@ -1,0 +1,5 @@
+# makepkg's downloads and build trees
+*.tar.xz
+*.pkg.tar.zst
+/src/
+/pkg/
