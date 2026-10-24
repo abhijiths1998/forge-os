@@ -108,12 +108,11 @@ class Applier {
   }
 
   /// Konsole: the user's ForgeGlass scheme (the forge-os profile's),
-  /// colours and opacity.
-  ///
-  /// Written whole and swapped in (a new file renamed over the old one):
-  /// Konsole watches the scheme and reloads it on change, and written in
-  /// place it could catch the file half-written, without the [General]
-  /// section (opacity, blur) that comes last, and turn opaque.
+  /// colours and opacity. A Konsole process never re-reads a scheme it has
+  /// loaded (checked with inotify), so windows already open keep their
+  /// colours; new windows get the theme. Open windows turning opaque on a
+  /// light/dark switch was Konsole itself (packages/konsole has the fix).
+  /// Written whole and renamed into place, so no reader ever sees half.
   Future<void> _konsole(ForgeTheme t) async {
     final dir = Directory('$_data/konsole')..createSync(recursive: true);
     final scheme = File('${dir.path}/ForgeGlass.colorscheme');
