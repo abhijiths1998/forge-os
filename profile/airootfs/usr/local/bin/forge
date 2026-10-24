@@ -227,7 +227,8 @@ case "${cmd}" in
         esac
         ;;
     about|info)
-        printf '%sForge%s %sOS%s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \
+        printf '%sForge%s %sOS%s %s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \
+            "$(forge-os-release 2>/dev/null)" \
             "${GREY}" "$(uname -r)" "$(uname -m)" "${XDG_CURRENT_DESKTOP:-tty}" "${OFF}"
         printf '%sBuilt hot. Runs cool.%s\n' "${LILAC}" "${OFF}"
         ;;

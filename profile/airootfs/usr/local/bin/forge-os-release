@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# forge-os-release: the Forge OS version, and /usr/lib/os-release saying so.
+#
+#   forge-os-release           print the version (2.0)
+#   forge-os-release --write   write /usr/lib/os-release (root)
+#
+# This is the one place the version is set; docs/RELEASES.md says what each
+# version brings. /usr/lib/os-release belongs to Arch's filesystem package,
+# which puts Arch's back on every update, so a pacman hook
+# (forge-os-release.hook) runs --write after it. mkarchiso's IMAGE_ID and
+# IMAGE_VERSION lines (the ISO build date) are kept.
+set -euo pipefail
+
+VERSION=2.0
+OS_RELEASE=/usr/lib/os-release
+
+if [[ "${1:-}" != --write ]]; then
+    echo "${VERSION}"
+    exit 0
+fi
+(( EUID == 0 )) || { echo "forge-os-release: --write needs root" >&2; exit 1; }
+
+image="$(grep -E '^IMAGE_(ID|VERSION)=' "${OS_RELEASE}" 2>/dev/null || true)"
+tmp="$(mktemp "${OS_RELEASE}.XXXXXX")"
+cat > "${tmp}" <<EOF
+NAME="Forge OS"
+PRETTY_NAME="Forge OS ${VERSION}"
+ID=forgeos
+ID_LIKE=arch
+VERSION="${VERSION}"
+VERSION_ID=${VERSION}
+BUILD_ID=rolling
+ANSI_COLOR="38;2;138;155;247"
+HOME_URL="https://github.com/abhijiths1998/forge-os"
+DOCUMENTATION_URL="https://github.com/abhijiths1998/forge-os#readme"
+SUPPORT_URL="https://github.com/abhijiths1998/forge-os/issues"
+BUG_REPORT_URL="https://github.com/abhijiths1998/forge-os/issues"
+LOGO=forge-os-emblem
+EOF
+[[ -n "${image}" ]] && echo "${image}" >> "${tmp}"
+chmod 644 "${tmp}"
+mv "${tmp}" "${OS_RELEASE}"
