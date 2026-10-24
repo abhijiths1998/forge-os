@@ -4,6 +4,10 @@
  * Big thin clock over the wallpaper, and one frosted-glass card holding the
  * user, password and session fields. The session picker matters: it's how
  * people reach the Gamescope/Steam session.
+ *
+ * Light or dark and the accent follow the desktop's Forge theme:
+ * forge-theme-sync writes them (accent=, dark=, background=) to
+ * theme.conf.user. Without it, this is stock Forge Glass light.
  */
 import QtQuick
 import QtQuick.Controls.Basic
@@ -13,11 +17,18 @@ Rectangle {
     id: root
     width: 1920
     height: 1080
-    color: "#EEEEF8"
+    color: dark ? "#16182E" : "#EEEEF8"
 
-    readonly property color ink: "#1E2140"
-    readonly property color soft: "#6E7391"
-    readonly property color accent: "#6C7CF0"
+    // SDDM hands config values over as strings (or, in some versions, booleans).
+    readonly property bool dark: String(config.dark) === "true"
+    readonly property color ink: dark ? "#E4E6F4" : "#1E2140"
+    readonly property color soft: dark ? "#9296B5" : "#6E7391"
+    readonly property color accent: config.accent ? config.accent : "#6C7CF0"
+    readonly property color danger: dark ? "#F28B9B" : "#D9576E"
+    // The glass's own colour: white over the light wallpaper, deep navy over
+    // the dark one.
+    readonly property color pane: dark ? "#1A1C33" : "#FFFFFF"
+    function glass(alpha) { return Qt.rgba(pane.r, pane.g, pane.b, alpha) }
     readonly property real u: Math.max(1, height / 1080)   // 1 unit = 1px at 1080p
     property date now: new Date()
 
@@ -99,8 +110,8 @@ Rectangle {
         Rectangle {
             anchors.fill: parent
             radius: 26 * u
-            color: "#80FFFFFF"
-            border.color: "#B3FFFFFF"
+            color: root.glass(0.5)
+            border.color: root.glass(0.7)
             border.width: 1
         }
 
@@ -178,8 +189,8 @@ Rectangle {
                 }
                 background: Rectangle {
                     radius: 12 * u
-                    color: "#40FFFFFF"
-                    border.color: "#80FFFFFF"
+                    color: root.glass(0.25)
+                    border.color: root.glass(0.5)
                 }
             }
 
@@ -189,7 +200,7 @@ Rectangle {
                 horizontalAlignment: Text.AlignHCenter
                 font.family: config.font
                 font.pixelSize: 13 * u
-                color: "#D9576E"
+                color: root.danger
                 text: ""
                 visible: text.length > 0
             }

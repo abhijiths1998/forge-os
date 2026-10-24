@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""forge-theme-sync: the Forge theme everywhere KDE's colour scheme doesn't reach.
+
+  forge-theme-sync            bring everything in line with the Forge theme
+  forge-theme-sync --status   what each place has now
+  forge-theme-sync --no-login skip the login screen (it asks polkit)
+
+It runs after each theme change: the Theming Kit runs it (so `forge theme`
+and the Control Center's Dark switch do too), and forged runs it when KDE's
+colours change from anywhere else, System Settings included. Light or dark
+and the accent are what KDE shows now (kdeglobals: the window colour's
+lightness, the selection colour), so everything matches the screen;
+~/.config/forge/theme.json only fills in when kdeglobals has neither.
+
+Already in step without this: Plasma, KDE and Qt apps, Forge's widgets
+(KDE's colour scheme); GTK 3 and 4 apps (KDE writes their colours.css);
+Firefox, Chromium/Brave, Electron apps and web pages' light/dark and accent
+(the freedesktop appearance portal, which KDE fills in); the Forge apps
+(theme.json). This adds:
+
+  shell     ~/.config/forge/theme.sh: the zsh prompt's and `forge`'s colours
+  gnome     GNOME's light/dark and nearest named accent, for GTK apps that
+            read gsettings instead of the portal
+  flatpak   sandboxed apps may read the GTK colours KDE writes
+  login     the login screen's accent, light/dark and wallpaper
+            (forge-theme-login, through pkexec)
+"""
+import colorsys
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+THEME = CONFIG / "forge/theme.json"
+SHELL = CONFIG / "forge/theme.sh"
+LOGIN = Path("/usr/share/sddm/themes/forge-glass/theme.conf.user")
+# GNOME's named accents, by hue (slate is for greys).
+GNOME_ACCENTS = {"red": 0, "orange": 30, "yellow": 50, "green": 130, "teal": 180,
+                 "blue": 215, "purple": 275, "pink": 330}
+
+
+def run(*cmd):
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def kde_colour(group, key):
+    """A kdeglobals colour ("r,g,b[,a]") as (r, g, b), or None."""
+    r = run("kreadconfig6", "--file", "kdeglobals", "--group", group, "--key", key)
+    try:
+        return tuple(int(x) for x in r.stdout.strip().split(",")[:3]) if r else None
+    except ValueError:
+        return None
+
+
+def theme():
+    """What the desktop shows now: KDE's colours, else the Forge theme file."""
+    try:
+        t = json.loads(THEME.read_text())
+        saved = {"dark": bool(t.get("dark", True)), "accent": str(t.get("accent", "#7F8EF5")).upper()}
+    except (OSError, ValueError):
+        saved = {"dark": True, "accent": "#7F8EF5"}
+    window = kde_colour("Colors:Window", "BackgroundNormal")
+    selection = kde_colour("Colors:Selection", "BackgroundNormal")
+    return {
+        "dark": colorsys.rgb_to_hls(*(c / 255 for c in window))[1] < 0.5 if window and len(window) == 3 else saved["dark"],
+        "accent": "#%02X%02X%02X" % selection if selection and len(selection) == 3 else saved["accent"],
+    }
+
+
+def rgb(hex_colour):
+    h = hex_colour.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def mix(hex_colour, other, amount):
+    a, b = rgb(hex_colour), rgb(other)
+    return "#%02X%02X%02X" % tuple(round(x + (y - x) * amount) for x, y in zip(a, b))
+
+
+def nearest_accent(hex_colour):
+    r, g, b = (c / 255 for c in rgb(hex_colour))
+    h, _, s = colorsys.rgb_to_hls(r, g, b)
+    if s < 0.15:
+        return "slate"
+    hue = h * 360
+    return min(GNOME_ACCENTS, key=lambda n: min(abs(hue - GNOME_ACCENTS[n]), 360 - abs(hue - GNOME_ACCENTS[n])))
+
+
+# --- targets ---------------------------------------------------------------
+def shell(t):
+    """Colours for the zsh prompt and `forge`, in a file both shells can source."""
+    dark, accent = t["dark"], t["accent"]
+    colours = {
+        "FORGE_DARK": "1" if dark else "0",
+        "FORGE_ACCENT": accent,
+        # The git branch: the accent, softened towards the text colour.
+        "FORGE_ACCENT_SOFT": mix(accent, "#FFFFFF", 0.35) if dark else mix(accent, "#000000", 0.25),
+        "FORGE_DIM": "#8B90B0" if dark else "#6E7391",
+        "FORGE_ERROR": "#F28B9B" if dark else "#D9576E",
+        "FORGE_OK": "#8FD3A8" if dark else "#3E9E6C",
+    }
+    lines = ["# Written by forge-theme-sync from ~/.config/forge/theme.json."]
+    for k, v in colours.items():
+        lines.append(f"{k}='{v}'")
+        if v.startswith("#"):
+            lines.append(f"{k}_RGB='{';'.join(map(str, rgb(v)))}'")
+    text = "\n".join(lines) + "\n"
+    if SHELL.exists() and SHELL.read_text() == text:
+        return "already in step"
+    SHELL.parent.mkdir(parents=True, exist_ok=True)
+    SHELL.write_text(text)
+    return f"accent {accent}"
+
+
+def gnome(t):
+    if not shutil.which("gsettings"):
+        return "no gsettings"
+    want = {"color-scheme": "prefer-dark" if t["dark"] else "default", "accent-color": nearest_accent(t["accent"])}
+    for key, value in want.items():
+        current = run("gsettings", "get", "org.gnome.desktop.interface", key)
+        if current is None or current.returncode != 0:
+            continue  # an older GNOME schema without accent-color
+        if current.stdout.strip().strip("'") != value:
+            run("gsettings", "set", "org.gnome.desktop.interface", key, value)
+    return f"{want['color-scheme']}, accent {want['accent-color']}"
+
+
+def flatpak(t):
+    if not shutil.which("flatpak"):
+        return "no flatpak"
+    shown = run("flatpak", "override", "--user", "--show")
+    have = shown.stdout if shown and shown.returncode == 0 else ""
+    if "xdg-config/gtk-3.0:ro" in have and "xdg-config/gtk-4.0:ro" in have:
+        return "already in step"
+    r = run("flatpak", "override", "--user", "--filesystem=xdg-config/gtk-3.0:ro",
+            "--filesystem=xdg-config/gtk-4.0:ro")
+    return "apps may read the GTK colours" if r and r.returncode == 0 else "couldn't set the override"
+
+
+def login(t):
+    if not LOGIN.parent.is_dir():
+        return "no forge-glass login theme"
+    mode = "dark" if t["dark"] else "light"
+    try:
+        current = LOGIN.read_text()
+    except OSError:
+        current = ""
+    if f"accent={t['accent']}" in current and f"dark={'true' if t['dark'] else 'false'}" in current:
+        return "already in step"
+    r = run("pkexec", "/usr/local/bin/forge-theme-login", t["accent"], mode)
+    if r is None or r.returncode != 0:
+        return "not changed (" + ((r and r.stderr.strip()) or "pkexec failed") + ")"
+    return f"{mode}, accent {t['accent']}"
+
+
+TARGETS = {"shell": shell, "gnome": gnome, "flatpak": flatpak, "login": login}
+
+
+def status(t):
+    print(f"theme: {'dark' if t['dark'] else 'light'}, accent {t['accent']}")
+    portal = run("busctl", "--user", "call", "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop",
+                 "org.freedesktop.portal.Settings", "ReadOne", "ss", "org.freedesktop.appearance", "color-scheme")
+    print("  portal (browsers, Electron, Flatpak):", {"v u 1": "dark", "v u 2": "light", "v u 0": "no preference"}
+          .get(portal.stdout.strip() if portal else "", "unknown"))
+    print("  shell:", SHELL.read_text().splitlines()[2].split("=")[1] if SHELL.exists() else "not written yet")
+    if shutil.which("gsettings"):
+        g = [run("gsettings", "get", "org.gnome.desktop.interface", k) for k in ("color-scheme", "accent-color")]
+        print("  gnome:", ", ".join(x.stdout.strip() for x in g if x and x.returncode == 0))
+    shown = run("flatpak", "override", "--user", "--show") if shutil.which("flatpak") else None
+    print("  flatpak:", "GTK colours readable" if shown and "gtk-4.0:ro" in shown.stdout else "not yet")
+    try:
+        print("  login:", " ".join(l for l in LOGIN.read_text().splitlines() if l.startswith(("accent", "dark"))))
+    except OSError:
+        print("  login: stock Forge Glass light")
+
+
+def main(argv):
+    t = theme()
+    if "--status" in argv:
+        status(t)
+        return True
+    for name, target in TARGETS.items():
+        if name == "login" and "--no-login" in argv:
+            continue
+        try:
+            print(f"{name:8} {target(t)}")
+        except Exception as e:  # one place failing mustn't stop the others
+            print(f"{name:8} failed: {e}")
+    return True
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main(sys.argv[1:]) else 1)

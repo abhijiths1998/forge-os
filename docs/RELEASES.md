@@ -59,6 +59,10 @@ gtk-layer-shell anchoring works.
   do-not-disturb and now playing (Flutter, `forge_ui`).
 - **Forge Battery:** the top bar's battery, macOS-style, the percentage
   written inside it, and a popup with its details and style.
+- **One theme everywhere:** `forge-theme-sync` takes the theme where KDE's
+  colour scheme doesn't reach: the login screen, the terminal prompt and
+  `forge`, GNOME's settings, Flatpak apps; forged runs it on any theme
+  change.
 - **Forge Wi-Fi, Bluetooth and Sound:** the tray's own icons replaced, each
   with a popup like the battery's: networks and joining them, paired
   devices, volume and outputs. The tray stays, slim, for apps' icons.

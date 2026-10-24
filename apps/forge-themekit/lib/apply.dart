@@ -2,8 +2,9 @@
 //   glass  - KWin's Glass and rounded-corners effects (kwinrc) and Darkly's
 //            window corners: cheap, so sliders apply them as they move;
 //   colours - a KDE colour scheme, icons for light or dark, Darkly's menu
-//            opacities, Konsole's scheme and ~/.config/forge/theme.json:
-//            every app repaints, so this waits for a slider's release.
+//            opacities, Konsole's scheme, ~/.config/forge/theme.json, and
+//            forge-theme-sync for the rest (login screen, shell, GNOME,
+//            Flatpak): every app repaints, so this waits for a slider's release.
 import 'dart:io';
 
 import 'package:forge_ui/forge_ui.dart';
@@ -96,6 +97,14 @@ class Applier {
 
     // For the Forge apps (launcher, store...): they read this for colours.
     t.writeTo(ForgeTheme.currentFile);
+
+    // Everywhere KDE's colour scheme doesn't reach: the login screen, the
+    // shell's prompt, GNOME's settings, Flatpak apps (forge-theme-sync).
+    try {
+      await Process.run('forge-theme-sync', []);
+    } catch (_) {
+      // not installed: the rest of the theme still applied
+    }
   }
 
   /// Konsole: the user's ForgeGlass scheme (the forge-os profile's),

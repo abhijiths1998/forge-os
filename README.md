@@ -66,6 +66,29 @@ theme set in the Theming Kit:
 Each is translucent, so KWin's Glass effect frosts it like the rest of the
 desktop. Brave stays installed for sites that need Widevine DRM.
 
+## One theme everywhere
+
+A theme set in the Theming Kit (or System Settings, or `forge theme`)
+reaches as much of the system as can take one:
+
+| Where | How |
+|---|---|
+| Plasma, KDE and Qt apps, Forge's top-bar widgets | KDE's colour scheme |
+| Forge apps (Launcher, Store, Control Center...) | `~/.config/forge/theme.json` |
+| GTK 3 and 4 apps | the `colors.css` KDE writes for them, Breeze GTK |
+| Firefox, Chromium/Brave, Electron apps, web pages | the freedesktop appearance portal (light/dark and the accent) |
+| Flatpak apps | allowed to read those GTK colours; Breeze for GTK 3 apps from Flathub |
+| GNOME settings (`gsettings`), for older GTK apps | light/dark and the nearest named accent |
+| The terminal prompt and `forge`'s output | `~/.config/forge/theme.sh`; open terminals follow at their next prompt |
+| The login screen | its accent, light/dark and wallpaper (`forge-theme-login`, through polkit) |
+| Konsole | its colour scheme (new windows) |
+
+`forge-theme-sync` does the part KDE doesn't. The Theming Kit runs it, and
+forged runs it whenever KDE's colours change from anywhere else; it follows
+what KDE shows. `forge theme status` shows where each place stands, and
+`forge theme sync` runs it by hand. Not reached: Steam (its own skin) and
+apps with their own theme settings (Discord, Brave's own theme).
+
 ## Forge Thermal
 
 Caps the CPU's and GPU's maximum clocks at a share of what the hardware

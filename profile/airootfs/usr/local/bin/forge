@@ -5,9 +5,10 @@
 #   forge remove <pkg...>
 #   forge update              system packages + Flatpaks
 #   forge search <query>
-#   forge theme [light|dark|<theme>|list]
+#   forge theme [light|dark|<theme>|list|sync|status]
 #                             Forge Glass light/dark (toggles if omitted), or any
-#                             Theming Kit theme
+#                             Theming Kit theme; sync puts it on the login screen,
+#                             shell, GTK/GNOME and Flatpak apps too (status: where)
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
 #   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
@@ -20,6 +21,13 @@ set -uo pipefail
 c() { printf '\e[38;2;%sm' "$1"; }
 PERI="$(c '138;155;247')" GREEN="$(c '143;211;168')" ROSE="$(c '242;139;155')"
 GREY="$(c '139;144;176')" LILAC="$(c '195;183;238')" BOLD=$'\e[1m' OFF=$'\e[0m'
+# The Forge theme's colours instead, once forge-theme-sync has written them.
+FORGE_THEME_SH="${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.sh"
+if [[ -r "${FORGE_THEME_SH}" ]] && source "${FORGE_THEME_SH}" 2>/dev/null; then
+    PERI="$(c "${FORGE_ACCENT_RGB:-138;155;247}")" LILAC="$(c "${FORGE_ACCENT_SOFT_RGB:-195;183;238}")"
+    GREY="$(c "${FORGE_DIM_RGB:-139;144;176}")" ROSE="$(c "${FORGE_ERROR_RGB:-242;139;155}")"
+    GREEN="$(c "${FORGE_OK_RGB:-143;211;168}")"
+fi
 
 say()  { printf '%s%s%s %s\n' "${PERI}" "forge" "${OFF}" "$*"; }
 ok()   { printf '%s✓%s %s\n' "${GREEN}" "${OFF}" "$*"; }
@@ -92,7 +100,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}remove${OFF} <pkg...>     remove packages
   ${PERI}update${OFF}              update everything ${GREY}(packages + Flatpaks)${OFF}
   ${PERI}search${OFF} <query>      find packages
-  ${PERI}theme${OFF} [light|dark|name] switch the look ${GREY}(forge theme list)${OFF}
+  ${PERI}theme${OFF} [light|dark|name] switch the look ${GREY}(list; sync and status: everywhere else)${OFF}
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
@@ -126,6 +134,12 @@ case "${cmd}" in
         pkg search "$@"
         ;;
     theme)
+        case "${1:-}" in
+            sync)   have forge-theme-sync || fail "forge-theme-sync is missing"
+                    forge-theme-sync; exit $? ;;
+            status) have forge-theme-sync || fail "forge-theme-sync is missing"
+                    forge-theme-sync --status; exit $? ;;
+        esac
         # With the Theming Kit, every theme goes through it, so the Forge
         # apps' colours (~/.config/forge/theme.json) stay in step.
         if have forge-themekit; then
