@@ -17,6 +17,13 @@ toolbar and tabs as the rest of the desktop.
 - **New tab page** (`forge://newtab`): clock, search and your bookmarks or
   most visited sites over the Forge Glass wallpaper. Tiles are letters, not
   favicons fetched from a third party.
+- **Vertical tabs** (menu, or Ctrl+Shift+,): a tab sidebar on the left
+  (`src/tabsidebar.cpp`) that is expanded (icon and title), collapsed
+  (icons only; resting the pointer on the strip rolls it open over the page
+  Brave-style, until the pointer leaves) or auto-hidden: hidden until the pointer reaches the
+  window's left edge, then it slides out over the page and away again when
+  the pointer leaves (Ctrl+\ or the eye/pin button). Drag to reorder,
+  middle-click or right-click to close. The choice is remembered.
 - Tabs restore on restart; bookmarks (Ctrl+D) and history feed the address
   bar's suggestions; searches go to DuckDuckGo.
 - One process: `forge-browser URL` from another app opens a tab in the

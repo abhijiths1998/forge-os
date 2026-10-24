@@ -17,6 +17,7 @@ add_executable(forge-browser
   src/bookmarks.cpp
   src/browserwindow.cpp
   src/newtab.cpp
+  src/tabsidebar.cpp
   src/webpage.cpp
   resources/resources.qrc
 )

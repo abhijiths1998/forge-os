@@ -32,6 +32,7 @@
 
 #include "adblock.h"
 #include "bookmarks.h"
+#include "tabsidebar.h"
 #include "webpage.h"
 
 namespace {
@@ -91,7 +92,8 @@ BrowserWindow::BrowserWindow(QWebEngineProfile* profile,
   auto* newTab = toolButton("tab-new", "New tab (Ctrl+T)");
   connect(newTab, &QToolButton::clicked, this, [this] { addTab(); });
 
-  auto* tabRow = new QHBoxLayout;
+  tabStrip_ = new QWidget;
+  auto* tabRow = new QHBoxLayout(tabStrip_);
   tabRow->setContentsMargins(6, 4, 6, 0);
   tabRow->setSpacing(4);
   tabRow->addWidget(tabs_, 1);
@@ -140,7 +142,7 @@ BrowserWindow::BrowserWindow(QWebEngineProfile* profile,
   auto* chromeLayout = new QVBoxLayout(chrome_);
   chromeLayout->setContentsMargins(0, 0, 0, 0);
   chromeLayout->setSpacing(0);
-  chromeLayout->addLayout(tabRow);
+  chromeLayout->addWidget(tabStrip_);
   chromeLayout->addLayout(toolRow);
 
   // --- Find bar.
@@ -177,13 +179,22 @@ BrowserWindow::BrowserWindow(QWebEngineProfile* profile,
   hoverLink_->setContentsMargins(8, 3, 8, 3);
   hoverLink_->hide();
 
+  // Pages, with the vertical tab sidebar docked to their left (or floating
+  // over them when it auto-hides).
+  auto* content = new QWidget;
+  auto* contentLayout = new QHBoxLayout(content);
+  contentLayout->setContentsMargins(0, 0, 0, 0);
+  contentLayout->setSpacing(0);
+  contentLayout->addWidget(stack_, 1);
+  sidebar_ = new TabSidebar(tabs_, content, contentLayout);
+
   auto* central = new QWidget;
   auto* layout = new QVBoxLayout(central);
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setSpacing(0);
   layout->addWidget(chrome_);
   layout->addWidget(findBar_);
-  layout->addWidget(stack_, 1);
+  layout->addWidget(content, 1);
   setCentralWidget(central);
 
   connect(tabs_, &QTabBar::currentChanged, this, &BrowserWindow::currentChanged);
@@ -193,6 +204,12 @@ BrowserWindow::BrowserWindow(QWebEngineProfile* profile,
     stack_->removeWidget(w);
     stack_->insertWidget(to, w);
     stack_->setCurrentIndex(tabs_->currentIndex());
+    sidebar_->refresh();
+  });
+  connect(sidebar_, &TabSidebar::newTabRequested, this, [this] { addTab(); });
+  connect(sidebar_, &TabSidebar::closeRequested, this, &BrowserWindow::closeTab);
+  connect(sidebar_, &TabSidebar::modeChanged, this, [](TabSidebar::Mode mode) {
+    QSettings().setValue("tabs/sidebarMode", static_cast<int>(mode));
   });
   connect(back_, &QToolButton::clicked, this, [this] { current()->back(); });
   connect(forward_, &QToolButton::clicked, this, [this] { current()->forward(); });
@@ -219,6 +236,11 @@ BrowserWindow::BrowserWindow(QWebEngineProfile* profile,
   buildMenu();
   buildShieldMenu();
   addShortcuts();
+
+  QSettings settings;
+  sidebar_->setMode(static_cast<TabSidebar::Mode>(
+      settings.value("tabs/sidebarMode", TabSidebar::Expanded).toInt()));
+  setVerticalTabs(settings.value("tabs/vertical", false).toBool());
 }
 
 QWebEngineView* BrowserWindow::current() const {
@@ -251,16 +273,21 @@ QWebEngineView* BrowserWindow::addTab(const QUrl& url, bool background,
   const int index = background ? tabs_->count() : tabs_->currentIndex() + 1;
   stack_->insertWidget(index, view);
   tabs_->insertTab(index, "New Tab");
+  sidebar_->refresh();
 
   connect(view, &QWebEngineView::titleChanged, this, [this, view](const QString& t) {
     const int i = indexOf(view);
     if (i < 0) return;
     tabs_->setTabText(i, elided(t.isEmpty() ? "New Tab" : t));
     tabs_->setTabToolTip(i, t);
+    sidebar_->refresh();
     if (view == current()) setWindowTitle(t + " — Forge Browser");
   });
   connect(view, &QWebEngineView::iconChanged, this, [this, view](const QIcon& icon) {
-    if (int i = indexOf(view); i >= 0) tabs_->setTabIcon(i, icon);
+    if (int i = indexOf(view); i >= 0) {
+      tabs_->setTabIcon(i, icon);
+      sidebar_->refresh();
+    }
   });
   connect(view, &QWebEngineView::urlChanged, this, [this, view](const QUrl&) {
     if (view == current()) updateChrome();
@@ -315,6 +342,7 @@ void BrowserWindow::closeTab(int index) {
   if (view == nullptr) return;
   if (!isNewTab(view->url())) closed_.append(view->url());
   tabs_->removeTab(index);
+  sidebar_->refresh();
   stack_->removeWidget(view);
   view->deleteLater();
   if (tabs_->count() == 0) close();
@@ -324,6 +352,7 @@ void BrowserWindow::currentChanged(int index) {
   if (index < 0) return;
   stack_->setCurrentIndex(index);
   hoverLink_->hide();
+  sidebar_->refresh();
   updateChrome();
 }
 
@@ -435,9 +464,11 @@ void BrowserWindow::fullScreen(QWebEngineFullScreenRequest request) {
     wasMaximized_ = isMaximized();
     chrome_->hide();
     findBar_->hide();
+    sidebar_->setActive(false);
     showFullScreen();
   } else {
     chrome_->show();
+    sidebar_->setActive(vertical_);
     if (wasMaximized_) {
       showMaximized();
     } else {
@@ -459,6 +490,18 @@ void BrowserWindow::buildMenu() {
   m->addAction(QIcon::fromTheme("edit-undo"), "Reopen closed tab",
                QKeySequence("Ctrl+Shift+T"), this, [this] {
                  if (!closed_.isEmpty()) addTab(closed_.takeLast());
+               });
+  verticalAction_ = m->addAction(QIcon::fromTheme("view-split-left-right"),
+                                 "Vertical tabs", QKeySequence("Ctrl+Shift+,"),
+                                 this, [this](bool on) { setVerticalTabs(on); });
+  verticalAction_->setCheckable(true);
+  m->addAction(QIcon::fromTheme("view-hidden"), "Auto-hide tab sidebar",
+               QKeySequence("Ctrl+\\"), this, [this] {
+                 if (!vertical_) {
+                   setVerticalTabs(true);
+                   if (sidebar_->mode() == TabSidebar::AutoHide) return;
+                 }
+                 sidebar_->toggleAutoHide();
                });
   m->addSeparator();
 
@@ -703,4 +746,13 @@ void BrowserWindow::trackDownload(QWebEngineDownloadRequest* download) {
   };
   connect(download, &QWebEngineDownloadRequest::stateChanged, this, refresh);
   refresh();
+}
+
+void BrowserWindow::setVerticalTabs(bool vertical) {
+  vertical_ = vertical;
+  tabStrip_->setVisible(!vertical);
+  sidebar_->setActive(vertical && !(isFullScreen() && chrome_->isHidden()));
+  sidebar_->refresh();
+  verticalAction_->setChecked(vertical);
+  QSettings().setValue("tabs/vertical", vertical);
 }

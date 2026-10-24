@@ -17,6 +17,7 @@ class QWebEngineFullScreenRequest;
 class QWebEngineProfile;
 class QWebEngineView;
 class QWidget;
+class TabSidebar;
 class WebPage;
 
 namespace adblock {
@@ -64,12 +65,18 @@ class BrowserWindow : public QMainWindow {
   void buildMenu();
   void buildShieldMenu();
   void addShortcuts();
+  // Tabs in a sidebar on the left (TabSidebar) instead of across the top.
+  void setVerticalTabs(bool vertical);
 
   QWebEngineProfile* profile_;
   adblock::Blocker* blocker_;
   QTabBar* tabs_;
   QStackedWidget* stack_;
   QWidget* chrome_;  // tab bar + toolbar, hidden in full screen
+  QWidget* tabStrip_;  // the horizontal tab row
+  TabSidebar* sidebar_;
+  QAction* verticalAction_;
+  bool vertical_ = false;
   QToolButton* back_;
   QToolButton* forward_;
   QToolButton* reload_;
