@@ -17,8 +17,10 @@ frosts it.
   - `org.forgeos.battery`, **Forge Battery**, at the right end: a
     macOS-style battery with the percentage written inside it, in a
     contrasting colour where the fill reaches. Green while plugged in, red
-    at 20% and below, a bolt while charging; the tooltip has the time left,
-    a click opens the Control Center. It takes no space without a battery,
+    at 20% and below, a bolt while charging. A click opens its popup: the
+    charge, the time left, health and model, and where the top bar shows
+    the percentage (inside the battery, beside it or hidden), each choice
+    previewed with the real charge. It takes no space without a battery,
     and Plasma's own battery icon moves to the tray's overflow.
 - **Placement:** with gtk-layer-shell, the panel anchors under the top bar on
   the right. Without it, a KWin rule (`/etc/skel/.config/kwinrulesrc`) takes
