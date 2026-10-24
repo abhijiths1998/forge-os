@@ -225,6 +225,10 @@ kwin-effects-glass-git
 darkly-qt6-git
 kwin-polonium
 
+# Forge Launcher (apps/forge-launcher, built into the local repo by
+# apps/build-packages.sh): the Meta+Space command bar, in place of KRunner.
+forge-launcher
+
 # Default shell: zsh + Oh My Zsh (for its plugins; the prompt is our own,
 # see /etc/skel/.zshrc) + autosuggestions/syntax-highlighting.
 oh-my-zsh-git

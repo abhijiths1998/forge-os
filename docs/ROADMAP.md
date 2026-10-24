@@ -45,7 +45,7 @@ and the tagline is ours ("Built hot. Runs cool.").
 | Glass wallpaper | `/usr/share/wallpapers/ForgeGlass` (light `images/` + dark `images_dark/`; Plasma picks by scheme) |
 | Top bar + dock | `org.forgeos.glass` look-and-feel `contents/layouts/org.kde.plasma.desktop-layout.js` |
 | Control center | Plasma system tray in the top bar |
-| Command bar | KRunner, `FreeFloating=true`, on Super+Space (`kglobalshortcutsrc`) |
+| Command bar | **Forge Launcher** (`apps/forge-launcher`, Flutter) on Super+Space: apps, files (Baloo), Forge actions, power, maths, `>` commands, `?` web. Starts hidden at login; a KWin rule (`kwinrulesrc`) makes it a borderless centred card. KRunner keeps Alt+Space / Alt+F2 |
 | Terminal + package tool | `ForgeGlass` Konsole scheme (translucent navy), zsh prompt, `/usr/local/bin/forge` (`install`/`remove`/`update`/`search`/`theme`/`tile`/`about`, on top of pamac) |
 | Tiling, workspaces | `kwin-polonium` (off by default; `forge tile on`), 3 desktops |
 | Lock/login | SDDM theme `forge-glass` (Qt 6: thin clock, `MultiEffect`-blurred glass card, session picker); lock screen uses the ForgeGlass wallpaper |

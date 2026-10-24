@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Launcher
+GenericName=Command Bar
+Comment=Find apps, files and settings, run commands and do quick maths
+Exec=forge-launcher
+Icon=search
+Categories=Utility;
+Keywords=search;run;launcher;krunner;spotlight;calculator;
+NoDisplay=true
+StartupNotify=false
+X-KDE-Shortcuts=Meta+Space

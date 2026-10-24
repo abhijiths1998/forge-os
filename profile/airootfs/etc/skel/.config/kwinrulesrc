@@ -1,0 +1,26 @@
+# Forge Launcher (Meta+Space): a borderless glass card, centred (which puts
+# its top edge high on the screen, since it maps at full height and then
+# shrinks to fit), above other windows and out of the taskbar and Alt+Tab.
+# The window asks GTK for no decoration, but KWin adds one anyway without
+# this. Placement 5 is KWin's "Centered"; rule 2 is "Force".
+[General]
+count=1
+rules=forge-launcher
+
+[forge-launcher]
+Description=Forge Launcher
+wmclass=org.forgeos.launcher
+wmclassmatch=1
+types=1
+noborder=true
+noborderrule=2
+placement=5
+placementrule=2
+above=true
+aboverule=2
+skiptaskbar=true
+skiptaskbarrule=2
+skippager=true
+skippagerrule=2
+skipswitcher=true
+skipswitcherrule=2
