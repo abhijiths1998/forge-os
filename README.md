@@ -103,8 +103,11 @@ Requests are read for the kind of file ("pdf", "screenshots", "videos"), when
 words. Rules do this instantly. With [Ollama](https://ollama.com) running, a
 local model (qwen3:4b unless `~/.config/forge/mind.conf` says `model=...`)
 reads longer requests too and adds likely name words: "my landlord's letter"
-also looks for lease, rent and tenancy. It never runs during a game. The
-Launcher (Super+Space) shows these results under the apps.
+also looks for lease, rent and tenancy. It only adds words (a small model
+guesses dates and file types wrong), takes about a second on a laptop
+RTX 3050, and leaves the GPU the moment a game starts (GameMode). Files are
+ranked by how many words match, typed words first. The Launcher
+(Super+Space) shows these results under the apps.
 
 Cleanup knows what fills a gaming Linux disk: Proton prefixes and shader
 caches of uninstalled Steam games (across every Steam library), the pacman

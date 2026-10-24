@@ -13,9 +13,10 @@
   add --json to search/ask/stats/cleanup for machine-readable output
 
 Everything here is deterministic; a model only ever turns a request into
-these calls and explains the results. The model is optional: Ollama with
-qwen3:4b by default (~/.config/forge/mind.conf: model=, ollama=), and
-without it, requests are understood by rules. Indexing pauses while GameMode is
+these calls and explains the results. Requests are read by rules; the model
+is optional and only adds name words (synonyms): Ollama with qwen3:4b by
+default (~/.config/forge/mind.conf: model=, ollama=). It's unloaded from
+the GPU when GameMode starts. Indexing pauses while GameMode is
 active, so it never competes with a game. The index lives in
 $XDG_DATA_HOME/forge-mind/index.db (SQLite, FTS5). Snapshot sizes need
 btrfs quotas (forge-postinstall.sh runs `snapper setup-quota`).
@@ -183,7 +184,8 @@ STOP = set("""a an the my me i i'm im that this those these it its file files th
     which where wheres where's what whats what's with of for to on in at from around about
     sent got had have was is were find show search look open get me some any all one ones
     called named saved downloaded download made took taken there here and or please can you
-    near roughly sometime ago when may might something anything someone somebody""".split())
+    near roughly sometime ago when may might something anything someone somebody
+    last past week weeks month months year years day days""".split())
 EXTS = {e for exts in KINDS.values() for e in exts}
 DAY = 86400
 
@@ -319,43 +321,32 @@ def model_config():
     return conf
 
 
-FILTER_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "words": {"type": "array", "items": {"type": "string"}},
-        "kinds": {"type": "array", "items": {"type": "string", "enum": list(KINDS)}},
-        "after": {"type": ["string", "null"]},
-        "before": {"type": ["string", "null"]},
-        "place": {"type": ["string", "null"], "enum": [*PLACES.values(), None]},
-        "origin": {"type": ["string", "null"]},
-        "min_size_mb": {"type": ["number", "null"]},
-        "max_size_mb": {"type": ["number", "null"]},
-    },
-    "required": ["words", "kinds", "after", "before", "place", "origin", "min_size_mb", "max_size_mb"],
-}
+WORDS_SCHEMA = {"type": "object", "properties": {"words": {"type": "array", "items": {"type": "string"}}},
+                "required": ["words"]}
 
-MODEL_PROMPT = """You turn a request for a file on a Linux desktop into search filters.
-Today is {today}. Only the file's name and folder are searchable, so for "words" give
-the words likely to appear in the file NAME: the request's key words plus 2-5 close
-synonyms or related terms (a landlord's letter: lease, rent, tenancy, landlord).
-Leave out filler words and words already covered by another filter.
-kinds: types of file asked for. after/before: dates (YYYY-MM-DD) bounding when the file
-was made or changed; for "around" a month, widen by two weeks each side. place: a home
-folder only if one is named. origin: a website it was downloaded from, if named
-(e.g. "github"). Sizes in MB only when asked. Use null and [] for anything not asked."""
+MODEL_PROMPT = """You help find a file on a Linux desktop by its name. Given a request,
+list 6-10 single lowercase words likely to appear in the file's NAME or its folder's:
+the request's key words, then at least 4 synonyms and the technical terms someone
+would name such a file with. Leave out dates, file types and filler.
+"the pdf my landlord sent": landlord, lease, rent, tenancy, agreement, rental
+"script that makes the wifi faster": wifi, network, wireless, speed, tune, iwd"""
+
+KEEP_ALIVE = "2m"   # short: the GPU is wanted for games
+model_used = [0.0]
 
 
-def model_filters(text, timeout=8):
-    """Filters from the local model, or None when there's none (or it fails)."""
+def model_words(text, timeout=8):
+    """Name words from the local model, or None when there's none (or it fails).
+    Only words: dates, kinds of file, places and sizes are the rules' job, since
+    a small model guesses those wrong and a wrong filter hides the right file."""
     import urllib.request
     if gamemode_active():
         return None
     conf = model_config()
     body = json.dumps({
-        "model": conf["model"], "stream": False, "think": False, "keep_alive": "5m",
-        "format": FILTER_SCHEMA, "options": {"temperature": 0},
-        "messages": [{"role": "system", "content": MODEL_PROMPT.format(today=time.strftime("%Y-%m-%d (%A)"))},
-                     {"role": "user", "content": text}],
+        "model": conf["model"], "stream": False, "think": False, "keep_alive": KEEP_ALIVE,
+        "format": WORDS_SCHEMA, "options": {"temperature": 0},
+        "messages": [{"role": "system", "content": MODEL_PROMPT}, {"role": "user", "content": text}],
     }).encode()
     try:
         req = urllib.request.Request(conf["ollama"] + "/api/chat", body, {"Content-Type": "application/json"})
@@ -363,27 +354,32 @@ def model_filters(text, timeout=8):
             raw = json.loads(json.loads(r.read())["message"]["content"])
     except (OSError, ValueError, KeyError):
         return None
+    model_used[0] = time.monotonic()
+    words = [t for w in raw.get("words", []) if isinstance(w, str) for t in re.findall(r"\w+", w.lower())]
+    # A word the rules read as something else ("pdf", "march", "downloads") isn't a name word.
+    return [w for w in dict.fromkeys(words) if understand(w)["words"] == [w]][:12]
 
-    def date(s):
-        try:
-            return time.mktime(time.strptime(s, "%Y-%m-%d"))
-        except (TypeError, ValueError):
-            return None
 
-    mb = lambda v: int(v * 1024**2) if isinstance(v, (int, float)) and v > 0 else None
-    words = [w.lower() for w in raw.get("words", []) if isinstance(w, str) and w.strip()]
-    return {"words": [t for w in words for t in re.findall(r"\w+", w) if t not in STOP][:12],
-            "kinds": [k for k in raw.get("kinds", []) if k in KINDS],
-            "after": date(raw.get("after")),
-            "before": date(raw.get("before")) and date(raw.get("before")) + DAY,
-            "place": raw.get("place") if raw.get("place") in PLACES.values() else None,
-            "origin": (raw.get("origin") or "").lower() or None,
-            "min_size": mb(raw.get("min_size_mb")), "max_size": mb(raw.get("max_size_mb"))}
+def unload_model():
+    """Free the GPU now (a game is starting), instead of after KEEP_ALIVE."""
+    import urllib.request
+    conf = model_config()
+    try:
+        body = json.dumps({"model": conf["model"], "keep_alive": 0}).encode()
+        urllib.request.urlopen(urllib.request.Request(
+            conf["ollama"] + "/api/generate", body, {"Content-Type": "application/json"}), timeout=5).close()
+    except OSError:
+        pass
+    model_used[0] = 0.0
+
+
+def _kind_exts(f):
+    return sorted({e for k in f["kinds"] for e in KINDS.get(k, [])} | set(f.get("exts", [])))
 
 
 def _conditions(f, kinds=True):
     where, args = [], []
-    exts = sorted({e for k in f["kinds"] for e in KINDS.get(k, [])} | set(f.get("exts", []))) if kinds else []
+    exts = _kind_exts(f) if kinds else []
     if exts:
         where.append(f"f.ext IN ({','.join('?' * len(exts))})")
         args += exts
@@ -409,12 +405,21 @@ def _conditions(f, kinds=True):
     return " AND ".join(where) or "1", args
 
 
+def _word_score(f, text):
+    """How well a path's words match: each typed word found counts 3 (as a
+    prefix, it may be half-typed), each of the model's words 1 (whole word)."""
+    tokens = set(re.findall(r"\w+", text.lower()))
+    typed = sum(3 for w in f["words"] if any(t.startswith(w) for t in tokens))
+    return typed + sum(1 for w in f.get("also", []) if w in tokens)
+
+
 def find(f, limit=30):
-    """Files matching filters f, with whether the match is loose. Name words rank
-    results (any may match) and the other filters must hold. Then, looser: the
-    name words without the kind of file (scripts often have no extension), and
-    last, everything the filters alone allow, newest first. The user's own files
-    rank above those in hidden app folders."""
+    """Files matching filters f, with whether the match is loose. Files any name
+    word matches are ranked by how many match and whether they're the kind of
+    file asked for (not a filter: scripts often have no extension); the other
+    filters must hold. With no name match, everything the filters allow comes
+    back, newest first. The user's own files rank above those in hidden app
+    folders."""
     cols = "f.path, f.size, f.mtime, f.origin"
     hidden = f"instr(substr(f.path, {len(str(HOME)) + 1}), '/.') > 0"
     con, rows, loose = db(), [], False
@@ -423,14 +428,16 @@ def find(f, limit=30):
     phrase = lambda w: '"' + w.replace('"', "") + '"'
     if f["words"] or f.get("also"):
         q = " OR ".join([phrase(w) + "*" for w in f["words"]] + [phrase(w) for w in f.get("also", [])])
-        for strict in (True, False):
-            cond, args = _conditions(f, kinds=strict)
-            rows = con.execute(f"""SELECT {cols} FROM names n JOIN files f USING(path)
-                                   WHERE names MATCH ? AND {cond} ORDER BY {hidden}, rank LIMIT ?""",
-                               [q, *args, limit]).fetchall()
-            if rows or not (f["kinds"] or f.get("exts")):
-                break
-            loose = True
+        cond, args = _conditions(f, kinds=False)
+        rows = con.execute(f"""SELECT {cols}, {hidden}, n.words FROM names n JOIN files f USING(path)
+                               WHERE names MATCH ? AND {cond} ORDER BY rank LIMIT 400""",
+                           [q, *args]).fetchall()
+        exts = _kind_exts(f)
+        fits = lambda r: not exts or Path(r[0]).suffix.lower() in exts
+        # The kind of file counts like a typed word, not as a filter.
+        rows = sorted(rows, key=lambda r: (r[4], -_word_score(f, r[5]) - 3 * fits(r)))[:limit]
+        loose = bool(rows) and not fits(rows[0])
+        rows = [r[:4] for r in rows]
     cond, args = _conditions(f)
     if not rows and cond != "1":
         loose = bool(f["words"] or f.get("also"))
@@ -443,16 +450,12 @@ def ask(text, deep=False):
     """Find files for a request in plain words. deep: let the local model read it too."""
     f, by = understand(text), "rules"
     if deep and len(text.split()) >= 2:
-        m = model_filters(text)
-        if m:
-            # Rules are exact about dates and kinds when they caught them; the model
-            # fills in the rest. For name words it's the better judge: typed words
-            # it kept stay, filler it dropped goes, and its synonyms are added.
-            for k in ("kinds", "after", "before", "place", "origin", "min_size", "max_size"):
-                if not f[k]:
-                    f[k] = m[k]
-            f["words"] = [w for w in f["words"] if w in m["words"]]
-            f["also"] = [w for w in m["words"] if w not in f["words"]]
+        words = model_words(text)
+        if words:
+            # For name words the model is the better judge: typed words it kept
+            # stay, filler it dropped goes, and its synonyms are added.
+            f["words"] = [w for w in f["words"] if w in words]
+            f["also"] = [w for w in words if w not in f["words"]]
             by = "model"
     results, loose = find(f)
     return {"filters": f, "by": by, "loose": loose, "results": results}
@@ -629,6 +632,8 @@ def serve():
     loop = GLib.MainLoop()
 
     def exit_if_idle():
+        if model_used[0] and gamemode_active():
+            unload_model()
         busy = Mind.indexing and Mind.indexing.poll() is None
         if not busy and time.monotonic() - last_call[0] > idle_exit:
             loop.quit()
@@ -685,6 +690,9 @@ def serve():
     bus = dbus.SessionBus()
     name = dbus.service.BusName(iface, bus, do_not_queue=True)  # noqa: F841 (held while running)
     Mind(bus, "/org/forgeos/Mind")
+    # A game starting frees the GPU at once (the idle check catches it too, later).
+    bus.add_signal_receiver(lambda *_: model_used[0] and unload_model(), signal_name="GameRegistered",
+                            dbus_interface="com.feralinteractive.GameMode")
     GLib.timeout_add_seconds(60, exit_if_idle)
     loop.run()
 
