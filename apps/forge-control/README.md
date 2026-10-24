@@ -11,8 +11,15 @@ frosts it.
   `/usr/local/bin/forged` in the ISO profile), which listens to each part's
   own service, so the panel stays right whoever changes something: a volume
   key, KDE's applets, `forge theme`.
-- **Top-bar button:** a Plasma widget (`data/plasmoid`, `org.forgeos.control`)
-  just left of the tray. The look-and-feel layout puts it there for new users.
+- **Top-bar widgets** (`data/plasmoids`, Plasma widgets the look-and-feel
+  layout puts in the top bar for new users):
+  - `org.forgeos.control`, the Control Center's button, just left of the tray;
+  - `org.forgeos.battery`, **Forge Battery**, at the right end: a
+    macOS-style battery with the percentage written inside it, in a
+    contrasting colour where the fill reaches. Green while plugged in, red
+    at 20% and below, a bolt while charging; the tooltip has the time left,
+    a click opens the Control Center. It takes no space without a battery,
+    and Plasma's own battery icon moves to the tray's overflow.
 - **Placement:** with gtk-layer-shell, the panel anchors under the top bar on
   the right. Without it, a KWin rule (`/etc/skel/.config/kwinrulesrc`) takes
   the border off and places it under the mouse, which is the button.

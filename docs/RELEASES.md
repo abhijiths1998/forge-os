@@ -43,7 +43,8 @@ ROADMAP's "Verification status" that are still open.
 ## 2.1: Control Center
 
 Built so far (2026-10-24, tried on the dev machine, not yet in an ISO):
-`forged` and Forge Control with its top-bar button. Still to do for 2.1:
+`forged`, Forge Control with its top-bar button, and Forge Battery (a
+macOS-style battery in the top bar with the percentage inside). Still to do for 2.1:
 picking a Wi-Fi network or Bluetooth device in the panel (today they only
 switch on and off), the Launcher on gtk-layer-shell, and a check on a
 laptop's built-in screen and a real install. The panel's own
@@ -56,6 +57,8 @@ gtk-layer-shell anchoring works.
 - **Control Center:** a glass panel from the top bar with Wi-Fi, Bluetooth,
   volume, brightness, power and thermal profile, dark mode, tiling,
   do-not-disturb and now playing (Flutter, `forge_ui`).
+- **Forge Battery:** the top bar's battery, macOS-style, the percentage
+  written inside it.
 - **gtk-layer-shell** for Forge's panels, so they anchor to the screen edge;
   the Launcher moves to it too.
 

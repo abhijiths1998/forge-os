@@ -10,7 +10,7 @@
 // Shared by org.forgeos.glass and org.forgeos.glass.dark (symlinked).
 
 // --- Top bar: launcher + app menu on the left, clock in the middle, Forge
-// Control and the tray on the right. Plasma centres whatever sits between two
+// Control, the tray and Forge Battery on the right. Plasma centres whatever sits between two
 // expanding spacers.
 var bar = new Panel;
 bar.location = "top";
@@ -36,7 +36,12 @@ clock.writeConfig("customDateFormat", "ddd, MMM d");
 
 bar.addWidget("org.kde.plasma.panelspacer");
 bar.addWidget("org.forgeos.control");
-bar.addWidget("org.kde.plasma.systemtray");
+var tray = bar.addWidget("org.kde.plasma.systemtray");
+// Forge Battery (next) shows the battery; Plasma's own moves to the tray's
+// overflow, where its power settings stay a click away.
+tray.currentConfigGroup = ["General"];
+tray.writeConfig("hiddenItems", ["org.kde.plasma.battery"]);
+bar.addWidget("org.forgeos.battery");
 
 // --- Dock: floating, only as wide as its icons, centred.
 var dock = new Panel;
