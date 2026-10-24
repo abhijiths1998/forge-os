@@ -1,7 +1,7 @@
 # Forge Launcher
 
 The Meta+Space command bar: a Forge Glass card (Flutter UI, GTK runner) that
-finds apps, files (Baloo), Forge actions (theme, tiling, thermal profiles,
+finds apps, files (Forge Mind, else Baloo), Forge actions (theme, tiling, thermal profiles,
 updates) and power actions, does quick maths, and runs commands.
 
 | Type | Does |
@@ -11,6 +11,7 @@ updates) and power actions, does quick maths, and runs commands.
 | `dark`, `tiling`, `cool`, `update` | Forge actions |
 | `lock`, `sleep`, `restart` | power actions |
 | `install <pkg>` | find it in Forge Store (or `forge install` without it) |
+| `the pdf from march`, `screenshots last week` | files, from Forge Mind; a request of three or more words gets a second look from its local model, when there is one |
 | `> command` | run it in Konsole |
 | `? words`, or any URL | web search / open the page |
 

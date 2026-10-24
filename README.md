@@ -7,6 +7,12 @@ first-class NVIDIA support. It cherry-picks ideas from CachyOS, Nobara,
 Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
 `docs/ROADMAP.md` for the feature rationale and what's still ahead.
 
+**Forge OS 2** arrives in steps: 2.0 is the Forge look and the first Forge
+apps, then one theme per release (Control Center, living wallpapers, the
+Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
+everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
+version is set in `forge-os-release` (`forge about` shows it).
+
 ## What you get
 
 - **Gaming, ready to go:** Steam, Lutris, Heroic, Wine, Proton tooling
@@ -54,6 +60,7 @@ theme set in the Theming Kit:
 | **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner |
 | **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
 | **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
+| **Forge Control**: the Control Center, a glass panel from the top bar: Wi-Fi, Bluetooth, quiet, dark mode, tiling, brightness, volume, power and cooling profiles, now playing; `forged state` / `forged set` | Plasma's tray popups, in one place | Flutter (forge_ui) + `forged` (Python, D-Bus) |
 | **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
 
 Each is translucent, so KWin's Glass effect frosts it like the rest of the
@@ -83,6 +90,50 @@ logo, boot assets), `colors.py` (colour schemes) and `desktoptheme.py`
 (Plasma theme: dock dots), then `install.sh`
 copies them into the profile. See `docs/ROADMAP.md` → "Forge Glass revamp".
 
+## Forge Mind
+
+The local file index and storage analyser that Forge's AI features are
+built on (`forge-mind`). It's deterministic: a model only turns a request
+into its calls and explains the results, so nothing is guessed and nothing
+leaves the machine.
+
+```sh
+forge find the pdf from march      # files, from a request in plain words
+forge space                        # disk, Steam libraries, snapshots, biggest folders
+forge space cleanup                # what could go, with sizes and reasons
+forge space clean <path>           # clean one of those (home files go to the trash)
+```
+
+Requests are read for the kind of file ("pdf", "screenshots", "videos"), when
+("around march", "last week", "2 weeks ago"), where ("in downloads"), how big
+("bigger than 2gb") and where it came from ("from github"); the rest are name
+words. Rules do this instantly. A local model, run by
+[Ollama](https://ollama.com) (qwen3:4b, set in `/etc/forge/mind.conf`, or per
+user in `~/.config/forge/mind.conf`), reads longer requests too and adds likely name words: "my landlord's letter"
+also looks for lease, rent and tenancy. It only adds words (a small model
+guesses dates and file types wrong), takes about a second on a laptop
+RTX 3050, and leaves the GPU the moment a game starts (GameMode). Files are
+ranked by how many words match, typed words first. The Launcher
+(Super+Space) shows these results under the apps.
+
+The ISO carries Ollama (with its Vulkan backend: 40 MB, any GPU, instead of
+CUDA's 6 GB) but not the 2.5 GB model. The installer downloads it
+(`forge-mind-model`), in the time it can spare; if it's offline or the line
+is slow, the first boot with a network finishes the download, resuming
+where it stopped. Until then, requests are read by rules alone.
+
+Cleanup knows what fills a gaming Linux disk: Proton prefixes and shader
+caches of uninstalled Steam games (across every Steam library), the pacman
+cache, AUR build files, node_modules, unused Flatpak runtimes, big files
+untouched for a year, and identical files (checked by hash). `clean` only
+accepts paths the cleanup list currently names.
+
+The index (SQLite, FTS5) lives in `~/.local/share/forge-mind/` and is
+refreshed by a user timer at idle priority; it waits while GameMode is
+active. Apps use it over D-Bus (`org.forgeos.Mind`: `Ask`, `Search`,
+`Stats`, `Cleanup`, `Clean`, `Index`, all returning JSON), which starts it on
+demand; it exits after ten idle minutes.
+
 ## Post-install script (faster path, no ISO)
 
 If a full custom ISO is more than you need right now, `post-install/setup.sh`
@@ -101,6 +152,11 @@ irqbalance, reflector, linux-zen), and a default browser. Safe to re-run.
 
 ## Building the ISO
 
+**On GitHub** (no disk space needed locally): Actions → **Build ISO** → Run
+workflow. It runs the same `build/build.sh build` on GitHub's runner and keeps
+the ISO and its checksum as an artifact of the run (14 days by default) for
+download from the run's page. See `.github/workflows/iso.yml`.
+
 Arch's own tooling (`mkarchiso`, `pacstrap`) only runs on Arch Linux, so the
 build runs inside a Docker container and works from any distro:
 
@@ -114,7 +170,7 @@ The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
 in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full KDE + gaming
 package set, so it's slow. A persistent Docker volume
 (`forge-os-pkgcache`) caches downloaded packages across retries. A full build
-takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
+takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.iso`.
 
 ## Layout
 

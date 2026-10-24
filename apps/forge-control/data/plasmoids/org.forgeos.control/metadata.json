@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Forge OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Opens Forge Control: Wi-Fi, Bluetooth, sound, brightness, power and more",
+        "Icon": "preferences-system",
+        "Id": "org.forgeos.control",
+        "License": "GPL-3.0-or-later",
+        "Name": "Forge Control",
+        "Version": "1.0",
+        "Website": "https://github.com/abhijiths1998/forge-os"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

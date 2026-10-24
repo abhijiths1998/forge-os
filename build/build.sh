@@ -9,12 +9,17 @@
 #   build/build.sh init    # one-time: seed profile/ from upstream releng skeleton
 #   build/build.sh build   # produce the ISO into out/
 #   build/build.sh shell   # drop into an interactive shell in the build container
+#
+# FORGE_WORK_DIR and FORGE_OUT_DIR put mkarchiso's work directory and the ISO
+# somewhere other than work/ and out/ in the repo (CI uses a bigger disk).
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 IMAGE_NAME="forge-os-builder"
 PKGCACHE_VOLUME="forge-os-pkgcache"
+WORK_DIR="${FORGE_WORK_DIR:-$REPO_ROOT/work}"
+OUT_DIR="${FORGE_OUT_DIR:-$REPO_ROOT/out}"
 
 build_image() {
     # Arch's current kwin version: a change re-runs the Containerfile step
@@ -31,10 +36,12 @@ fix_ownership() {
     # Container runs as root, so anything it writes into the bind-mounted
     # repo (out/, work/, or profile/ during init) ends up root-owned on the
     # host. Hand it back to the calling user.
-    docker run --rm \
-        -v "$REPO_ROOT:/build" \
+    local dirs=(-v "$REPO_ROOT:/build")
+    [ -d "$WORK_DIR" ] && dirs+=(-v "$WORK_DIR:/work")
+    [ -d "$OUT_DIR" ] && dirs+=(-v "$OUT_DIR:/out")
+    docker run --rm "${dirs[@]}" \
         "$IMAGE_NAME" \
-        chown -R "$(id -u)":"$(id -g)" /build
+        bash -c "chown -R $(id -u):$(id -g) /build \$(ls -d /work /out 2>/dev/null)"
 }
 
 cmd="${1:-}"
@@ -55,7 +62,7 @@ case "$cmd" in
         ;;
     build)
         build_image
-        mkdir -p "$REPO_ROOT/out" "$REPO_ROOT/work"
+        mkdir -p "$OUT_DIR" "$WORK_DIR"
         # The Forge apps (apps/) are built into the local repo first, in the
         # same container run, so mkarchiso finds them there.
         # Named volume for pacman's package cache: each `docker run --rm` is
@@ -63,13 +70,15 @@ case "$cmd" in
         # entire (large: KDE + gaming stack) package set from scratch.
         docker run --rm --privileged \
             -v "$REPO_ROOT:/build" \
+            -v "$WORK_DIR:/work" \
+            -v "$OUT_DIR:/out" \
             -v "$PKGCACHE_VOLUME:/var/cache/pacman/pkg" \
             -w /build \
             "$IMAGE_NAME" \
             bash -c "/build/apps/build-packages.sh \
-                && mkarchiso -v -w /build/work -o /build/out /build/profile"
+                && mkarchiso -v -w /work -o /out /build/profile"
         fix_ownership
-        echo "ISO written to out/"
+        echo "ISO written to $OUT_DIR"
         ;;
     shell)
         build_image

@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Forge OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "The battery, macOS-style, with its charge written inside",
+        "Icon": "battery-100",
+        "Id": "org.forgeos.battery",
+        "License": "GPL-3.0-or-later",
+        "Name": "Forge Battery",
+        "Version": "1.0",
+        "Website": "https://github.com/abhijiths1998/forge-os"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

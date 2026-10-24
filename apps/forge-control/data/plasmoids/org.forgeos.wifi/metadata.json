@@ -1,0 +1,19 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Forge OS"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Wi-Fi in the top bar",
+        "Icon": " networks, joining and the switch:network-wireless",
+        "Id": "org.forgeos.wifi",
+        "License": "GPL-3.0-or-later",
+        "Name": "Forge Wi-Fi",
+        "Version": "1.0",
+        "Website": "https://github.com/abhijiths1998/forge-os"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

@@ -5,7 +5,8 @@ iso_name="forge-os"
 iso_label="FORGE_$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y%m)"
 iso_publisher="forge-os <https://example.invalid>"
 iso_application="forge-os Live/Install Medium"
-iso_version="$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
+# The Forge OS version (set in forge-os-release), then the build date.
+iso_version="$("$(dirname "${BASH_SOURCE[0]}")/airootfs/usr/local/bin/forge-os-release")-$(date --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +%Y.%m.%d)"
 install_dir="forge"
 buildmodes=('iso')
 bootmodes=('bios.syslinux'
@@ -28,5 +29,9 @@ file_permissions=(
   ["/usr/local/bin/forge-glass-check"]="0:0:755"
   ["/usr/local/bin/forge-thermal"]="0:0:755"
   ["/usr/local/bin/forge-thermal-gui"]="0:0:755"
+  ["/usr/local/bin/forge-mind"]="0:0:755"
+  ["/usr/local/bin/forge-mind-model"]="0:0:755"
+  ["/usr/local/bin/forge-os-release"]="0:0:755"
+  ["/usr/local/bin/forged"]="0:0:755"
   ["/usr/lib/systemd/system-sleep/forge-thermal"]="0:0:755"
 )

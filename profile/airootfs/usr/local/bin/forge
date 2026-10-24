@@ -11,6 +11,8 @@
 #   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
 #   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
+#   forge find <request>      find files: "the pdf from march", "big videos"
+#   forge space [cleanup]     what's using the disk, and what could go
 #   forge about
 set -uo pipefail
 
@@ -94,6 +96,8 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}tile${OFF} [on|off]       auto-tiling windows
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
+  ${PERI}find${OFF} <request>       find files ${GREY}("the pdf from march", "big videos")${OFF}
+  ${PERI}space${OFF} [cleanup]     what's using the disk, and what could go
   ${PERI}about${OFF}               this system, briefly
 EOF
 }
@@ -208,8 +212,23 @@ case "${cmd}" in
         glass_reload
         ok "glass $1"
         ;;
+    find)
+        have forge-mind || fail "forge-mind is missing"
+        [[ $# -gt 0 ]] || fail "find what?"
+        forge-mind ask --deep "$@"
+        ;;
+    space|disk)
+        have forge-mind || fail "forge-mind is missing"
+        case "${1:-}" in
+            "")      forge-mind stats ;;
+            cleanup) forge-mind cleanup ;;
+            clean)   shift; forge-mind clean "$@" ;;
+            *) fail "space is ${PERI}cleanup${OFF} or ${PERI}clean${OFF} <path...>" ;;
+        esac
+        ;;
     about|info)
-        printf '%sForge%s %sOS%s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \
+        printf '%sForge%s %sOS%s %s  %s%s · %s · %s%s\n' "${BOLD}" "${OFF}" "${GREY}" "${OFF}" \
+            "$(forge-os-release 2>/dev/null)" \
             "${GREY}" "$(uname -r)" "$(uname -m)" "${XDG_CURRENT_DESKTOP:-tty}" "${OFF}"
         printf '%sBuilt hot. Runs cool.%s\n' "${LILAC}" "${OFF}"
         ;;

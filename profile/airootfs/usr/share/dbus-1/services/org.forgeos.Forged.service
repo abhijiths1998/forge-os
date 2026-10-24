@@ -1,0 +1,6 @@
+# forged starts on the first call to org.forgeos.Forged (Forge Control at
+# login, `forged state`), as the user's systemd unit.
+[D-BUS Service]
+Name=org.forgeos.Forged
+Exec=/usr/local/bin/forged serve
+SystemdService=forged.service

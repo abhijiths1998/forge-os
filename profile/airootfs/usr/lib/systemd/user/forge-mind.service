@@ -1,0 +1,8 @@
+[Unit]
+Description=Forge Mind: file index and storage analyser (D-Bus org.forgeos.Mind)
+
+[Service]
+Type=dbus
+BusName=org.forgeos.Mind
+ExecStart=/usr/local/bin/forge-mind serve
+Nice=10

@@ -1,0 +1,6 @@
+# forge-mind starts on the first call to org.forgeos.Mind (Forge apps, the
+# Launcher, `gdbus call ...`), as the user's systemd unit.
+[D-BUS Service]
+Name=org.forgeos.Mind
+Exec=/usr/local/bin/forge-mind serve
+SystemdService=forge-mind.service

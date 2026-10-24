@@ -1,0 +1,18 @@
+# Finishes downloading Forge Mind's model on the first boot with a network,
+# when the installer couldn't (forge-postinstall.sh enables this only then;
+# forge-mind-model disables it once the model is there).
+[Unit]
+Description=Forge Mind: download the local model
+Wants=network-online.target
+Requires=ollama.service
+After=network-online.target ollama.service
+
+[Service]
+# Not oneshot: a 2.5 GB download mustn't hold up booting.
+Type=exec
+ExecStart=/usr/local/bin/forge-mind-model
+Nice=19
+IOSchedulingClass=idle
+
+[Install]
+WantedBy=multi-user.target

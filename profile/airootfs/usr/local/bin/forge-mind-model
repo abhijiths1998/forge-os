@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# forge-mind-model: download Forge Mind's local model into Ollama, once.
+#
+#   forge-mind-model [--timeout <seconds>]     (root)
+#
+# The ISO ships Ollama but not the model (qwen3:4b is 2.5 GB). The installer
+# pulls it (forge-postinstall.sh, with a timeout so a slow line can't fail
+# the install), and if it was offline or ran out of time,
+# forge-mind-model.service finishes on the first boot with a network: an
+# interrupted pull resumes where it stopped. The model is /etc/forge/mind.conf's
+# model=. In the installer's chroot it runs its own Ollama for the download,
+# since the system's isn't running there.
+set -uo pipefail
+
+CONF=/etc/forge/mind.conf
+MODELS=/var/lib/ollama
+TMP_HOST=127.0.0.1:11439   # not 11434: the live session may run its own
+
+fail() { echo "forge-mind-model: $*" >&2; exit 1; }
+(( EUID == 0 )) || fail "needs root"
+command -v ollama >/dev/null 2>&1 || fail "ollama isn't installed"
+
+limit=0
+if [[ "${1:-}" == --timeout ]]; then
+    [[ "${2:-}" =~ ^[0-9]+$ ]] || fail "--timeout takes seconds"
+    limit=$2
+fi
+model="$(sed -n 's/^model=//p' "${CONF}" 2>/dev/null | head -n1)"
+model="${model:-qwen3:4b}"
+[[ "${model}" =~ ^[A-Za-z0-9._:/-]+$ ]] || fail "bad model name in ${CONF}: ${model}"
+[[ "${model##*/}" == *:* ]] || model+=":latest"   # as `ollama list` names it
+
+serve_pid=""
+trap '[[ -n "${serve_pid}" ]] && kill "${serve_pid}" 2>/dev/null; wait 2>/dev/null' EXIT
+
+up() { curl -sf --max-time 2 "http://$1/api/version" >/dev/null; }
+
+if ! systemd-detect-virt --chroot -q 2>/dev/null && up 127.0.0.1:11434; then
+    export OLLAMA_HOST=127.0.0.1:11434
+else
+    export OLLAMA_HOST="${TMP_HOST}" OLLAMA_MODELS="${MODELS}" HOME="${MODELS}"
+    mkdir -p "${MODELS}"
+    ollama serve >/dev/null 2>&1 &
+    serve_pid=$!
+    for _ in $(seq 40); do up "${TMP_HOST}" && break; sleep 0.5; done
+    up "${TMP_HOST}" || fail "ollama didn't start"
+fi
+
+if ollama list 2>/dev/null | awk 'NR > 1 { print $1 }' | grep -qxF "${model}"; then
+    echo "forge-mind-model: ${model} is already there"
+else
+    echo "forge-mind-model: downloading ${model}"
+    if (( limit > 0 )); then
+        timeout "${limit}" ollama pull "${model}" >/dev/null 2>&1
+    else
+        ollama pull "${model}" >/dev/null 2>&1
+    fi
+    rc=$?
+    # Files written by our own `ollama serve` (as root) belong to the service user.
+    [[ -n "${serve_pid}" ]] && id ollama >/dev/null 2>&1 && chown -R ollama:ollama "${MODELS}"
+    (( rc == 0 )) || fail "${model} isn't complete yet ($( (( rc == 124 )) && echo "out of time" || echo "offline?"))"
+    echo "forge-mind-model: ${model} is ready"
+fi
+
+# Done for good: the first-boot fallback has nothing left to do.
+systemd-detect-virt --chroot -q 2>/dev/null || systemctl disable forge-mind-model.service >/dev/null 2>&1
+exit 0

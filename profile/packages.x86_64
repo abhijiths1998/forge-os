@@ -299,3 +299,15 @@ plymouth
 chaotic-keyring
 chaotic-mirrorlist
 calamares
+
+# Forge Mind (forge-mind) and Forge Thermal's GUI: Python, its D-Bus and Qt
+# bindings, and paccache for cleaning the package cache
+python
+python-dbus
+python-gobject
+pyside6
+pacman-contrib
+# Forge Mind's local model runtime; the model itself is downloaded at install
+# time (forge-mind-model). Vulkan, not CUDA: 40 MB instead of 6 GB, any GPU.
+ollama
+ollama-vulkan

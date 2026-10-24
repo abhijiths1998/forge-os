@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22">
+  <!-- Two switches, one on (knob right) and one off (knob left), drawn as
+       a mask: Plasma colours it like the rest of the top bar. -->
+  <path fill="#000" fill-rule="evenodd"
+        d="M7 3h8a4 4 0 0 1 0 8H7a4 4 0 0 1 0-8zm8 1.6a2.4 2.4 0 1 0 0 4.8a2.4 2.4 0 0 0 0-4.8z
+           M7 12.5h8a3.5 3.5 0 0 1 0 7H7a3.5 3.5 0 0 1 0-7zm0 1.2a2.3 2.3 0 1 0 0 4.6a2.3 2.3 0 0 0 0-4.6zm2.9.6v3.4h5.1a1.7 1.7 0 0 0 0-3.4z"/>
+</svg>

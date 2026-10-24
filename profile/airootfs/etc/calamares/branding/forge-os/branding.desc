@@ -13,8 +13,8 @@ sidebar: widget
 navigation: widget
 
 strings:
-    productName:         forge-os
-    shortProductName:    forge-os
+    productName:         Forge OS
+    shortProductName:    Forge OS
     version:             0.1
     shortVersion:        0.1
     versionedName:       "forge-os 0.1"

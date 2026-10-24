@@ -188,7 +188,23 @@ if [[ "$(findmnt -no FSTYPE /)" == btrfs ]] && command -v snapper >/dev/null 2>&
     install -Dm640 /usr/share/snapper/config-templates/default /etc/snapper/configs/root
     sed -i 's|^SUBVOLUME=.*|SUBVOLUME="/"|' /etc/snapper/configs/root
     sed -i 's|^SNAPPER_CONFIGS=.*|SNAPPER_CONFIGS="root"|' /etc/conf.d/snapper
+    # Let admins (wheel) list snapshots without root, so forge-mind can show
+    # them, and turn on btrfs quotas so snapper reports the space each holds.
+    sed -i 's|^ALLOW_GROUPS=.*|ALLOW_GROUPS="wheel"|; s|^SYNC_ACL=.*|SYNC_ACL="yes"|' /etc/snapper/configs/root
+    snapper -c root setup-quota 2>/dev/null || true
     chmod 750 /.snapshots
     systemctl enable snapper-timeline.timer snapper-cleanup.timer 2>/dev/null || true
     systemctl enable grub-btrfsd.service 2>/dev/null || true
+fi
+
+# Forge Mind's local model isn't on the ISO (2.5 GB): download it now, in
+# whatever is left of the 15 minutes Calamares' shellprocess allows this
+# script (less a minute's margin). If the installer is offline or that's not
+# enough, forge-mind-model.service finishes it on the first boot online.
+if command -v ollama >/dev/null 2>&1; then
+    systemctl enable ollama.service
+    budget=$(( 840 - SECONDS ))
+    if (( budget < 60 )) || ! forge-mind-model --timeout "${budget}"; then
+        systemctl enable forge-mind-model.service
+    fi
 fi

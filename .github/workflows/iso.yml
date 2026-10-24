@@ -1,0 +1,74 @@
+# Builds the Forge OS ISO on GitHub's runners, so it doesn't fill anyone's
+# disk, and keeps it as a workflow artifact (the run's page, Artifacts).
+#
+# Started by hand: Actions > Build ISO > Run workflow. It runs the same
+# build/build.sh as a local build. The runner's main disk has ~14 GB free,
+# too little for mkarchiso, so Docker and the build directories go on its
+# temporary disk at /mnt (~65 GB).
+name: Build ISO
+
+on:
+  workflow_dispatch:
+    inputs:
+      keep_days:
+        description: Days to keep the ISO
+        default: "14"
+        required: true
+
+# One build at a time; a second one waits for the first.
+concurrency:
+  group: iso
+  cancel-in-progress: false
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use the big disk for Docker and the build
+        run: |
+          df -h / /mnt
+          sudo systemctl stop docker docker.socket
+          sudo mkdir -p /mnt/docker /mnt/forge/work /mnt/forge/out
+          sudo chown -R "$USER" /mnt/forge
+          echo '{"data-root": "/mnt/docker"}' | sudo tee /etc/docker/daemon.json
+          sudo systemctl start docker
+          docker info --format 'Docker data-root: {{.DockerRootDir}}'
+          echo "FORGE_WORK_DIR=/mnt/forge/work" >> "$GITHUB_ENV"
+          echo "FORGE_OUT_DIR=/mnt/forge/out" >> "$GITHUB_ENV"
+
+      - name: Build the ISO
+        # pipefail: a failed build must fail the step, not only tee.
+        shell: bash
+        run: build/build.sh build 2>&1 | tee /mnt/forge/build.log
+
+      - name: Checksum
+        run: |
+          cd /mnt/forge/out
+          ls -lh
+          sha256sum *.iso | tee "$(ls *.iso).sha256"
+          echo "ISO_NAME=$(basename "$(ls *.iso)" .iso)" >> "$GITHUB_ENV"
+          df -h / /mnt
+
+      - name: Keep the ISO
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ISO_NAME }}
+          path: |
+            /mnt/forge/out/*.iso
+            /mnt/forge/out/*.sha256
+          # The ISO is already compressed (squashfs, xz).
+          compression-level: 0
+          retention-days: ${{ fromJSON(inputs.keep_days) }}
+          if-no-files-found: error
+
+      - name: Keep the build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ github.run_number }}
+          path: /mnt/forge/build.log
+          retention-days: 14

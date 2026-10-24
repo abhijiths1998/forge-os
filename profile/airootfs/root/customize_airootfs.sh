@@ -12,6 +12,13 @@ set -e -u
 useradd -m -G wheel,users,storage,power,network,video,audio,disk,input,uucp -s /bin/zsh liveuser
 passwd -d liveuser
 
+# --- Version ---
+# Forge OS's os-release, and the installer's version, from forge-os-release.
+/usr/local/bin/forge-os-release --write
+forge_version="$(/usr/local/bin/forge-os-release)"
+sed -i -E "s/^( *(shortVersion|version): *).*/\1${forge_version}/; s/^( *(shortVersionedName|versionedName): *).*/\1\"Forge OS ${forge_version}\"/" \
+    /etc/calamares/branding/forge-os/branding.desc
+
 # --- Services ---
 systemctl set-default graphical.target
 systemctl enable sddm.service
@@ -24,6 +31,8 @@ systemctl enable irqbalance.service
 systemctl enable ananicy-cpp.service
 systemctl enable power-profiles-daemon.service
 systemctl enable forge-thermal.service
+# forge-mind keeps its file index fresh per user (systemd --user)
+systemctl --global enable forge-mind-index.timer
 systemctl enable fwupd.service
 
 # chaotic-keyring / chaotic-mirrorlist (in packages.x86_64) already installed
