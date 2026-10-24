@@ -119,7 +119,7 @@ class _StoreAppState extends State<StoreApp> {
       debugShowCheckedModeBanner: false,
       title: 'Forge Store',
       color: Colors.transparent,
-      theme: p.theme(),
+      theme: p.materialTheme(),
       home: Scaffold(
         backgroundColor: p.window,
         body: Row(

@@ -161,7 +161,7 @@ class GlassCard extends StatelessWidget {
       color: palette.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: palette.rim),
+        // No outline: the glass runs to the edge.
       ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(

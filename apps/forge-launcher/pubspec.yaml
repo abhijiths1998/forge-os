@@ -9,6 +9,8 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  forge_ui:
+    path: ../forge_ui
 
 dev_dependencies:
   flutter_test:

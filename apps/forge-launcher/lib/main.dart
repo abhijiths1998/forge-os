@@ -13,7 +13,6 @@ import 'sources.dart';
 const _searchHeight = 64.0;
 const _rowHeight = 52.0;
 const _maxRows = 8;
-const _radius = 14.0; // KWin's window corner radius (kwinrc [Round-Corners])
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -172,7 +171,8 @@ class _LauncherAppState extends State<LauncherApp> {
           decoration: BoxDecoration(
             color: p.surface,
             // No outline: the glass runs to the edge, like every window.
-            borderRadius: BorderRadius.circular(_radius),
+            // The theme's window corners, which KWin rounds this window to.
+            borderRadius: BorderRadius.circular(p.cornerRadius.toDouble()),
           ),
           child: Column(
             children: [
