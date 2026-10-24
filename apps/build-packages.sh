@@ -31,6 +31,18 @@ if [ -d "${REPO_ROOT}/apps/forge_ui" ]; then
     chown -R builder: "${work}/forge_ui"
 fi
 
+# Every app built here must be in the ISO's package list too, or mkarchiso
+# quietly leaves it out (forge-control once was).
+missing=()
+for pkgbuild in "${pkgbuilds[@]}"; do
+    app="$(basename "$(dirname "${pkgbuild}")")"
+    grep -qx "${app}" "${REPO_ROOT}/profile/packages.x86_64" || missing+=("${app}")
+done
+if [ ${#missing[@]} -gt 0 ]; then
+    echo "==> not in profile/packages.x86_64: ${missing[*]}" >&2
+    exit 1
+fi
+
 for pkgbuild in "${pkgbuilds[@]}"; do
     app="$(basename "$(dirname "${pkgbuild}")")"
     echo "==> building ${app}"
