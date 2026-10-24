@@ -152,6 +152,11 @@ irqbalance, reflector, linux-zen), and a default browser. Safe to re-run.
 
 ## Building the ISO
 
+**On GitHub** (no disk space needed locally): Actions → **Build ISO** → Run
+workflow. It runs the same `build/build.sh build` on GitHub's runner and keeps
+the ISO and its checksum as an artifact of the run (14 days by default) for
+download from the run's page. See `.github/workflows/iso.yml`.
+
 Arch's own tooling (`mkarchiso`, `pacstrap`) only runs on Arch Linux, so the
 build runs inside a Docker container and works from any distro:
 
@@ -165,7 +170,7 @@ The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
 in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full KDE + gaming
 package set, so it's slow. A persistent Docker volume
 (`forge-os-pkgcache`) caches downloaded packages across retries. A full build
-takes about 40 minutes; the ISO lands in `out/forge-os-<date>-x86_64.iso`.
+takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.iso`.
 
 ## Layout
 
