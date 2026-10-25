@@ -124,6 +124,16 @@ proprietary driver only exists chaotic-aur-side as version-pinned packages
 (`nvidia-470xx-dkms`, `nvidia-390xx-dkms`, etc.) for pre-Turing cards. See
 Deferred.
 
+**NVIDIA 615.78.08 freezes games; the ISO ships 610.57.04 (2026-10-25).**
+On the RTX 3050 laptop, GTA 5 and Witcher 3 (Lutris, GE-Proton) hard-froze
+the whole machine with nothing in the journal: no panic, no Xid. It happened
+on linux-zen and on stock linux, and never on Nobara or Fedora on the same
+hardware, so it wasn't the kernel or heat. Downgrading to 610.57.04 fixed
+it: over an hour of play with no freeze. `build/Containerfile` fetches the
+610 packages from the Arch Linux Archive into `forge-os-local`, and
+`profile/airootfs/etc/pacman.conf` holds them in `IgnorePkg`. Try each new
+driver release on hardware before taking the pin out.
+
 **`kde-applications-meta` was a trap.** It doesn't mean "some useful KDE
 apps" — it pulls in the *entire* KDE Applications release: Calligra-style
 office apps, education apps, kdevelop, kde-games, the works. First build
