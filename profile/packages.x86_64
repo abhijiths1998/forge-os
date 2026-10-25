@@ -257,9 +257,10 @@ forge-store
 pamac
 
 # Default browser: Forge Browser (apps/forge-browser), with built-in ad
-# blocking. Brave stays for sites that need Widevine DRM (Netflix, Spotify
-# web), which Qt WebEngine doesn't ship.
+# blocking, and Widevine for DRM sites (Netflix, Spotify web), which Qt
+# WebEngine doesn't ship. Brave stays as a second browser.
 forge-browser
+chromium-widevine
 brave-bin
 
 # Gaming stack

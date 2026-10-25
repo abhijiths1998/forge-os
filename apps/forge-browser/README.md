@@ -32,7 +32,10 @@ toolbar and tabs as the rest of the desktop.
 Data: profile and bookmarks/history in `~/.local/share/forgeos/forge-browser`,
 settings in `~/.config/forgeos/forge-browser.conf`.
 
-No Widevine DRM out of the box (Netflix, Spotify web): Qt WebEngine picks up
-a Widevine CDM if one is installed where Chrome keeps it.
+DRM (Netflix, Spotify web, Prime Video) uses Widevine from
+`chromium-widevine` (Chaotic-AUR, on the ISO). Qt WebEngine doesn't search
+its `/usr/lib/chromium` path itself, so `main.cpp` passes `--widevine-path`
+when the CDM is there. Check it at `chrome://media-internals` or
+https://bitmovin.com/demos/drm.
 
 Build: `cmake -S . -B build -G Ninja && ninja -C build`.
