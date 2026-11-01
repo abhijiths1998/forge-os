@@ -55,15 +55,24 @@ BrowserWindow* activeWindow() {
 // Widevine (Netflix, Spotify, Prime Video): Arch's chromium-widevine puts
 // the CDM in /usr/lib/chromium, which Qt WebEngine doesn't search on its
 // own (only Chrome's paths and ~/.config/{chromium,google-chrome}), so
-// point it there. Must happen before WebEngine starts.
+// point it at the first CDM found: chromium-widevine's, Google Chrome's,
+// or one a user dropped in ~/.local/lib. Must happen before WebEngine starts.
 void useSystemWidevine() {
-  const QString cdm =
-      "/usr/lib/chromium/WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so";
   QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
-  if (flags.contains("--widevine-path") || !QFile::exists(cdm)) return;
-  if (!flags.isEmpty()) flags += ' ';
-  flags += "--widevine-path=" + QFile::encodeName(cdm);
-  qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+  if (flags.contains("--widevine-path")) return;
+  const QString tail = "WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so";
+  const QStringList candidates = {
+      "/usr/lib/chromium/" + tail,
+      "/opt/google/chrome/" + tail,
+      QDir::homePath() + "/.local/lib/" + tail,
+  };
+  for (const QString& cdm : candidates) {
+    if (!QFile::exists(cdm)) continue;
+    if (!flags.isEmpty()) flags += ' ';
+    flags += "--widevine-path=" + QFile::encodeName(cdm);
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+    return;
+  }
 }
 
 }  // namespace

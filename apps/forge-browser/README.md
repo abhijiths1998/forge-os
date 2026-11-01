@@ -32,7 +32,7 @@ toolbar and tabs as the rest of the desktop.
 Data: profile and bookmarks/history in `~/.local/share/forgeos/forge-browser`,
 settings in `~/.config/forgeos/forge-browser.conf`.
 
-DRM (Netflix, Spotify web, Prime Video) uses Widevine from
+DRM (Netflix, Spotify web, Prime Video, Disney+) uses Widevine from
 `chromium-widevine` (Chaotic-AUR, on the ISO). Qt WebEngine doesn't search
 its `/usr/lib/chromium` path itself, so `main.cpp` passes `--widevine-path`
 when the CDM is there. Check it at `chrome://media-internals` or
