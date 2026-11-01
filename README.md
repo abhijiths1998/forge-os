@@ -100,12 +100,17 @@ allows, so the machine runs cooler and quieter:
 | Silent | 60% | 60% | reading, video |
 | Cool | 75% | 80% | lower temperatures, most of the speed |
 | **Balanced** (default) | 90% | 100% | everyday use |
+| Cool gaming | 100% | 100% | games: the firmware holds the CPU at 90 °C / 45 W and the GPU at 80 °C (Lenovo LOQ/Legion only) |
 | Performance | 100% | 100% | no limits |
 | Custom | 30–100% | 30–100% | your own, set with sliders in the app |
 
 The CPU limit works with amd-pstate, intel_pstate and acpi-cpufreq. On the
 GPU it's a clock lock on NVIDIA, a power cap on AMD and a maximum frequency
-on Intel. The choice is kept across reboots and suspend, and the user at the
+on Intel. Where the firmware takes limits itself (Lenovo LOQ/Legion, through
+`lenovo-wmi-other`), profiles can also set the CPU and GPU temperature limits
+and the CPU's sustained and boost watts, which costs less speed than a clock
+cap; the app (`apps/forge-thermal`) shows the live temperatures, a two-minute
+graph, the fan speed and sliders for those limits. The choice is kept across reboots and suspend, and the user at the
 machine can switch without a password. Profiles live in
 `/etc/forge-thermal/profiles/` and are plain `KEY=value` files.
 
@@ -204,11 +209,15 @@ takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.i
   the installed system.
 - `profile/airootfs/etc/calamares/` — the installer configuration.
 - `profile/airootfs/usr/local/bin/` — Forge OS's own tools: `forge`,
-  `forge-thermal` and its app `forge-thermal-gui`, and `forge-postinstall.sh`
+  `forge-thermal` (its app is `apps/forge-thermal`), and `forge-postinstall.sh`
   (run by the installer).
 - `apps/` — Forge OS's in-house apps (see "Forge apps"), each with a
   PKGBUILD; `apps/build-packages.sh` builds every one into the local repo
   during `build/build.sh build`, before mkarchiso.
+- `utils/` — scripts for working on a real machine: install an app or
+  `forge-thermal` from the checkout, check a gaming setup, catch and report
+  hard freezes, switch the default kernel, pin the NVIDIA driver (see
+  `utils/README.md`).
 - `packages/` — Forge's builds of other packages, built the same way:
   `packages/konsole` is Konsole with a fix (open terminals kept turning
   opaque when the desktop switched between light and dark), until KDE has it.

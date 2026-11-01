@@ -1,0 +1,10 @@
+[Unit]
+Description=Forge crash logger: temps, clocks and power to disk every 2 s
+
+[Service]
+ExecStart=%h/.local/bin/forge-crashlog
+Nice=10
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
