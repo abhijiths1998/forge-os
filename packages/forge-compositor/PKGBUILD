@@ -1,0 +1,25 @@
+# Forge Compositor: the Forge desktop's own Wayland compositor (Rust, on
+# the Smithay toolkit), built from compositor/ in this repo (copied beside
+# this directory by apps/build-packages.sh).
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-compositor
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Forge OS's Wayland compositor: windows, Forge title bars and glass"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('libinput' 'libxkbcommon' 'mesa' 'seatd' 'systemd-libs' 'libdisplay-info'
+         'xorg-xwayland' 'pixman' 'wayland')
+makedepends=('rust' 'cargo' 'pkgconf')
+options=('!debug')
+
+build() {
+    cd "${startdir}/../compositor"
+    cargo build --release --locked
+}
+
+package() {
+    install -Dm755 "${startdir}/../compositor/target/release/forge-compositor" \
+        "${pkgdir}/usr/bin/forge-compositor"
+}

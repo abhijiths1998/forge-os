@@ -1,0 +1,15 @@
+[package]
+name = "forge-compositor"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bitflags = "2.13.2"
+fontdue = "0.9.5"
+serde_json = "1.0.154"
+smithay = { version = "0.7.0", default-features = false, features = ["backend_winit", "backend_drm", "backend_gbm", "backend_egl", "backend_libinput", "backend_udev", "backend_session_libseat", "renderer_gl", "renderer_glow", "desktop", "wayland_frontend", "xwayland", "use_system_lib"] }
+smithay-drm-extras = { version = "0.1", default-features = false }
+tiny-skia = "0.12.0"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
+xcursor = "0.3.11"

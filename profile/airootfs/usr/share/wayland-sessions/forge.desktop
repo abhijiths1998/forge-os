@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Forge
+Comment=The Forge desktop
+Exec=/usr/local/bin/forge-session
+Type=Application
+DesktopNames=Forge

@@ -1,0 +1,23 @@
+name: forge_shell
+description: "Forge OS desktop shell: top bar, dock and wallpaper."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  forge_ui:
+    path: ../forge_ui
+  # forged's state (Wi-Fi, sound, battery...) for the bar, over the session bus.
+  dbus: ^0.8.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/emblem.png

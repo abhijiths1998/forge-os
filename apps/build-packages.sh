@@ -32,6 +32,13 @@ if [ -d "${REPO_ROOT}/apps/forge_ui" ]; then
     chown -R builder: "${work}/forge_ui"
 fi
 
+# Forge Compositor's Rust sources, which packages/forge-compositor builds.
+if [ -d "${REPO_ROOT}/compositor" ]; then
+    mkdir -p "${work}/compositor"
+    tar -C "${REPO_ROOT}/compositor" --exclude=./target -cf - . | tar -C "${work}/compositor" -xf -
+    chown -R builder: "${work}/compositor"
+fi
+
 # Everything built here must be in the ISO's package list too, or mkarchiso
 # quietly leaves it out (forge-control once was).
 missing=()

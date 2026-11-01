@@ -1,0 +1,13 @@
+# The Forge desktop session for systemd: forge-session-start starts this
+# once the compositor is up. It pulls in what a desktop expects (graphical-
+# session.target, the XDG autostart entries) the way plasma-workspace.target
+# does for Plasma; those targets refuse to be started by hand.
+[Unit]
+Description=Forge desktop session
+Documentation=file:///usr/share/doc/forge-os/DESKTOP.md
+BindsTo=graphical-session.target
+Before=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=xdg-desktop-autostart.target
+Before=xdg-desktop-autostart.target

@@ -1,0 +1,59 @@
+#!/bin/bash
+# forge-session: the Forge desktop, picked at the login screen
+# (/usr/share/wayland-sessions/forge.desktop). Forge Compositor (our own,
+# compositor/ in the tree) draws the windows and starts the rest
+# (forge-session-start); Forge Shell is everything around them.
+# KWin is only the safety net: a Forge Compositor that's missing or fails
+# to start falls back to it. There's no login-screen entry for it (a second
+# "Forge (...)" entry got picked by mistake); "forge-session --kwin" or
+# FORGE_COMPOSITOR=kwin still forces it by hand.
+
+[[ $1 == --kwin ]] && FORGE_COMPOSITOR=kwin
+
+# Everything the session prints goes to the journal (journalctl -t forge),
+# where it outlives the next login; SDDM's own log file is overwritten by it.
+if command -v systemd-cat >/dev/null; then
+    exec > >(systemd-cat -t forge) 2>&1
+fi
+
+# The user's own programs (and Forge apps tried with dev-install-app.sh)
+# first, as a login shell would have them; the login screen doesn't.
+[[ -d "$HOME/.local/bin" ]] && export PATH="$HOME/.local/bin:$PATH"
+
+export XDG_CURRENT_DESKTOP=Forge
+export XDG_SESSION_DESKTOP=forge
+export XDG_SESSION_TYPE=wayland
+# Qt and KDE apps keep the Forge Glass colours, fonts and icons outside Plasma.
+export QT_QPA_PLATFORMTHEME=kde
+export QT_QPA_PLATFORM='wayland;xcb'
+export MOZ_ENABLE_WAYLAND=1
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+# NVIDIA: GBM and its own GLX for X apps; harmless elsewhere.
+if [[ -e /proc/driver/nvidia/version ]]; then
+    export LIBVA_DRIVER_NAME=nvidia
+    export __GLX_VENDOR_LIBRARY_NAME=nvidia
+fi
+
+export XCURSOR_THEME=breeze_cursors
+export XCURSOR_SIZE=24
+
+kwin() {
+    # The wrapper restarts KWin after a crash, keeping the apps' connections.
+    exec kwin_wayland_wrapper --xwayland --exit-with-session /usr/local/bin/forge-session-start
+}
+
+if [[ $FORGE_COMPOSITOR == kwin ]] || ! command -v forge-compositor >/dev/null; then
+    kwin
+fi
+
+start=$SECONDS
+forge-compositor --startup forge-session-start
+status=$?
+# Logging out (forge-session-start ending) or Ctrl+Alt+Backspace is a 0.
+(( status == 0 )) && exit 0
+echo "forge-session: Forge Compositor exited with $status after $((SECONDS - start))s" >&2
+# It never got going (no screen, no GPU, a crash on the first frame): the
+# desktop comes up on KWin instead of a black screen. A crash later on
+# (its watchdog aborts a stuck compositor) goes back to the login screen.
+(( SECONDS - start < 20 )) && kwin
+exit "$status"

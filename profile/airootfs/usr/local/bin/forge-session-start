@@ -1,0 +1,38 @@
+#!/bin/bash
+# forge-session-start: what the compositor (KWin, or Forge Compositor) starts
+# once it's up, with WAYLAND_DISPLAY and DISPLAY set: the session's
+# environment for D-Bus and systemd services, the shell and the autostart
+# entries. The session ends when this does.
+
+# The wallet first: pam_kwallet5 opened it with the login password and is
+# waiting (ksecretd --pam-login) for the session's environment, which
+# pam_kwallet_init hands over. Plasma runs it as plasma-kwallet-pam.service;
+# without it the first app wanting a password starts a second, locked
+# ksecretd that asks for the wallet password again and again.
+if [[ -n $PAM_KWALLET5_LOGIN && -x /usr/lib/pam_kwallet_init ]]; then
+    /usr/lib/pam_kwallet_init
+fi
+
+dbus-update-activation-environment --systemd \
+    WAYLAND_DISPLAY DISPLAY XAUTHORITY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE \
+    FORGE_COMPOSITOR_SOCKET QT_QPA_PLATFORMTHEME XCURSOR_THEME XCURSOR_SIZE
+
+# Power and brightness (forged reads brightness from it, and it takes the
+# brightness keys, the lid and the battery), and KDE's portal.
+systemctl --user start plasma-powerdevil.service plasma-xdg-desktop-portal-kde.service
+
+forge-keep forge-shell wallpaper &
+forge-keep forge-shell bar &
+forge-keep forge-shell dock &
+# The start menu, menus, dialogs and polkit's password prompt (it falls
+# back to KDE's agent if polkit won't take it).
+forge-keep forge-shell popups &
+
+# KDE Connect, Forge Control and Launcher (started hidden), the rest of the
+# autostart entries, and graphical-session.target for the services that wait
+# on it. Both targets refuse a direct start, so forge-session.target pulls
+# them in; it stops with the session (forge-keep and this script end).
+systemctl --user start forge-session.target
+
+wait
+systemctl --user stop forge-session.target

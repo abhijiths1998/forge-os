@@ -1,0 +1,31 @@
+# hyprbars, Hyprland's own title-bar plugin, for the Forge desktop: the
+# title bar with minimise, maximise and close on every window (styled in
+# /usr/share/forge/hyprland.conf and by forge-theme-sync).
+#
+# A Hyprland plugin only loads into the exact Hyprland it was built
+# against, so the commit is the one hyprland-plugins' hyprpm.toml names for
+# Hyprland 0.56.2, and this package depends on that version. Moving
+# Hyprland on means moving this commit with it.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-hyprbars
+_hyprland=0.56.2
+_commit=7644cecdb947060682891a0db2a0cdc5c0b9e704
+pkgver=0.56.2
+pkgrel=1
+pkgdesc="Title bars with window buttons for the Forge desktop (Hyprland's hyprbars plugin)"
+arch=('x86_64')
+url="https://github.com/hyprwm/hyprland-plugins"
+license=('BSD-3-Clause')
+depends=("hyprland=${_hyprland}")
+makedepends=('git' 'pkgconf' 'pixman' 'libdrm' 'libinput' 'wayland' 'libxkbcommon')
+source=("hyprland-plugins::git+${url}.git#commit=${_commit}")
+sha256sums=('SKIP')
+
+build() {
+    make -C hyprland-plugins/hyprbars
+}
+
+package() {
+    install -Dm755 hyprland-plugins/hyprbars/hyprbars.so "${pkgdir}/usr/lib/forge/hyprbars.so"
+    install -Dm644 hyprland-plugins/LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

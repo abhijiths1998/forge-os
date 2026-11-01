@@ -137,6 +137,7 @@ RUN grep -q "^\[chaotic-aur\]" /etc/pacman.conf \
         flutter-bin cmake ninja clang pkgconf gtk3 gtk-layer-shell pamac \
         qt6-base qt6-webengine glycin libjxl \
         konsole extra-cmake-modules kdoctools \
+        rust libinput seatd libdisplay-info xorg-xwayland \
     && pacman -Scc --noconfirm
 
 WORKDIR /build

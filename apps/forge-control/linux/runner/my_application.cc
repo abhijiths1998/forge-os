@@ -36,11 +36,13 @@ struct _MyApplication {
   int height;
   gboolean start_hidden;
   gboolean first_frame_done;
+  gboolean focused;  // had the keyboard since it was last shown
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 static void show_panel(MyApplication* self) {
+  self->focused = FALSE;
   gtk_widget_set_size_request(self->view, kWidth, self->height);
   gtk_window_resize(self->window, kWidth, self->height);
   gtk_window_present(self->window);
@@ -56,8 +58,15 @@ static void hide_panel(MyApplication* self) {
 }
 
 // Clicking anywhere else closes the panel, as macOS's Control Center does.
+// Hyprland sends a focus-out to a layer surface it never focused, right as
+// it maps; only a focus the panel really had counts.
+static gboolean focus_in_cb(GtkWidget*, GdkEvent*, MyApplication* self) {
+  self->focused = TRUE;
+  return FALSE;
+}
+
 static gboolean focus_out_cb(GtkWidget*, GdkEvent*, MyApplication* self) {
-  hide_panel(self);
+  if (self->focused) hide_panel(self);
   return FALSE;
 }
 
@@ -148,6 +157,7 @@ static void create_window(MyApplication* self) {
 
   g_signal_connect_swapped(view, "first-frame", G_CALLBACK(first_frame_cb),
                            self);
+  g_signal_connect(window, "focus-in-event", G_CALLBACK(focus_in_cb), self);
   g_signal_connect(window, "focus-out-event", G_CALLBACK(focus_out_cb), self);
   g_signal_connect(window, "delete-event", G_CALLBACK(gtk_widget_hide_on_delete),
                    nullptr);

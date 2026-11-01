@@ -24,6 +24,8 @@ Firefox, Chromium/Brave, Electron apps and web pages' light/dark and accent
   flatpak   sandboxed apps may read the GTK colours KDE writes
   login     the login screen's accent, light/dark and wallpaper
             (forge-theme-login, through pkexec)
+  hyprland  the Forge session's window corners, blur and title bars
+            (~/.config/forge/hypr/theme.conf, read by its hyprland.conf)
 """
 import colorsys
 import json
@@ -37,6 +39,7 @@ HOME = Path.home()
 CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 THEME = CONFIG / "forge/theme.json"
 SHELL = CONFIG / "forge/theme.sh"
+HYPR = CONFIG / "forge/hypr/theme.conf"
 LOGIN = Path("/usr/share/sddm/themes/forge-glass/theme.conf.user")
 # GNOME's named accents, by hue (slate is for greys).
 GNOME_ACCENTS = {"red": 0, "orange": 30, "yellow": 50, "green": 130, "teal": 180,
@@ -160,7 +163,52 @@ def login(t):
     return f"{mode}, accent {t['accent']}"
 
 
-TARGETS = {"shell": shell, "gnome": gnome, "flatpak": flatpak, "login": login}
+def hyprland(t):
+    """The Forge session's corners, blur and title bars from the theme.
+
+    Written even outside the Forge session, so it's ready at the next login."""
+    try:
+        full = json.loads(THEME.read_text())
+    except (OSError, ValueError):
+        full = {}
+    radius = int(full.get("cornerRadius", 14))
+    blur = int(full.get("blur", 8))  # 1-15, KWin's BlurStrength
+    saturation = float(full.get("saturation", 1.4))
+    # Title bars: the window colour at the window's own glass, so a bar and
+    # the window under it read as one pane (colors.py's window colours).
+    alpha = max(0x30, min(0xF0, round(int(full.get("windowOpacity", 41)) * 2.55) + 40))
+    bar, ink = ("1a1c33", "e4e6f4") if t["dark"] else ("f3f2fa", "1e2140")
+    text = "\n".join([
+        "# Written by forge-theme-sync from ~/.config/forge/theme.json.",
+        "decoration {",
+        f"    rounding = {radius}",
+        "    blur {",
+        f"        size = {max(2, blur)}",
+        f"        passes = {3 if blur >= 6 else 2}",
+        f"        vibrancy = {min(1.0, max(0.0, saturation - 1)):.2f}",
+        "    }",
+        "}",
+        "# hyprlang if FORGE_BARS",
+        "plugin {",
+        "    hyprbars {",
+        f"        bar_color = rgba({bar}{alpha:02x})",
+        f"        col.text = rgb({ink})",
+        f"        inactive_button_color = rgba({ink}30)",
+        "    }",
+        "}",
+        "# hyprlang endif",
+        "",
+    ])
+    if HYPR.exists() and HYPR.read_text() == text:
+        return "already in step"
+    HYPR.parent.mkdir(parents=True, exist_ok=True)
+    HYPR.write_text(text)
+    if os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") and shutil.which("hyprctl"):
+        run("hyprctl", "reload")
+    return f"corners {radius} px, blur {blur}"
+
+
+TARGETS = {"shell": shell, "gnome": gnome, "flatpak": flatpak, "login": login, "hyprland": hyprland}
 
 
 def status(t):

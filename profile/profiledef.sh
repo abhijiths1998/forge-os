@@ -34,5 +34,8 @@ file_permissions=(
   ["/usr/local/bin/forged"]="0:0:755"
   ["/usr/local/bin/forge-theme-login"]="0:0:755"
   ["/usr/local/bin/forge-theme-sync"]="0:0:755"
+  ["/usr/local/bin/forge-session"]="0:0:755"
+  ["/usr/local/bin/forge-keep"]="0:0:755"
+  ["/usr/local/bin/forge-session-start"]="0:0:755"
   ["/usr/lib/systemd/system-sleep/forge-thermal"]="0:0:755"
 )

@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+"""forge-dialog: Forge's own dialogs and popups from a script, drawn by the
+Forge Shell (forge-shell popups, org.forgeos.Popups on the session bus),
+in place of kdialog or zenity.
+
+  forge-dialog info     TITLE [TEXT]             a message; exits 0
+  forge-dialog warning  TITLE [TEXT]
+  forge-dialog error    TITLE [TEXT]
+  forge-dialog question TITLE [TEXT] [--yes LABEL] [--no LABEL] [--danger]
+                                                 exits 0 for yes, 1 for no
+  forge-dialog entry    TITLE [TEXT] [--value V] [--placeholder P]
+                                                 prints what was typed; 1 if cancelled
+  forge-dialog password TITLE [TEXT]             the same, hidden as typed
+  forge-dialog json     '{"title": ..., "buttons": [...]}'
+                                                 any dialog; prints the answer's JSON
+
+  forge-dialog start-menu | calendar | wallpapers
+  forge-dialog power [lock|sleep|logout|restart|shutdown]
+                                                 the power choices, or ask about one
+
+Exit status 2: the Forge Shell isn't running.
+"""
+import argparse
+import json
+import subprocess
+import sys
+
+NAME = "org.forgeos.Popups"
+PATH = "/org/forgeos/Popups"
+
+
+def call(method, *args):
+    cmd = ["busctl", "--user", "--json=short", "--timeout=infinity",
+           "call", NAME, PATH, NAME, method]
+    if args:
+        cmd += ["s" * len(args), *args]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        print(f"forge-dialog: {r.stderr.strip() or 'no Forge Shell'}",
+              file=sys.stderr)
+        sys.exit(2)
+    out = r.stdout.strip()
+    if not out:
+        return ""
+    data = json.loads(out).get("data") or [""]
+    return data[0]
+
+
+def dialog(spec):
+    return json.loads(call("Dialog", json.dumps(spec)) or "{}")
+
+
+def main():
+    ap = argparse.ArgumentParser(
+        prog="forge-dialog", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("kind", choices=[
+        "info", "warning", "error", "question", "entry", "password", "json",
+        "start-menu", "calendar", "wallpapers", "power"])
+    ap.add_argument("title", nargs="?", default="")
+    ap.add_argument("text", nargs="?", default="")
+    ap.add_argument("--yes", default="Yes")
+    ap.add_argument("--no", default="No")
+    ap.add_argument("--danger", action="store_true",
+                    help="the yes button is a destructive one (red)")
+    ap.add_argument("--value", default="")
+    ap.add_argument("--placeholder", default="")
+    a = ap.parse_args()
+
+    if a.kind == "start-menu":
+        call("StartMenu")
+    elif a.kind == "calendar":
+        call("Calendar")
+    elif a.kind == "wallpapers":
+        call("Wallpapers")
+    elif a.kind == "power":
+        call("Power", a.title)
+    elif a.kind == "json":
+        print(json.dumps(dialog(json.loads(a.title))))
+    elif a.kind in ("info", "warning", "error"):
+        dialog({"title": a.title, "text": a.text, "icon": a.kind,
+                "buttons": [{"id": "ok", "label": "OK", "primary": True}]})
+    elif a.kind == "question":
+        answer = dialog({
+            "title": a.title, "text": a.text, "icon": "question",
+            "buttons": [
+                {"id": "no", "label": a.no},
+                {"id": "yes", "label": a.yes, "primary": not a.danger,
+                 "danger": a.danger},
+            ]})
+        sys.exit(0 if answer.get("button") == "yes" else 1)
+    else:  # entry, password
+        answer = dialog({
+            "title": a.title, "text": a.text,
+            "icon": "lock" if a.kind == "password" else None,
+            "input": {"value": a.value, "placeholder": a.placeholder,
+                      "password": a.kind == "password"},
+            "buttons": [
+                {"id": "cancel", "label": "Cancel"},
+                {"id": "ok", "label": "OK", "primary": True},
+            ]})
+        if answer.get("button") != "ok":
+            sys.exit(1)
+        print(answer.get("text", ""))
+
+
+if __name__ == "__main__":
+    main()

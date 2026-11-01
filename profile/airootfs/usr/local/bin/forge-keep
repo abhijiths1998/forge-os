@@ -1,0 +1,23 @@
+#!/bin/bash
+# forge-keep: run a part of the Forge desktop and start it again if it
+# exits, for as long as the compositor that started it is running.
+#   forge-keep forge-shell bar
+# The compositor is the one in our own environment: whoever holds the lock on
+# its Wayland socket (KWin's wrapper keeps it across KWin restarts). A dead
+# compositor can leave the socket file behind but never the lock, so a loop
+# left over from one stops instead of joining the next.
+socket=${WAYLAND_DISPLAY:-wayland-0}
+[[ $socket == /* ]] || socket="${XDG_RUNTIME_DIR}/${socket}"
+alive() {
+    [[ -S "${socket}" ]] && ! flock -n "${socket}.lock" true 2>/dev/null
+}
+alive || echo "forge-keep: no compositor at ${socket}, not starting $*" >&2
+fails=0
+while alive; do
+    start=${SECONDS}
+    "$@"
+    # Crashing right away again and again: wait longer each time.
+    if (( SECONDS - start < 5 )); then (( fails++ )); else fails=0; fi
+    (( fails > 5 )) && { echo "forge-keep: $* keeps failing, giving up" >&2; exit 1; }
+    sleep $(( 1 + fails * 2 ))
+done

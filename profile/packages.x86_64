@@ -242,6 +242,21 @@ forge-control
 # profiles and firmware limits.
 forge-thermal
 
+# The Forge desktop (docs/DESKTOP.md), a session beside Plasma at the login
+# screen: Forge Compositor (compositor/, packages/forge-compositor) and
+# Forge Shell (apps/forge-shell: bar, dock, wallpaper, start menu, dialogs), plus what its
+# keys and portals call. Hyprland stays as the fallback compositor.
+forge-compositor
+forge-shell
+forge-hyprbars
+hyprland
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-wlr
+grim
+slurp
+brightnessctl
+playerctl
+
 # Forge Shot (apps/forge-shot): screenshots, in place of Spectacle on the
 # Print keys (Spectacle stays, for screen recording).
 forge-shot
@@ -268,8 +283,8 @@ chromium-widevine
 brave-bin
 
 # Forge's everyday apps (apps/forge-terminal, forge-files, forge-calendar):
-# Forge's terminal, file manager and calendar on Plasma, opening by default
-# in place of Konsole and Dolphin (which stay installed). Videos and PDFs get
+# the terminal, file manager and calendar the Forge desktop opens, in place
+# of Konsole and Dolphin (which stay for now). Videos and PDFs get
 # thumbnails from ffmpeg and poppler.
 forge-terminal
 forge-files
