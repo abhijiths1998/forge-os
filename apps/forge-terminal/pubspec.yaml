@@ -1,0 +1,21 @@
+name: forge_terminal
+description: "Forge Terminal: Forge OS's terminal, in the desktop's glass and colours."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  ffi: ^2.1.0
+  forge_ui:
+    path: ../forge_ui
+  xterm: ^4.0.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

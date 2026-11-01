@@ -1,0 +1,21 @@
+name: forge_files
+description: "Forge Files: Forge OS's file manager."
+publish_to: 'none'
+version: 1.0.0
+
+environment:
+  sdk: ^3.13.5
+
+dependencies:
+  flutter:
+    sdk: flutter
+  crypto: ^3.0.3
+  forge_ui:
+    path: ../forge_ui
+  mime: ^2.0.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

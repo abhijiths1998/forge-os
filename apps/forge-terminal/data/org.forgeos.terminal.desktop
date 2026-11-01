@@ -1,0 +1,20 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Terminal
+GenericName=Terminal
+Comment=A terminal in the desktop's glass and colours
+Exec=forge-terminal
+Icon=utilities-terminal
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=terminal;shell;console;command;prompt;cli;bash;zsh;
+StartupNotify=true
+StartupWMClass=org.forgeos.terminal
+X-TerminalArgExec=-e
+X-TerminalArgDir=--workdir
+X-TerminalArgHold=--hold
+Actions=NewWindow;
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=forge-terminal

@@ -8,6 +8,9 @@ LookAndFeelPackage=org.forgeos.glass
 [General]
 # The browser Plasma opens links in (see also ~/.config/mimeapps.list).
 BrowserApplication=org.forgeos.browser.desktop
+# The terminal KDE apps open ("Open Terminal Here", Terminal=true apps).
+TerminalApplication=forge-terminal
+TerminalService=org.forgeos.terminal.desktop
 font=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 menuFont=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 toolBarFont=Plus Jakarta Sans,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Calendar
+Comment=Runs hidden so calendar reminders arrive on time
+Exec=forge-calendar --background
+Icon=x-office-calendar
+NoDisplay=true
+X-KDE-autostart-phase=2

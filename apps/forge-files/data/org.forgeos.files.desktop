@@ -1,0 +1,22 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Files
+GenericName=File Manager
+Comment=Browse, find and organise your files
+Exec=forge-files %U
+Icon=system-file-manager
+Terminal=false
+Categories=System;FileTools;FileManager;
+Keywords=files;folders;file manager;explorer;browse;documents;trash;usb;drive;
+MimeType=inode/directory;
+StartupNotify=true
+StartupWMClass=org.forgeos.files
+Actions=NewWindow;Trash;
+
+[Desktop Action NewWindow]
+Name=New Window
+Exec=forge-files
+
+[Desktop Action Trash]
+Name=Trash
+Exec=forge-files trash:///

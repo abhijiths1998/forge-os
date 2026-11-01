@@ -238,6 +238,10 @@ forge-launcher
 # Forge Glass layout puts there.
 forge-control
 
+# Forge Thermal (apps/forge-thermal): the app for forge-thermal's cooling
+# profiles and firmware limits.
+forge-thermal
+
 # Forge Shot (apps/forge-shot): screenshots, in place of Spectacle on the
 # Print keys (Spectacle stays, for screen recording).
 forge-shot
@@ -262,6 +266,16 @@ pamac
 forge-browser
 chromium-widevine
 brave-bin
+
+# Forge's everyday apps (apps/forge-terminal, forge-files, forge-calendar):
+# Forge's terminal, file manager and calendar on Plasma, opening by default
+# in place of Konsole and Dolphin (which stay installed). Videos and PDFs get
+# thumbnails from ffmpeg and poppler.
+forge-terminal
+forge-files
+forge-calendar
+ffmpeg
+poppler
 
 # Gaming stack
 steam
@@ -310,12 +324,11 @@ chaotic-keyring
 chaotic-mirrorlist
 calamares
 
-# Forge Mind (forge-mind) and Forge Thermal's GUI: Python, its D-Bus and Qt
-# bindings, and paccache for cleaning the package cache
+# Forge Mind (forge-mind): Python, its D-Bus and GObject bindings, and
+# paccache for cleaning the package cache
 python
 python-dbus
 python-gobject
-pyside6
 pacman-contrib
 # Forge Mind's local model runtime; the model itself is downloaded at install
 # time (forge-mind-model). Vulkan, not CUDA: 40 MB instead of 6 GB, any GPU.
