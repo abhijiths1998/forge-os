@@ -4,7 +4,9 @@
 #   forge-thermal status          live temps, clocks and the active profile
 #   forge-thermal list            profiles: name, CPU %, GPU %, description
 #   forge-thermal apply <name>    apply a profile and make it the default  (root)
-#   forge-thermal custom <cpu%> <gpu%>   set and apply the Custom profile (root)
+#   forge-thermal custom <cpu%> <gpu%> [KEY=value ...]
+#                                 set and apply the Custom profile (root);
+#                                 KEYs are the firmware limits below
 #   forge-thermal restore         re-apply the saved profile (boot, resume) (root)
 #
 # A profile caps the CPU's maximum frequency and the GPU's at a percentage
@@ -13,8 +15,21 @@
 # honour. GPU: NVIDIA locked clocks (nvidia-smi -lgc), AMD power cap
 # (amdgpu hwmon power1_cap), Intel max frequency (i915 / xe sysfs).
 #
+# Where the firmware takes limits itself (Lenovo LOQ/Legion, through
+# lenovo-wmi-other), a profile can also set them, which beats a clock cap:
+# the firmware holds the chip at a temperature or wattage and clocks as
+# high as that allows. CPU_TEMP_LIMIT and GPU_TEMP_LIMIT (°C),
+# CPU_SUSTAINED_W and CPU_BOOST_W (package watts); unset ones go back to
+# the firmware's defaults. The firmware only honours them in its "custom"
+# platform profile, so a profile that sets any of them switches to it.
+# PLATFORM_PROFILE picks the platform profile otherwise (low-power,
+# balanced, performance, ...), though that is power-profiles-daemon's
+# (Forge Control's Power row), so the shipped profiles leave it alone;
+# leaving "custom" goes back to its choice.
+#
 # Profiles live in /etc/forge-thermal/profiles/<name>.conf as KEY=value
-# lines (NAME, DESCRIPTION, CPU_PERCENT, GPU_PERCENT); the saved choice is
+# lines (NAME, DESCRIPTION, CPU_PERCENT, GPU_PERCENT, and the optional keys
+# above); the saved choice is
 # /etc/forge-thermal/current. Polkit (org.forgeos.thermal) lets the active
 # desktop user run the root commands through pkexec without a password, so
 # arguments are validated strictly.
@@ -118,14 +133,15 @@ gpu_apply() { # percent
 gpu_status() {
     local line h d kind
     if have_nvidia; then
-        line="$(nvidia-smi --query-gpu=name,temperature.gpu,clocks.gr,clocks.max.graphics \
+        line="$(nvidia-smi --query-gpu=name,temperature.gpu,clocks.gr,clocks.max.graphics,power.draw \
             --format=csv,noheader,nounits -i 0 2>/dev/null)"
-        IFS=',' read -r name temp clk max <<<"${line}"
+        IFS=',' read -r name temp clk max watts <<<"${line}"
         echo "gpu_vendor=nvidia"
         echo "gpu_name=${name# }"
         echo "gpu_temp_c=${temp// /}"
         echo "gpu_clock_mhz=${clk// /}"
         echo "gpu_max_mhz=${max// /}"
+        [[ "${watts}" =~ ^\ ?[0-9.]+$ ]] && echo "gpu_power_w=${watts// /}"
         return
     fi
     for h in $(amd_hwmons); do
@@ -149,6 +165,102 @@ gpu_status() {
     fi
 }
 
+# --- Firmware limits -------------------------------------------------------
+FW_ATTRS="$(ls -d /sys/class/firmware-attributes/lenovo-wmi-other-*/attributes 2>/dev/null | head -n1)"
+PLATFORM=/sys/firmware/acpi/platform_profile
+FW_KEYS="CPU_TEMP_LIMIT GPU_TEMP_LIMIT CPU_SUSTAINED_W CPU_BOOST_W"
+
+fw_attr() { # profile key -> firmware attribute
+    case "$1" in
+        CPU_TEMP_LIMIT) echo cpu_temp ;;
+        GPU_TEMP_LIMIT) echo gpu_temp ;;
+        CPU_SUSTAINED_W) echo ppt_pl1_spl ;;
+        CPU_BOOST_W) echo ppt_pl3_fppt ;;
+    esac
+}
+
+fw_has() { [[ -n "${FW_ATTRS}" && -r "${FW_ATTRS}/$1/current_value" ]]; }
+
+fw_set() { # attribute value: clamped to the firmware's own range
+    local a="${FW_ATTRS}/$1" v="$2" lo hi
+    fw_has "$1" || return 0
+    lo="$(<"${a}/min_value")" hi="$(<"${a}/max_value")"
+    (( v < lo )) && v=${lo}
+    (( v > hi )) && v=${hi}
+    [[ "$(<"${a}/current_value")" == "${v}" ]] || echo "${v}" > "${a}/current_value"
+}
+
+ppd_platform() { # power-profiles-daemon's profile, as a platform profile
+    case "$(powerprofilesctl get 2>/dev/null)" in
+        power-saver) echo low-power ;;
+        performance) echo performance ;;
+        *) echo balanced ;;
+    esac
+}
+
+platform_set() { # name
+    [[ -w "${PLATFORM}" ]] || return 0
+    grep -qw -- "$1" /sys/firmware/acpi/platform_profile_choices 2>/dev/null \
+        || { echo "forge-thermal: no platform profile '$1', left as is" >&2; return 0; }
+    [[ "$(<"${PLATFORM}")" == "$1" ]] || echo "$1" > "${PLATFORM}"
+}
+
+fw_apply() { # profile file
+    local f="$1" key any=0 pp want spl sppt_lo pass
+    for key in ${FW_KEYS}; do [[ -n "$(profile_get "${f}" "${key}")" ]] && any=1; done
+    [[ -n "${FW_ATTRS}" ]] || any=0
+    pp="$(profile_get "${f}" PLATFORM_PROFILE)"
+    (( any )) && pp=custom
+    # A profile without firmware limits doesn't leave the last one's behind:
+    # back to the platform profile power-profiles-daemon has chosen.
+    [[ -z "${pp}" && -r "${PLATFORM}" && "$(<"${PLATFORM}")" == custom ]] && pp="$(ppd_platform)"
+    [[ -n "${pp}" ]] && platform_set "${pp}"
+    (( any )) || return 0
+    # Twice: the firmware may refuse a sustained limit above the boost one
+    # until the boost one has moved, whichever way they're going.
+    for pass in 1 2; do
+        for key in ${FW_KEYS}; do
+            want="$(profile_get "${f}" "${key}")"
+            [[ -n "${want}" ]] || want="$(<"${FW_ATTRS}/$(fw_attr "${key}")/default_value")"
+            fw_set "$(fw_attr "${key}")" "${want}" 2>/dev/null \
+                || { (( pass == 2 )) && echo "forge-thermal: the firmware refused ${key}=${want}" >&2; }
+        done
+        # The slow boost window sits between the two: at the sustained limit.
+        if fw_has ppt_pl2_sppt; then
+            spl="$(<"${FW_ATTRS}/ppt_pl1_spl/current_value")"
+            sppt_lo="$(<"${FW_ATTRS}/ppt_pl2_sppt/min_value")"
+            fw_set ppt_pl2_sppt $(( spl > sppt_lo ? spl : sppt_lo )) 2>/dev/null \
+                || { (( pass == 2 )) && echo "forge-thermal: the firmware refused the slow boost limit" >&2; }
+        fi
+    done
+}
+
+# Prints fw_* and platform_* status lines.
+fw_status() {
+    local key a
+    if [[ -r "${PLATFORM}" ]]; then
+        echo "platform_profile=$(<"${PLATFORM}")"
+        echo "platform_profiles=$(cat /sys/firmware/acpi/platform_profile_choices 2>/dev/null)"
+    fi
+    [[ -n "${FW_ATTRS}" ]] || return 0
+    for key in ${FW_KEYS}; do
+        a="${FW_ATTRS}/$(fw_attr "${key}")"
+        [[ -r "${a}/current_value" ]] || continue
+        # current min max default
+        echo "fw_${key,,}=$(<"${a}/current_value") $(<"${a}/min_value") $(<"${a}/max_value") $(<"${a}/default_value")"
+    done
+}
+
+fan_status() { # fan_rpm: the fastest fan
+    local f rpm max=-1
+    for f in /sys/class/hwmon/hwmon*/fan*_input; do
+        [[ -r "${f}" ]] || continue
+        rpm="$(<"${f}")" 2>/dev/null || continue
+        (( rpm > max )) && max=${rpm}
+    done
+    (( max >= 0 )) && echo "fan_rpm=${max}"
+}
+
 apply_profile() { # name
     local f="${PROFILES}/$1.conf" cpu gpu
     [[ -f "${f}" ]] || fail "no profile '$1' (see: forge-thermal list)"
@@ -157,6 +269,17 @@ apply_profile() { # name
     valid_percent "${gpu}" || fail "$1: GPU_PERCENT must be ${MIN_PERCENT}-100"
     cpu_apply "${cpu}"
     gpu_apply "${gpu}"
+    fw_apply "${f}"
+}
+
+# The optional keys a profile sets, as "KEY=value KEY=value".
+profile_extras() { # file
+    local key v out=()
+    for key in PLATFORM_PROFILE ${FW_KEYS}; do
+        v="$(profile_get "$1" "${key}")"
+        [[ -n "${v}" ]] && out+=("${key}=${v}")
+    done
+    echo "${out[*]}"
 }
 
 cmd="${1:-status}"; shift || true
@@ -176,13 +299,17 @@ case "${cmd}" in
         fi
         t="$(cpu_temp)"; [[ -n "${t}" ]] && echo "cpu_temp_c=${t}"
         gpu_status
+        fan_status
+        fw_status
         ;;
     list)
+        # name, CPU %, GPU %, display name, description, optional keys
         for f in "${PROFILES}"/*.conf; do
             [[ -f "${f}" ]] || continue
             n="$(basename "${f}" .conf)"
-            printf '%s\t%s\t%s\t%s\t%s\n' "${n}" "$(profile_get "${f}" CPU_PERCENT)" \
-                "$(profile_get "${f}" GPU_PERCENT)" "$(profile_get "${f}" NAME)" "$(profile_get "${f}" DESCRIPTION)"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\n' "${n}" "$(profile_get "${f}" CPU_PERCENT)" \
+                "$(profile_get "${f}" GPU_PERCENT)" "$(profile_get "${f}" NAME)" \
+                "$(profile_get "${f}" DESCRIPTION)" "$(profile_extras "${f}")"
         done
         ;;
     apply)
@@ -192,13 +319,22 @@ case "${cmd}" in
         ;;
     custom)
         need_root custom
-        valid_percent "${1:-}" && valid_percent "${2:-}" || fail "usage: custom <cpu ${MIN_PERCENT}-100> <gpu ${MIN_PERCENT}-100>"
-        cat > "${PROFILES}/custom.conf" <<EOF
-NAME="Custom"
-DESCRIPTION="Your own limits"
-CPU_PERCENT=$1
-GPU_PERCENT=$2
-EOF
+        valid_percent "${1:-}" && valid_percent "${2:-}" \
+            || fail "usage: custom <cpu ${MIN_PERCENT}-100> <gpu ${MIN_PERCENT}-100> [KEY=value ...]"
+        cpu="$1" gpu="$2"; shift 2
+        extras=()
+        for kv in "$@"; do
+            [[ "${kv}" =~ ^([A-Z_]+)=([0-9]{1,3})$ && " ${FW_KEYS} " == *" ${BASH_REMATCH[1]} "* ]] \
+                || fail "custom: '${kv}' isn't one of ${FW_KEYS// /, } =<number>"
+            extras+=("${kv}")
+        done
+        {
+            echo 'NAME="Custom"'
+            echo 'DESCRIPTION="Your own limits"'
+            echo "CPU_PERCENT=${cpu}"
+            echo "GPU_PERCENT=${gpu}"
+            (( ${#extras[@]} )) && printf '%s\n' "${extras[@]}"
+        } > "${PROFILES}/custom.conf"
         apply_profile custom && echo custom > "${CURRENT}"
         ;;
     restore)

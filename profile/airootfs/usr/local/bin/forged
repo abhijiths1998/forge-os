@@ -229,7 +229,15 @@ class Desktop:
         if not shutil.which("forge-thermal", path=TOOLS):
             return {"available": False}
         status = dict(line.split("=", 1) for line in run(tool("forge-thermal"), "status").splitlines() if "=" in line)
-        profiles = [line.split("\t")[0] for line in run(tool("forge-thermal"), "list").splitlines() if line.strip()]
+        # Profiles that set firmware limits (the 6th column) only where the
+        # firmware takes them.
+        firmware = any(k.startswith("fw_") for k in status)
+        profiles = []
+        for line in run(tool("forge-thermal"), "list").splitlines():
+            f = line.split("\t")
+            needs_fw = len(f) > 5 and any(k in f[5] for k in ("_LIMIT=", "_W="))
+            if line.strip() and (firmware or not needs_fw):
+                profiles.append(f[0])
         return {"available": bool(profiles), "profile": status.get("profile"), "profiles": profiles,
                 "cpu_temp": int(status["cpu_temp_c"]) if status.get("cpu_temp_c", "").isdigit() else None}
 

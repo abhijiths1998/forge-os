@@ -28,7 +28,6 @@ file_permissions=(
   ["/usr/local/bin/forge"]="0:0:755"
   ["/usr/local/bin/forge-glass-check"]="0:0:755"
   ["/usr/local/bin/forge-thermal"]="0:0:755"
-  ["/usr/local/bin/forge-thermal-gui"]="0:0:755"
   ["/usr/local/bin/forge-mind"]="0:0:755"
   ["/usr/local/bin/forge-mind-model"]="0:0:755"
   ["/usr/local/bin/forge-os-release"]="0:0:755"

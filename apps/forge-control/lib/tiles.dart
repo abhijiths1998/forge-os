@@ -290,10 +290,10 @@ class ProfilesCard extends StatelessWidget {
     'performance': 'Performance',
   };
   static const _thermalOrder = [
-    'silent', 'cool', 'balanced', 'performance', 'custom', //
+    'silent', 'cool', 'balanced', 'gaming', 'performance', 'custom', //
   ];
   // Up to five fit in the row, so short names; "Max" is no clock limit.
-  static const _thermalNames = {'performance': 'Max'};
+  static const _thermalNames = {'performance': 'Max', 'gaming': 'Game'};
 
   String _name(String id) => id[0].toUpperCase() + id.substring(1);
 
@@ -305,8 +305,14 @@ class ProfilesCard extends StatelessWidget {
     final thermalProfiles = [
       ...(thermal?['profiles'] as List? ?? const [])
           .cast<String>()
-          // Custom only shows while it's the one in use.
-          .where((t) => t != 'custom' || t == thermal?['profile']),
+          // Custom only shows while it's the one in use, and Game (the
+          // firmware's limits, where there are any) takes Cool's place;
+          // both stay in Forge Thermal.
+          .where((t) => t != 'custom' || t == thermal?['profile'])
+          .where((t) =>
+              t != 'cool' ||
+              t == thermal?['profile'] ||
+              !(thermal?['profiles'] as List).contains('gaming')),
     ]..sort((a, b) =>
         _thermalOrder.indexOf(a).compareTo(_thermalOrder.indexOf(b)));
     final temp = thermal?['cpu_temp'];
