@@ -13,6 +13,10 @@ Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
 everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
 version is set in `forge-os-release` (`forge about` shows it).
 
+**Moving to Hyprland:** Forge OS is moving from KDE Plasma to Hyprland, with
+a Quickshell shell. The plan is in `docs/HYPRLAND.md`; until it lands, the
+ISO described below is still the KDE one.
+
 ## What you get
 
 - **Gaming, ready to go:** Steam, Lutris, Heroic, Wine, Proton tooling
