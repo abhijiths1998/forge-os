@@ -5,12 +5,12 @@
 // file syntactically simple and the config-error notifier turns a reload
 // failure into a readable message with file and line.
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
 import '../main.dart';
+import '../widgets.dart';
 
 class DisplaysPage extends StatefulWidget {
   const DisplaysPage({super.key});
@@ -19,17 +19,19 @@ class DisplaysPage extends StatefulWidget {
   State<DisplaysPage> createState() => _DisplaysPageState();
 }
 
+/// One output's editable values.
+class Output {
+  Output(this.name);
+  final String name;
+  String res = '1920x1080';
+  String refresh = '60';
+  String scale = '1';
+  bool vrr = false;
+  bool enabled = true;
+}
+
 class _DisplaysPageState extends State<DisplaysPage> {
   // One output's editable values.
-  class Output {
-    Output(this.name);
-    final String name;
-    String res = '1920x1080';
-    String refresh = '60';
-    String scale = '1';
-    bool vrr = false;
-    bool enabled = true;
-  }
 
   final _outputs = <String, Output>{};
   List<String> _order = [];
@@ -46,7 +48,7 @@ class _DisplaysPageState extends State<DisplaysPage> {
   /// output when hyprctl isn't running (e.g. in the builder or a test).
   Future<List<String>> _detectOutputs() async {
     try {
-      final text = await _run(['hyprctl', 'monitors', '-j']);
+      final text = await runCommand(['hyprctl', 'monitors', '-j']);
       final list = jsonDecode(text) as List;
       return list.map((m) => m['name'] as String).toList();
     } catch (_) {
@@ -70,7 +72,7 @@ class _DisplaysPageState extends State<DisplaysPage> {
     final lines = <String>[];
     lines.add('-- Monitors, written by Forge Settings.');
     lines.add('-- Loaded by ~/.config/hypr/hyprland.lua, which runs after');
-    lines.add('-- Forge\'s own defaults, so this wins.');
+    lines.add("-- Forge's own defaults, so this wins.");
     lines.add('');
     for (final name in _order) {
       final o = _outputs[name]!;
@@ -256,15 +258,4 @@ class _DisplaysPageState extends State<DisplaysPage> {
       ),
     );
   }
-}
-
-/// Run a command and return its stdout, or throw.
-Future<String> _run(List<String> args) async {
-  final r = await Process.run(args[0], args.sublist(1));
-  if (r.exitCode != 0) {
-    throw Exception((r.stderr as String).trim().isNotEmpty
-        ? (r.stderr as String).trim()
-        : 'command failed (exit ${r.exitCode})');
-  }
-  return (r.stdout as String).trim();
 }

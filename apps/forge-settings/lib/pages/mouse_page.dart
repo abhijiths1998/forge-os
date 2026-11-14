@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
 import '../main.dart';
+import '../widgets.dart';
 
 class MousePage extends StatefulWidget {
   const MousePage({super.key});
@@ -47,7 +48,7 @@ class _MousePageState extends State<MousePage> {
   Future<void> _load() async {
     final values = <String, String>{};
     values.addAll(_defaults);
-    final file = File('${_hyprConfigDir}/input.user.lua');
+    final file = File('${hyprConfigDir}/input.user.lua');
     if (file.existsSync()) {
       final text = file.readAsStringSync();
       for (final entry in ['natural_scroll', 'tap_to_click', 'disable_while_typing',
@@ -203,7 +204,7 @@ hl.config({
             control: SizedBox(
               width: 160,
               child: DropdownButtonFormField<String>(
-                value: _controllers['accel_profile']!.text.isEmpty
+                initialValue: _controllers['accel_profile']!.text.isEmpty
                     ? 'adaptive'
                     : _controllers['accel_profile']!.text,
                 items: const [

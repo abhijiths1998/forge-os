@@ -128,7 +128,7 @@ class SettingToggle extends StatelessWidget {
       child: Switch(
         value: value,
         onChanged: onChanged,
-        activeColor: p.accent,
+        activeThumbColor: p.accent,
         trackColor: WidgetStateProperty.resolveWith((states) =>
             states.contains(WidgetState.selected) ? p.accent : p.hover),
       ),
@@ -217,58 +217,8 @@ class SettingTile extends StatelessWidget {
   }
 }
 
-/// A section header.
-class SectionLabel extends StatelessWidget {
-  const SectionLabel(this.text, {super.key, required this.palette});
-
-  final String text;
-  final ForgePalette palette;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 20, bottom: 8),
-      child: Text(
-        text.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          letterSpacing: 0.8,
-          fontWeight: FontWeight.w700,
-          color: palette.dimText,
-        ),
-      ),
-    );
-  }
-}
-
-/// A filled button that opens an external editor (nm-connection-editor, etc.).
-class OpenEditorButton extends StatelessWidget {
-  const OpenEditorButton({
-    super.key,
-    required this.label,
-    required this.command,
-  });
-
-  final String label;
-  final List<String> command;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = ForgePalette.current();
-    return PillButton(
-      palette: p,
-      label: label,
-      filled: false,
-      onTap: () async {
-        try {
-          await Process.run(command[0], command.sublist(1));
-        } catch (_) {}
-      },
-    );
-  }
-}
-
-/// The readable config-error banner, shared so every page uses the same look.
+/// The readable config-error banner: a readable error with file and line,
+/// never Hyprland's raw red bar.
 class ConfigError extends StatelessWidget {
   const ConfigError({super.key, required this.text});
 
@@ -298,6 +248,33 @@ class ConfigError extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// A filled button that opens an external editor (nm-connection-editor, etc.).
+class OpenEditorButton extends StatelessWidget {
+  const OpenEditorButton({
+    super.key,
+    required this.label,
+    required this.command,
+  });
+
+  final String label;
+  final List<String> command;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = ForgePalette.current();
+    return PillButton(
+      palette: p,
+      label: label,
+      filled: false,
+      onTap: () async {
+        try {
+          await Process.run(command[0], command.sublist(1));
+        } catch (_) {}
+      },
     );
   }
 }

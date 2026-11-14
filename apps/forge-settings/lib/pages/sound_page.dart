@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
-import '../main.dart';
+import '../widgets.dart';
 
 class SoundPage extends StatefulWidget {
   const SoundPage({super.key});
@@ -15,10 +15,10 @@ class SoundPage extends StatefulWidget {
 }
 
 class _SoundPageState extends State<SoundPage> {
-  int _volume = 50;
+  int _volumePct = 50;
   bool _muted = false;
   String _defaultSink = '';
-  List<String> _sinks = <String>[];
+  List<String> _sinkNames = <String>[];
   String? _error;
   bool _busy = false;
 
@@ -29,12 +29,12 @@ class _SoundPageState extends State<SoundPage> {
   }
 
   Future<void> _load() async {
-    await _volume();
-    await _sinks();
+    await _readVolume();
+    await _readSinks();
   }
 
   /// Parse "Volume: 0.50" (wpctl prints 0.0–1.0) and the mute flag.
-  Future<void> _volume() async {
+  Future<void> _readVolume() async {
     try {
       final r = await Process.run('wpctl', ['get-volume', '@DEFAULT_AUDIO_SINK@']);
       final out = (r.stdout as String).trim();
@@ -43,8 +43,9 @@ class _SoundPageState extends State<SoundPage> {
       final vol = m != null ? (double.tryParse(m.group(1)!) ?? 0.5) : 0.5;
       if (!mounted) return;
       setState(() {
-        _volume = (vol * 100).round();
+        _volumePct = (vol * 100).round();
         _muted = muted;
+        _error = null;
       });
     } catch (_) {
       if (!mounted) return;
@@ -53,7 +54,7 @@ class _SoundPageState extends State<SoundPage> {
   }
 
   /// List sinks from wpctl status, taking the names after "├─" / "└─".
-  Future<void> _sinks() async {
+  Future<void> _readSinks() async {
     try {
       final r = await Process.run('wpctl', ['status']);
       final out = (r.stdout as String);
@@ -70,7 +71,7 @@ class _SoundPageState extends State<SoundPage> {
         }
       }
       if (!mounted) return;
-      setState(() => _sinks = sinks);
+      setState(() => _sinkNames = sinks);
     } catch (_) {}
   }
 
@@ -80,7 +81,7 @@ class _SoundPageState extends State<SoundPage> {
       await Process.run('wpctl', ['set-volume', '@DEFAULT_AUDIO_SINK@', vol.toStringAsFixed(2)]);
       if (!mounted) return;
       setState(() {
-        _volume = pct;
+        _volumePct = pct;
         _error = null;
       });
     } catch (e) {
@@ -118,8 +119,8 @@ class _SoundPageState extends State<SoundPage> {
             control: SizedBox(
               width: 260,
               child: DropdownButtonFormField<String>(
-                value: _defaultSink.isEmpty ? null : _defaultSink,
-                items: _sinks
+                initialValue: _defaultSink.isEmpty ? null : _defaultSink,
+                items: _sinkNames
                     .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                     .toList(),
                 onChanged: (v) {
@@ -142,12 +143,12 @@ class _SoundPageState extends State<SoundPage> {
               child: ForgeSlider(
                 palette: p,
                 label: '',
-                value: _volume.toDouble(),
+                value: _volumePct.toDouble(),
                 min: 0,
                 max: 150,
                 divisions: 150,
                 format: (v) => '${v.round()}%${_muted ? ' (muted)' : ''}',
-                onChanged: (v) => setState(() => _volume = v.round()),
+                onChanged: (v) => setState(() => _volumePct = v.round()),
               ),
             ),
           ),
@@ -164,7 +165,7 @@ class _SoundPageState extends State<SoundPage> {
                 label: 'Apply volume',
                 onTap: () {
                   setState(() => _busy = true);
-                  _setVolume(_volume);
+                  _setVolume(_volumePct);
                   setState(() => _busy = false);
                 },
                 busy: _busy,
@@ -180,7 +181,6 @@ class _SoundPageState extends State<SoundPage> {
           SectionLabel('Advanced', palette: p),
           Text(
             '• Volume changes apply at once — there’s nothing to reload.\n'
-            '• For VPN and advanced network settings, open nm-connection-editor.\n'
             '• Per-app volume and input devices: pavucontrol.',
             style: TextStyle(fontSize: 12.5, color: p.dimText),
           ),

@@ -11,12 +11,12 @@
 //
 // A bad key or duplicate is shown inline (never Hyprland’s raw red bar).
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
 import '../main.dart';
+import '../widgets.dart';
 
 /// One bind as Hyprland reports it.
 class Bind {
@@ -63,7 +63,7 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
   Future<void> _load() async {
     List<Bind> binds = <Bind>[];
     try {
-      final text = await _run(['hyprctl', 'binds', '-j']);
+      final text = await runCommand(['hyprctl', 'binds', '-j']);
       binds = _parseBinds(text);
     } catch (_) {
       // hyprctl isn’t running (builder, test) — show a small built-in set so
@@ -113,7 +113,6 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
       final desc = (entry['description'] ?? '') as String;
       final keys = (entry['keys'] ?? '') as String;
       final handler = entry['handler'] as String?;
-      // Split "[Category] text" into category + description.
       String category = 'Other';
       String textOnly = desc;
       final m = RegExp(r'^\[([^\]]+)\]\s*(.*)$').firstMatch(desc);
@@ -138,8 +137,6 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
   /// first conflict, or null.
   Map<String, String> _checkConflicts() {
     final conflicts = <String, String>{};
-    // All currently bound keys: original keys for binds the user didn’t
-    // touch, plus the user’s new keys.
     final taken = <String, String>{}; // key -> "[Category] description"
     for (final cat in _categories) {
       for (final b in _byCategory[cat]!) {
@@ -148,7 +145,6 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
         if (k.isNotEmpty) taken[k] = '[${b.category}] ${b.description}';
       }
     }
-    // A bind’s own key isn’t a conflict with itself.
     for (final cat in _categories) {
       for (final b in _byCategory[cat]!) {
         final cur = _controllers[_controllerKey(b)]!.text.trim();
@@ -190,7 +186,6 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
     final h = b.handler ?? '';
     if (h.startsWith('exec: ')) return h.substring(6);
     if (h.startsWith('exec ')) return h.substring(5);
-    // Non-exec binds can’t be reconstructed from hyprctl output; note it.
     return '# TODO: ${b.handler}';
   }
 
@@ -207,9 +202,8 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
     final lua = _generateLua();
     try {
       await hyprFile('keybinds.user.lua').writeAsString(lua + '\n');
-      // Reload Hyprland’s config if it’s running so the new keys take effect.
       try {
-        await Process.run('hyprctl', ['reload']);
+        await runCommand(['hyprctl', 'reload']);
       } catch (_) {}
       if (!mounted) return;
       setState(() {
@@ -218,8 +212,6 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
       });
       _load(); // refresh from the real config
     } catch (e) {
-      // A bad bind lands Hyprland in the red bar; report it readably with
-      // file and line instead.
       setState(() {
         _error = "keybinds.user.lua failed to write: $e\n"
             "Fix ~/.config/hypr/keybinds.user.lua, then reload Hyprland "
@@ -332,15 +324,4 @@ class _ShortcutsPageState extends State<ShortcutsPage> {
       ),
     );
   }
-}
-
-/// Run a command and return its stdout, or throw.
-Future<String> _run(List<String> args) async {
-  final r = await Process.run(args[0], args.sublist(1));
-  if (r.exitCode != 0) {
-    throw Exception((r.stderr as String).trim().isNotEmpty
-        ? (r.stderr as String).trim()
-        : 'command failed (exit ${r.exitCode})');
-  }
-  return (r.stdout as String).trim();
 }

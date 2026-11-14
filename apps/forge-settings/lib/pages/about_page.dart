@@ -1,6 +1,6 @@
 // About page: version, kernel, session, and what Forge OS is.
 import 'package:flutter/material.dart';
-import 'package:forge_ui/forge_ui.dart' hide SectionLabel;
+import 'package:forge_ui/forge_ui.dart';
 
 import '../widgets.dart';
 

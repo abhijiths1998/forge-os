@@ -7,7 +7,15 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
-import '../main.dart';
+import '../widgets.dart';
+
+/// One startup entry: name, command, whether it's enabled.
+class StartupEntry {
+  StartupEntry(this.name, this.command, {this.enabled = true});
+  String name;
+  String command;
+  bool enabled;
+}
 
 class StartupPage extends StatefulWidget {
   const StartupPage({super.key});
@@ -17,15 +25,7 @@ class StartupPage extends StatefulWidget {
 }
 
 class _StartupPageState extends State<StartupPage> {
-  // One startup entry: name, command, whether it's enabled.
-  class Entry {
-    Entry(this.name, this.command, {this.enabled = true});
-    String name;
-    String command;
-    bool enabled;
-  }
-
-  final _entries = <Entry>[];
+  final _entries = <StartupEntry>[];
   String? _error;
   bool _busy = false;
   final _nameC = TextEditingController();
@@ -54,7 +54,7 @@ class _StartupPageState extends State<StartupPage> {
 
   Future<void> _load() async {
     final dir = Directory(_dir);
-    final found = <Entry>[];
+    final found = <StartupEntry>[];
     if (dir.existsSync()) {
       for (final f in dir.listSync().whereType<File>()) {
         if (!f.path.endsWith('.desktop')) continue;
@@ -78,7 +78,7 @@ class _StartupPageState extends State<StartupPage> {
           if (t.startsWith('Exec=')) command = t.substring(5);
           if (t.startsWith('Hidden=')) enabled = t.substring(7).toLowerCase() != 'true';
         }
-        found.add(Entry(name, command, enabled: enabled));
+        found.add(StartupEntry(name, command, enabled: enabled));
       }
     }
     found.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -94,7 +94,7 @@ class _StartupPageState extends State<StartupPage> {
       return;
     }
     setState(() {
-      _entries.add(Entry(name, command));
+      _entries.add(StartupEntry(name, command));
       _nameC.clear();
       _cmdC.clear();
       _error = null;
@@ -104,7 +104,6 @@ class _StartupPageState extends State<StartupPage> {
   Future<void> _save() async {
     final dir = Directory(_dir);
     if (!dir.existsSync()) dir.createSync(recursive: true);
-    // Remove any Forge-written entries we no longer list, then write each.
     try {
       if (dir.existsSync()) {
         for (final f in dir.listSync().whereType<File>()) {
@@ -112,14 +111,13 @@ class _StartupPageState extends State<StartupPage> {
         }
       }
       for (final e in _entries) {
-        final hidden = e.enabled ? 'false' : 'true';
         final safe = e.name.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '-');
         final file = File('$_dir/$safe.desktop');
         await file.writeAsString('''[Desktop Entry]
 Type=Application
 Name=${e.name}
 Exec=${e.command}
-Hidden=$hidden
+Hidden=${e.enabled ? 'false' : 'true'}
 X-GNOME-Autostart-enabled=${e.enabled ? 'true' : 'false'}
 ''');
       }

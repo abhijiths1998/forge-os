@@ -6,12 +6,11 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
-import '../main.dart';
+import '../widgets.dart';
 
 class UsersPage extends StatelessWidget {
   const UsersPage({super.key});
 
-  // Real users: UID >= 1000, not the nobody/nfsnobody accounts.
   static bool _isReal(String line) {
     final f = line.split(':');
     if (f.length < 7) return false;

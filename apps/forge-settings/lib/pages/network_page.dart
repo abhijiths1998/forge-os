@@ -5,7 +5,7 @@
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
-import '../main.dart';
+import '../widgets.dart';
 
 class NetworkPage extends StatelessWidget {
   const NetworkPage({super.key});

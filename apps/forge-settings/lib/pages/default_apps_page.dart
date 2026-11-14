@@ -6,7 +6,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:forge_ui/forge_ui.dart' hide SectionLabel;
+import 'package:forge_ui/forge_ui.dart';
 
 import '../widgets.dart';
 
@@ -36,7 +36,6 @@ class _DefaultAppsPageState extends State<DefaultAppsPage> {
       final r = await Process.run('xdg-settings', ['get', 'default-web-browser']);
       if (r.exitCode == 0) {
         final desktop = (r.stdout as String).trim();
-        // desktop is like org.forgeos.browser.desktop; map back to a name.
         current = _browserFromDesktop(desktop);
         if (current.isEmpty) current = desktop;
       }
@@ -45,7 +44,6 @@ class _DefaultAppsPageState extends State<DefaultAppsPage> {
     setState(() => _currentBrowser = current);
   }
 
-  /// Map a .desktop file name to one of the known browsers, best effort.
   String _browserFromDesktop(String desktop) {
     final lower = desktop.toLowerCase();
     for (final b in _browsers) {
@@ -93,7 +91,7 @@ class _DefaultAppsPageState extends State<DefaultAppsPage> {
             control: SizedBox(
               width: 260,
               child: DropdownButtonFormField<String>(
-                value: _currentBrowser.isEmpty ? null : _currentBrowser,
+                initialValue: _currentBrowser.isEmpty ? null : _currentBrowser,
                 items: _browsers
                     .map((b) => DropdownMenuItem(value: b, child: Text(b)))
                     .toList(),
@@ -107,7 +105,7 @@ class _DefaultAppsPageState extends State<DefaultAppsPage> {
           SectionLabel('How forge-open decides', palette: p),
           Text(
             '• terminal: xdg-terminal-exec (Forge Terminal), falling back to foot.\n'
-            '• files: xdg-open $HOME.\n'
+            '• files: xdg-open \$HOME.\n'
             '• browser: the default-web-browser above, then forge-browser / brave / '
                 'firefox / chromium.\n'
             '• settings: Forge Settings, then the Theming Kit.',

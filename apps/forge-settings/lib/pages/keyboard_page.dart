@@ -1,13 +1,13 @@
 // Keyboard page: layout, variant, options, and repeat rate/delay.
 // Writes ~/.config/hypr/input.user.lua (Hyprland's input block), which loads
 // after Forge's input.lua, so the user's choice wins.
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
 import '../main.dart';
+import '../widgets.dart';
 
 class KeyboardPage extends StatefulWidget {
   const KeyboardPage({super.key});
@@ -45,7 +45,7 @@ class _KeyboardPageState extends State<KeyboardPage> {
   Future<void> _load() async {
     final values = <String, String>{};
     values.addAll(_defaults);
-    final file = hyprFile('input.user.lua');
+    final file = File('${hyprConfigDir}/input.user.lua');
     if (file.existsSync()) {
       final text = file.readAsStringSync();
       for (final entry in ['layout', 'variant', 'model', 'options']) {
@@ -97,9 +97,8 @@ hl.config({
     final file = hyprFile('input.user.lua');
     try {
       await file.writeAsString(lua);
-      // Tell Hyprland to reload the input block if it's running.
       try {
-        await Process.run('hyprctl', ['keyword', 'input:kb_layout', layout]);
+        await runCommand(['hyprctl', 'keyword', 'input:kb_layout', layout]);
       } catch (_) {}
       setState(() {
         _error = null;
@@ -107,7 +106,7 @@ hl.config({
       });
     } catch (e) {
       setState(() {
-        _error = "Couldn't write $_userFile: $e";
+        _error = "Couldn't write input.user.lua: $e";
         _busy = false;
       });
     }

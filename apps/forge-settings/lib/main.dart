@@ -92,7 +92,7 @@ class _SettingsHomeState extends State<SettingsHome> {
                 const SizedBox(height: 4),
                 Text(
                   'Displays, keyboard, shortcuts and everything else Hyprland '
-                  'doesn’t have a settings app for.',
+                  "doesn't have a settings app for.",
                   style: TextStyle(fontSize: 13, color: p.dimText),
                 ),
               ],
@@ -153,7 +153,7 @@ class _SettingsHomeState extends State<SettingsHome> {
 ///   $XDG_CONFIG_HOME/hypr  (default ~/.config/hypr)
 /// It exists because ~/.config/hypr/hyprland.lua loads Forge's defaults and
 /// then the user's files, which win.
-String get _hyprConfigDir {
+String get hyprConfigDir {
   final home = Platform.environment['HOME'] ?? '';
   final xdg = Platform.environment['XDG_CONFIG_HOME'] ?? '$home/.config';
   return '$xdg/hypr';
@@ -164,15 +164,18 @@ String get _hyprConfigDir {
 /// valid Lua, because a bad line lands Hyprland in the raw red bar — the
 /// notifier turns that into a readable message with file and line.
 File hyprFile(String name) {
-  final dir = Directory(_hyprConfigDir);
+  final dir = Directory(hyprConfigDir);
   if (!dir.existsSync()) dir.createSync(recursive: true);
   return File('$dir/$name');
 }
 
-/// The directory Forge Settings writes user overrides into:
-///   $XDG_CONFIG_HOME/hypr  (default ~/.config/hypr)
-String get _hyprConfigDir {
-  final home = Platform.environment['HOME'] ?? '';
-  final xdg = Platform.environment['XDG_CONFIG_HOME'] ?? '$home/.config';
-  return '$xdg/hypr';
+/// Run a command and return its stdout, or throw with its stderr.
+Future<String> runCommand(List<String> args) async {
+  final r = await Process.run(args[0], args.sublist(1));
+  if (r.exitCode != 0) {
+    throw Exception((r.stderr as String).trim().isNotEmpty
+        ? (r.stderr as String).trim()
+        : 'command failed (exit ${r.exitCode})');
+  }
+  return (r.stdout as String).trim();
 }

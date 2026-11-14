@@ -1,13 +1,12 @@
 // Bluetooth page: powered on/off, paired devices, connect/forget.
 // Reads and writes through bluetoothctl (BlueZ). New devices are paired in
 // blueman-manager (installed) or forged’s BlueZ agent in M3.
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:forge_ui/forge_ui.dart';
 
-import '../main.dart';
+import '../widgets.dart';
 
 class BluetoothPage extends StatefulWidget {
   const BluetoothPage({super.key});
@@ -20,7 +19,6 @@ class _BluetoothPageState extends State<BluetoothPage> {
   bool _powered = false;
   List<Map<String, String>> _devices = <Map<String, String>>[];
   String? _error;
-  bool _busy = false;
 
   @override
   void initState() {
@@ -29,12 +27,11 @@ class _BluetoothPageState extends State<BluetoothPage> {
   }
 
   Future<void> _load() async {
-    await _powered();
-    await _devices();
+    await _readPowered();
+    await _readDevices();
   }
 
-  /// Whether Bluetooth is powered, from `bluetoothctl show`.
-  Future<void> _powered() async {
+  Future<void> _readPowered() async {
     try {
       final r = await Process.run('bluetoothctl', ['show']);
       final out = (r.stdout as String);
@@ -47,8 +44,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
     }
   }
 
-  /// Paired (or discovered) devices: `bluetoothctl devices`.
-  Future<void> _devices() async {
+  Future<void> _readDevices() async {
     try {
       final r = await Process.run('bluetoothctl', ['devices']);
       final out = (r.stdout as String).trim();
@@ -82,7 +78,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
   Future<void> _connect(String address) async {
     try {
       await Process.run('bluetoothctl', ['connect', address]);
-      await _devices();
+      await _readDevices();
     } catch (e) {
       setState(() => _error = "Couldn't connect: $e");
     }
@@ -91,7 +87,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
   Future<void> _remove(String address) async {
     try {
       await Process.run('bluetoothctl', ['remove', address]);
-      await _devices();
+      await _readDevices();
     } catch (e) {
       setState(() => _error = "Couldn't remove device: $e");
     }
@@ -118,8 +114,8 @@ class _BluetoothPageState extends State<BluetoothPage> {
               SettingToggle(
                 value: _powered,
                 onChanged: (v) {
-                  setState(() => _busy = true);
-                  _setPower(v).then((_) => setState(() => _busy = false));
+                  setState(() {});
+                  _setPower(v).then((_) => setState(() {}));
                 },
               ),
             ],
@@ -169,8 +165,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
                       palette: p,
                       label: 'Connect',
                       onTap: () {
-                        setState(() => _busy = true);
-                        _connect(d['address']!).then((_) => setState(() => _busy = false));
+                        _connect(d['address']!).then((_) => setState(() {}));
                       },
                     ),
                     const SizedBox(width: 6),
@@ -178,8 +173,7 @@ class _BluetoothPageState extends State<BluetoothPage> {
                       palette: p,
                       label: 'Forget',
                       onTap: () {
-                        setState(() => _busy = true);
-                        _remove(d['address']!).then((_) => setState(() => _busy = false));
+                        _remove(d['address']!).then((_) => setState(() {}));
                       },
                     ),
                   ],
