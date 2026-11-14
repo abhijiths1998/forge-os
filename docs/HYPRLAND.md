@@ -683,6 +683,8 @@ Not verified: the shell on the laptop (real Wi-Fi, Bluetooth, PipeWire,
 UPower, backlight, tray apps), hold-Super's long press with a real
 keyboard, and the ISO.
 
+keyboard, and the ISO.
+
 ### M3: the Forge apps without KDE (forged was done in M2)
 
 - **forge-theme-sync** now takes `theme.json` everywhere itself: Hyprland
@@ -731,3 +733,32 @@ oversized window (980×800 on a 720-pixel-high screen) had its title bar
 off the top. forge-session now shrinks any new floating window that's
 bigger than its screen and centres it. All six changed Flutter apps pass
 `flutter analyze` and build.
+
+### M7: Forge Settings + keybind editor (apps/forge-settings)
+
+Flutter on `forge_ui`. A settings app for newcomers, since Hyprland has none.
+
+- **Pages:** displays (resolution, scale, refresh, VRR; writes
+  `~/.config/hypr/monitors.lua`), keyboard layout and repeat, mouse/touchpad,
+  default apps, startup apps, sound (wpctl), network/VPN
+  (`nm-connection-editor` fallback), Bluetooth pairing (bluetoothctl), users,
+  about.
+- **Shortcuts page:** rebind any bind from `hyprctl binds -j`, with conflict
+  detection (a key already bound elsewhere is rejected inline), writing
+  `~/.config/hypr/keybinds.user.lua`, which `~/.config/hypr/hyprland.lua`
+  loads after `keybinds.lua` so the user's overrides win. `forge keys`
+  (CLI equivalent) lists binds and rebinds one: `forge keys set <category>
+  <description> <new-key>`.
+- **Config error notifier:** a bad monitor line or a bad bind lands Hyprland
+  in its raw red bar. Forge Settings keeps the files it writes syntactically
+  simple, and any failure shows a readable notification with file and line —
+  never the raw red bar.
+
+Tests: `flutter analyze` passes on `apps/forge-settings`. The
+`forge-session` bind lint (`tests/check-binds.lua`) still runs on
+`keybinds.lua` itself; `keybinds.user.lua` is user-owned and not linted by
+the build.
+
+Not verified: the app on a real session (Hyprland not running here, so
+`hyprctl binds -j` and `hyprctl reload` can't be exercised), the ISO build,
+the QEMU install, and anything on the NVIDIA laptop.

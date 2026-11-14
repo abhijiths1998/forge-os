@@ -71,6 +71,7 @@ theme set in the Theming Kit:
 | **Forge Shell**: the bar, the Control Center (Wi-Fi, Bluetooth, quiet, dark mode, tiling, night light, brightness, volume, power and cooling profiles, now playing), notifications, OSDs, the desktop shortcut panel, the cheat sheet, overview, Alt+Tab, clipboard and emoji pickers; state from `forged` | Plasma's panels and tray | Quickshell (QML) + `forged` (Python, D-Bus) |
 | **Forge Shot**: screenshots on the Print keys: an area on the frozen screen (loupe, handles), a window (click it) or the whole screen; a thumbnail after; an editor (arrows, boxes, text, highlighter, pixelate, numbered steps, crop); copy, save, copy the text in it. Super+Alt+R records the screen (gpu-screen-recorder, NVENC) | Spectacle | Flutter (forge_ui) + grim |
 | **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and glass (blur, vibrancy, lit edge, grain), opacities and corners; `forge theme <name>` | Plasma's colour and effect settings, for the Forge look | Flutter (forge_ui) |
+| **Forge Settings**: displays, keyboard, mouse, shortcuts with conflict detection, default apps, startup, sound, network/VPN, Bluetooth, users, about; writes `keybinds.user.lua` and `monitors.lua` | System Settings on Hyprland (which has none) | Flutter (forge_ui) |
 
 Each is translucent, so Hyprland's blur frosts it like the rest of the
 desktop, and each draws a glass title bar of its own (Hyprland draws none). Brave stays installed for sites that need Widevine DRM.
