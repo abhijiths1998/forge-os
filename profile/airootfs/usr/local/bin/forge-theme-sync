@@ -70,7 +70,7 @@ def theme():
     selection = kde_colour("Colors:Selection", "BackgroundNormal")
     return {
         "dark": colorsys.rgb_to_hls(*(c / 255 for c in window))[1] < 0.5 if window and len(window) == 3 else saved["dark"],
-        "accent": "#%02X%02X%02X" % selection if selection and len(selection) == 3 else saved["accent"],
+        "accent": "#{:02X}{:02X}{:02X}".format(*selection) if selection and len(selection) == 3 else saved["accent"],
     }
 
 
@@ -81,7 +81,7 @@ def rgb(hex_colour):
 
 def mix(hex_colour, other, amount):
     a, b = rgb(hex_colour), rgb(other)
-    return "#%02X%02X%02X" % tuple(round(x + (y - x) * amount) for x, y in zip(a, b))
+    return "#{:02X}{:02X}{:02X}".format(*(round(x + (y - x) * amount) for x, y in zip(a, b)))
 
 
 def nearest_accent(hex_colour):
@@ -176,7 +176,7 @@ def status(t):
     shown = run("flatpak", "override", "--user", "--show") if shutil.which("flatpak") else None
     print("  flatpak:", "GTK colours readable" if shown and "gtk-4.0:ro" in shown.stdout else "not yet")
     try:
-        print("  login:", " ".join(l for l in LOGIN.read_text().splitlines() if l.startswith(("accent", "dark"))))
+        print("  login:", " ".join(line for line in LOGIN.read_text().splitlines() if line.startswith(("accent", "dark"))))
     except OSError:
         print("  login: stock Forge Glass light")
 

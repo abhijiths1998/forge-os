@@ -28,7 +28,7 @@ case "${1:-}" in
     settings)
         run "$(first forge-settings forge-themekit)" ;;
     control)
-        run "$(first forge-control)" ;;
+        run forge-shell control ;;
     monitor)
         if command -v xdg-terminal-exec >/dev/null 2>&1; then run xdg-terminal-exec btop
         else run foot btop; fi ;;

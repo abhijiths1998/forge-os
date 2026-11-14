@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# forge-shell: Forge's desktop shell (Quickshell), and a way to drive it.
+#   forge-shell                  run it (forge-shell.service does this)
+#   forge-shell restart          restart it
+#   forge-shell control|notifications|cheatsheet|clipboard|emoji|overview|
+#               power|whichkey|shortcuts-panel|close
+#   forge-shell switcher next|previous|commit
+#   forge-shell osd capslock
+#   forge-shell wallpaper-pause|wallpaper-resume
+# Exits non-zero when the shell isn't running (forge-power-menu falls back).
+set -u
+SHELL_DIR="${FORGE_SHELL_DIR:-/usr/share/forge/shell}"
+
+call() { qs -p "${SHELL_DIR}" ipc call shell "$@" >/dev/null 2>&1; }
+
+case "${1:-run}" in
+    run) exec qs -p "${SHELL_DIR}" ;;
+    restart) exec systemctl --user restart forge-shell.service ;;
+    shortcuts-panel) call shortcutsPanel ;;
+    wallpaper-pause) call wallpaperPause ;;
+    wallpaper-resume) call wallpaperResume ;;
+    switcher) call switcher "${2:-next}" ;;
+    osd) call osd "${2:-capslock}" ;;
+    control|notifications|cheatsheet|clipboard|emoji|overview|power|whichkey|close) call "$1" ;;
+    *) sed -n '2,10p' "$0" >&2; exit 2 ;;
+esac

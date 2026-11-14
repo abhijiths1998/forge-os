@@ -9,7 +9,7 @@ local floating = {
     { name = "polkit", match = { class = "^(hyprpolkitagent|org\\.hyprland\\.polkitagent)$" } },
     { name = "settings-tools", match = { class = "^(nm-connection-editor|blueman-manager|pavucontrol|org\\.pulseaudio\\.pavucontrol|nwg-displays|qt6ct|kvantummanager|system-config-printer)$" } },
     { name = "small-apps", match = { class = "^(org\\.gnome\\.Calculator|gnome-calculator|org\\.gnome\\.FileRoller|file-roller|hyprland-dialog|hyprland-share-picker)$" } },
-    { name = "forge-small", match = { class = "^org\\.forgeos\\.(control|thermal|themekit|shot)$" } },
+    { name = "forge-small", match = { class = "^org\\.forgeos\\.(thermal|themekit|shot)$" } },
     { name = "installer", match = { class = "^(calamares|io\\.calamares\\.calamares)$" } },
     { name = "steam-dialogs", match = { class = "^steam$", title = "^(Steam Settings|Friends List|Steam - News.*|Special Offers|Product Activation|Install - .*)$" } },
 }

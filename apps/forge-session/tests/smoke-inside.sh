@@ -15,5 +15,7 @@ for _ in $(seq 40); do ls "${XDG_RUNTIME_DIR}"/hypr/*/.socket.sock >/dev/null 2>
 HYPRLAND_INSTANCE_SIGNATURE="$(ls "${XDG_RUNTIME_DIR}/hypr" | head -1)"
 export HYPRLAND_INSTANCE_SIGNATURE
 export WAYLAND_DISPLAY=wayland-1
+# The nested output comes up at scale 2; tests want real-size layouts.
+hyprctl eval 'hl.monitor({ output = "WAYLAND-1", mode = "preferred", position = "0x0", scale = 1 })' >/dev/null
 sleep 1
 "$@"
