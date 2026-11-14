@@ -284,6 +284,9 @@ awww
 neovim
 forge-code
 
+# Forge Welcome (apps/forge-welcome): first-boot choices + Keyboard Dojo.
+forge-welcome
+
 # Forge Thermal (apps/forge-thermal): the app for forge-thermal's cooling
 # profiles and firmware limits.
 forge-thermal
