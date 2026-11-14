@@ -47,6 +47,8 @@ ensure_vm() {
 }
 
 cmd="${1:-}"
+# QEMU's own option values use commas.
+# shellcheck disable=SC2054
 common=(
     -enable-kvm -machine q35 -cpu host -smp "$CPUS" -m "$MEM"
     -drive "if=pflash,format=raw,readonly=on,file=$(find_ovmf OVMF_CODE)"

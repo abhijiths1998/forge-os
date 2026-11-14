@@ -582,3 +582,58 @@ not on running anything:
 - Logind `SetBrightness` on the laptop's backlight device.
 - The tiling model and the edge-sheen approximation.
 - Everything NVIDIA.
+
+## 11. Decisions and progress
+
+**2026-11-14: "go ahead and finish everything."** Taken as approval of this
+document's recommendations for every open question in section 9: Lua and
+`[Category]` descriptions, the 3.x numbering, fresh installs only, Plasma
+kept as a fallback through M1, the Control Center in Quickshell, Forge
+Terminal rewritten in GTK4 + VTE, the stopgap apps, `mako`-free M1. The
+untracked `apps/forge-shell/` and `compositor/` build leftovers were moved,
+not deleted, to `~/Projects/forge-os-leftovers/` on the dev machine.
+
+### M1: the session (apps/forge-session)
+
+Built and tested against Hyprland 0.57.2. What changed from the design
+above while building it:
+
+- **The theme is read, not generated.** `theme.lua` reads
+  `~/.config/forge/theme.json` itself (`lib/json.lua`, a small JSON reader
+  and writer), so there's no generated `theme.lua` to go stale. forge-theme-sync
+  only needs to run `hyprctl reload`.
+- **The game watcher is Lua plus a small script.** `game.lua` listens to
+  Hyprland's own events (`window.fullscreen` and the rest), turns blur,
+  shadows and animations off itself, and runs `forge-game fullscreen-on|off`
+  for the wallpaper and the cooling profile. No socket-reading daemon.
+  GameMode's hooks call `forge-game gamemode-start|end`.
+- **Per-workspace tiling is window rules.** Floating a window from the
+  `window.open_early` event had no effect in 0.57, so a rule floats every new
+  window while tiling is off, and a rule per workspace that differs from
+  the default overrides it. Toggling also floats or tiles the windows
+  already there. State: `~/.local/state/forge/tiling.json`; forged writes
+  it and runs `hyprctl eval 'forge.tiling.reload()'`.
+- **uwsm's environment hook** is `/etc/xdg/uwsm/env-hyprland.d/50-forge.sh`,
+  which `eval`s `forge-gpu-env`. The session is Hyprland's own
+  `hyprland-uwsm.desktop`.
+- **Hyprland isn't held back.** Pinning it in `IgnorePkg` without our own
+  repo would leave it linked against libraries that `-Syu` moves on.
+  Section 8's risk 1 stays open until the Forge repo exists.
+- **Hyprland's own wallpapers are off** (`misc.force_default_wallpaper = 0`,
+  `disable_hyprland_logo`). They feature Hyprland's anime mascot, and
+  Forge's anime art is only its own cast.
+
+Tests: `lua tests/check-binds.lua hypr` (no hl.bind outside forge.bind,
+every bind categorised, no key bound twice, JSON round trip),
+`Hyprland --verify-config` in `build/check.sh lua`, and `tests/smoke.sh`.
+The smoke test runs the real config in Hyprland 0.57.2 nested on the dev
+machine's desktop (Hyprland's headless backend needs a seat or a parent
+compositor; Weston's and sway's protocols are too old for Aquamarine). It
+checks the binds over `hyprctl`, that new windows float, Super+Left
+snapping, tiling on and off per workspace, resize mode and workspaces.
+All 13 pass.
+
+Not verified yet: the ISO build, a QEMU install, the live session opening
+Calamares, and anything on the NVIDIA laptop's own session (NVIDIA env,
+explicit sync, VRR, suspend, hyprlock after resume, the touchpad gesture,
+the hardware keys).

@@ -1,0 +1,9 @@
+# Forge OS's Python (forged, forge-mind, forge-theme-sync, the branding
+# generators, tests): checked by build/check.sh.
+line-length = 120
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "W", "B", "UP", "SIM"]
+# Forge's tools are scripts that print and exit; long lines are wrapped by hand.
+ignore = ["E501"]

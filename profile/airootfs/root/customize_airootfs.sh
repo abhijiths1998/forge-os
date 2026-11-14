@@ -11,6 +11,14 @@ set -e -u
 # gets a user to the desktop, so no one is ever prompted for this password.
 useradd -m -G wheel,users,storage,power,network,video,audio,disk,input,uucp -s /bin/zsh liveuser
 passwd -d liveuser
+# The live session opens the installer once Hyprland is up (the installed
+# system's users get the plain user.lua from /etc/skel instead).
+install -Dm644 -o liveuser -g liveuser /dev/stdin /home/liveuser/.config/hypr/user.lua <<'EOF'
+-- Live session only: open the installer when the desktop is up.
+hl.on("hyprland.start", function()
+    hl.exec_cmd("forge-live-installer")
+end)
+EOF
 
 # --- Version ---
 # Forge OS's os-release, and the installer's version, from forge-os-release.

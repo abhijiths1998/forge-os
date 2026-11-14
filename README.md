@@ -13,9 +13,11 @@ Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
 everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
 version is set in `forge-os-release` (`forge about` shows it).
 
-**Moving to Hyprland:** Forge OS is moving from KDE Plasma to Hyprland, with
-a Quickshell shell. The plan is in `docs/HYPRLAND.md`; until it lands, the
-ISO described below is still the KDE one.
+**Forge OS 3 runs on Hyprland.** The desktop session is Hyprland (started
+through uwsm) with Forge's defaults from `apps/forge-session`, and Forge's
+shell is being built in Quickshell. The plan and progress are in
+`docs/HYPRLAND.md`. Parts of this README still describe the Plasma desktop
+until the last of it is gone (milestone 2).
 
 ## What you get
 

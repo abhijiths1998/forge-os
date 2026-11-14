@@ -1,0 +1,5 @@
+[Unit]
+Description=Keep the screen awake while a game runs (started by GameMode)
+
+[Service]
+ExecStart=/usr/bin/systemd-inhibit --what=idle --who="Forge OS" --why="A game is running" --mode=block /usr/bin/sleep infinity

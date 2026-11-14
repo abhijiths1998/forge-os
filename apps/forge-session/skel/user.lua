@@ -1,0 +1,8 @@
+-- Your own Hyprland settings. They load after Forge's, so they win.
+-- Forge's defaults are in /usr/share/forge/hypr; copy what you want to
+-- change from there. A few examples:
+--
+-- hl.config({ general = { gaps_out = 20 } })
+-- hl.unbind("SUPER + B")
+-- forge.bind("Apps", "SUPER + B", "Open Firefox", forge.exec("firefox"))
+-- hl.monitor({ output = "eDP-1", mode = "1920x1080@144", position = "0x0", scale = 1 })

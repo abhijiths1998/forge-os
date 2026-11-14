@@ -229,6 +229,55 @@ kwin-effects-glass-git
 darkly-qt6-git
 kwin-polonium
 
+# Forge's Hyprland session (forge-session, apps/forge-session): Hyprland
+# started through uwsm, Forge's defaults in /usr/share/forge/hypr, the
+# portals, polkit agent, idle/lock, clipboard history, auto-mount and the
+# wallpaper. See docs/HYPRLAND.md. Plasma stays installed beside it until
+# forge-shell replaces its panels (milestone 2).
+forge-session
+hyprland
+uwsm
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprpolkitagent
+hypridle
+hyprlock
+hyprpicker
+hyprsunset
+hyprland-guiutils
+qt6-wayland
+qt5-wayland
+qt6ct
+kvantum
+adw-gtk-theme
+adwaita-cursors
+awww
+grim
+slurp
+wl-clipboard
+cliphist
+wl-clip-persist
+brightnessctl
+playerctl
+udiskie
+gnome-keyring
+libsecret
+upower
+jq
+libnotify
+xdg-user-dirs
+xdg-terminal-exec
+foot
+btop
+nm-connection-editor
+network-manager-applet
+blueman
+nwg-displays
+gpu-screen-recorder
+noto-fonts
+noto-fonts-emoji
+noto-fonts-cjk
+
 # Forge Launcher (apps/forge-launcher, built into the local repo by
 # apps/build-packages.sh): the Meta+Space command bar, in place of KRunner.
 forge-launcher
