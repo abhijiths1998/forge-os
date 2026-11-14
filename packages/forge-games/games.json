@@ -1,0 +1,195 @@
+[
+  {
+    "id": "port-calder",
+    "name": "Port Calder",
+    "description": "An open-world California road trip, scaled down to 8 by 9 km: 19 real cities, Interstate 5, US 101 and the Pacific Coast Highway, with traffic, police chases, shops, jobs and races.",
+    "controls": [
+      ["WASD / arrows", "Walk or drive"],
+      ["Mouse, wheel, C", "Camera, zoom, distance"],
+      ["F / Enter", "Enter or exit a vehicle, carjack"],
+      ["Space", "Handbrake or jump"],
+      ["Shift", "Sprint"],
+      ["H", "Horn"],
+      ["Q / E", "Radio station"],
+      ["T", "Taxi duty"],
+      ["Tab", "Map"],
+      ["Esc", "Pause, settings, stats"],
+      ["F11 / M", "Fullscreen / mute"]
+    ],
+    "needsGpu": true,
+    "exec": "/usr/bin/port-calder",
+    "cover": "/usr/share/forge-games/covers/port-calder.png",
+    "highScoreFile": null
+  },
+  {
+    "id": "hardlight",
+    "name": "Hardlight",
+    "description": "An arena shooter with a modern renderer: hold a neon rooftop against waves of drones, crawlers and sentinels. Shadows, bloom and dynamic lights.",
+    "controls": [
+      ["WASD", "Move"],
+      ["Mouse", "Aim"],
+      ["Left mouse", "Pulse rifle"],
+      ["Right mouse", "Arc cannon (3 charges)"],
+      ["Space", "Jump"],
+      ["Shift", "Sprint"],
+      ["Q / Ctrl", "Dash"],
+      ["R", "Reload"],
+      ["Esc / P", "Pause"],
+      ["F11 / M", "Fullscreen / mute"]
+    ],
+    "needsGpu": true,
+    "exec": "/usr/bin/hardlight",
+    "cover": "/usr/share/forge-games/covers/hardlight.png",
+    "highScoreFile": "~/.local/share/doomedl/hardlight/best.txt",
+    "highScoreFormat": "int"
+  },
+  {
+    "id": "bramble-bound",
+    "name": "Bramble Bound",
+    "description": "A side-scrolling platformer. Guide Bramble the fox through four worlds with parallax backdrops, dynamic lighting, weather and a chiptune for each.",
+    "controls": [
+      ["Arrows / A D", "Move"],
+      ["Space / Z / W / Up", "Jump (hold for higher)"],
+      ["Shift / X", "Run"],
+      ["Esc / P", "Pause"],
+      ["M", "Music on or off"],
+      ["F11", "Fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/bramble-bound",
+    "cover": "/usr/share/forge-games/covers/bramble-bound.png",
+    "highScoreFile": "~/.local/share/doomedl/bramble-bound/best",
+    "highScoreFormat": "int"
+  },
+  {
+    "id": "orbit-golf",
+    "name": "Orbit Golf",
+    "description": "Gravity mini-golf in space. Sling the ball round planets, black holes and wormholes across twelve holes. The best round is the fewest strokes.",
+    "controls": [
+      ["Drag back and release", "Aim and shoot (mouse)"],
+      ["Left / Right, A / D", "Aim (Shift for fine)"],
+      ["Space (hold)", "Charge the shot, release to hit"],
+      ["Right click / Esc", "Cancel a shot"],
+      ["Esc / P", "Pause"],
+      ["F11", "Fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/orbit-golf",
+    "cover": "/usr/share/forge-games/covers/orbit-golf.png",
+    "highScoreFile": "~/.local/share/doomedl/orbit-golf/best",
+    "highScoreFormat": "int",
+    "lowerIsBetter": true
+  },
+  {
+    "id": "prism-smash",
+    "name": "Prism Smash",
+    "description": "A neon brick-breaker with chain-reaction bricks, ball-splitting prisms, seven power-ups and twelve levels. Hit bricks without touching the paddle to build a combo.",
+    "controls": [
+      ["Mouse / A D / arrows", "Move the paddle"],
+      ["Click / Space / Enter", "Launch, fire the laser"],
+      ["Esc / P", "Pause (Q then quits to title)"],
+      ["F11", "Fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/prism-smash",
+    "cover": "/usr/share/forge-games/covers/prism-smash.png",
+    "highScoreFile": "~/.local/share/doomedl/prism-smash/best",
+    "highScoreFormat": "int"
+  },
+  {
+    "id": "lumen-drift",
+    "name": "Lumen Drift",
+    "description": "You are a small light drifting through a dark cavern. Gather sparks to stay alive and chain them for a bigger score while shadows hunt you.",
+    "controls": [
+      ["WASD / arrows", "Move"],
+      ["Space / J / Z", "Flare (costs 14 light)"],
+      ["Shift / K / X", "Dash (invulnerable)"],
+      ["Esc / P", "Pause"],
+      ["F11", "Fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/lumen-drift",
+    "cover": "/usr/share/forge-games/covers/lumen-drift.png",
+    "highScoreFile": "~/.local/share/lumen-drift/best",
+    "highScoreFormat": "int"
+  },
+  {
+    "id": "relic-runner",
+    "name": "Relic Runner",
+    "description": "An EGA platformer in the style of early-90s DOS games. Grab each vault's Sunstone, then reach the door. Jetpack, pistol, PC-speaker sound and CRT scanlines.",
+    "controls": [
+      ["Arrows / WASD", "Move"],
+      ["Space / Up / Z", "Jump (hold for higher)"],
+      ["X / Ctrl / J", "Fire the pistol"],
+      ["C / Alt / K", "Jetpack on or off"],
+      ["P", "Pause"],
+      ["Esc", "Quit to title"],
+      ["F2 / M / F11", "CRT filter / sound / fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/relic-runner",
+    "cover": "/usr/share/forge-games/covers/relic-runner.png",
+    "highScoreFile": "~/.local/share/doomedl/relic-runner/scores.txt",
+    "highScoreFormat": "table"
+  },
+  {
+    "id": "ember-isle",
+    "name": "Ember Isle",
+    "description": "A small open-world 3D island drawn by a software renderer in the style of early-90s polygon games. Gather embers, light seven beacons and rekindle the lighthouse as the sun sets.",
+    "controls": [
+      ["W S / Up Down", "Walk"],
+      ["A D / Left Right, mouse", "Turn"],
+      ["Q E", "Step sideways"],
+      ["Shift", "Run"],
+      ["Space", "Jump"],
+      ["Tab / C", "Map"],
+      ["P / Esc", "Pause / quit to title"],
+      ["F2 / M / F11", "CRT filter / sound / fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/ember-isle",
+    "cover": "/usr/share/forge-games/covers/ember-isle.png",
+    "highScoreFile": "~/.local/share/doomedl/ember-isle/scores.txt",
+    "highScoreFormat": "table"
+  },
+  {
+    "id": "nova-lancer",
+    "name": "Nova Lancer",
+    "description": "A four-colour CGA vertical shoot-'em-up. Four stages, multi-phase bosses, three weapons and smart bombs; chain kills for a score multiplier up to x8.",
+    "controls": [
+      ["Arrows / WASD", "Move"],
+      ["Space / Z / X / J / Ctrl", "Fire (hold)"],
+      ["B / C", "Smart bomb"],
+      ["P", "Pause"],
+      ["Esc", "Quit to title"],
+      ["M / F2 / F11", "Mute / CRT filter / fullscreen"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/nova-lancer",
+    "cover": "/usr/share/forge-games/covers/nova-lancer.png",
+    "highScoreFile": "~/.local/share/doomedl/nova-lancer/scores.txt",
+    "highScoreFormat": "table"
+  },
+  {
+    "id": "deep-delve",
+    "name": "Deep Delve",
+    "description": "A DOS text-mode roguelike. Descend ten generated floors with unidentified potions and scrolls, and take the Hollow Star from the Hollow King. Death is permanent.",
+    "controls": [
+      ["Arrows / WASD / numpad", "Move or attack"],
+      ["Y U B N", "Diagonals"],
+      ["., 5, Space", "Wait a turn"],
+      ["R", "Rest until healed"],
+      ["G / ,", "Pick up"],
+      ["> / Enter on stairs", "Descend"],
+      ["I", "Inventory"],
+      ["T", "Throw or zap"],
+      ["L", "Message log"],
+      ["Esc", "Quit to title"]
+    ],
+    "needsGpu": false,
+    "exec": "/usr/bin/deep-delve",
+    "cover": "/usr/share/forge-games/covers/deep-delve.png",
+    "highScoreFile": "~/.local/share/doomedl/deep-delve/scores.txt",
+    "highScoreFormat": "table"
+  }
+]

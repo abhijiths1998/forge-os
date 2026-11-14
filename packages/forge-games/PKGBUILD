@@ -1,0 +1,105 @@
+# forge-games: the user's own C11/SDL2 games, packaged for Forge OS
+# (github.com/abhijiths1998/games). Forge Arcade (apps/forge-arcade) lists them.
+pkgname=forge-games
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Ten small SDL2 games (Port Calder, Hardlight, Bramble Bound and more) for Forge Arcade"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/games"
+license=('custom')
+# mesa: Port Calder and Hardlight link libGL (OpenGL 3.3). The rest are
+# software-rendered SDL2.
+depends=('sdl2' 'mesa')
+# imagemagick turns the games' own BMP screenshots into covers; jq checks
+# games.json. Nothing here needs the network or a GPU after the clone.
+makedepends=('git' 'gcc' 'make' 'pkgconf' 'imagemagick' 'jq')
+options=('!debug')
+source=("games::git+https://github.com/abhijiths1998/games.git#commit=2a19cdc3235380d5453fd41eede6b940ee4a054c"
+        'games.json')
+sha256sums=('SKIP'
+            'SKIP')
+
+# name:directory:cover screenshot:needs a GPU (the cover screenshot comes from
+# the game's own --selftest, which renders real frames headless)
+_games=(
+    'port-calder:port-calder:07_golden_gate:1'
+    'hardlight:hardlight:combat:1'
+    'bramble-bound:bramble-bound:level1:0'
+    'orbit-golf:orbit-golf:play:0'
+    'prism-smash:prism-smash:play:0'
+    'lumen-drift:lumen-drift:play:0'
+    'relic-runner:vintage/relic-runner:level1:0'
+    'ember-isle:vintage/ember-isle:play_day:0'
+    'nova-lancer:vintage/nova-lancer:stage1_play:0'
+    'deep-delve:vintage/deep-delve:play_depth2:0'
+)
+
+build() {
+    cd "${srcdir}/games"
+    local g name dir shot gpu shots
+    for g in "${_games[@]}"; do
+        IFS=: read -r name dir shot gpu <<<"${g}"
+        make -C "${dir}"
+
+        # Cover art: run the game's own self-test headless (no display, no
+        # sound card) and keep one frame. Mesa's llvmpipe stands in for the GPU
+        # in the two OpenGL games. A throwaway data dir keeps it away from saves.
+        shots="${srcdir}/shots/${name}"
+        mkdir -p "${shots}" "${srcdir}/xdg"
+        (
+            cd "${dir}"
+            export SDL_VIDEODRIVER=offscreen SDL_AUDIODRIVER=dummy
+            export LIBGL_ALWAYS_SOFTWARE=1 XDG_DATA_HOME="${srcdir}/xdg"
+            timeout 600 "./${name}" --selftest "${shots}" >"${srcdir}/${name}-selftest.log" 2>&1
+        ) || echo "warning: ${name} self-test failed, cover falls back to a plain card"
+        # 320x200 games are scaled with a point filter so the pixels stay
+        # square; the rest are cropped to 8:5 from the middle.
+        local filter=()
+        [[ ${dir} == vintage/* ]] && filter=(-filter point)
+        if [[ -f ${shots}/${shot}.bmp ]]; then
+            magick "${shots}/${shot}.bmp" "${filter[@]}" -resize '640x400^' \
+                -gravity center -extent 640x400 "${srcdir}/${name}.png"
+        else
+            magick -size 640x400 gradient:'#1b2a4a-#0b0f1a' "${srcdir}/${name}.png"
+        fi
+    done
+    jq -e 'length == 10' "${srcdir}/games.json" >/dev/null
+}
+
+package() {
+    local g name dir shot gpu app
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    install -Dm644 "${srcdir}/games.json" "${pkgdir}/usr/share/${pkgname}/games.json"
+    for g in "${_games[@]}"; do
+        IFS=: read -r name dir shot gpu <<<"${g}"
+        install -Dm755 "${srcdir}/games/${dir}/${name}" "${pkgdir}/usr/lib/${pkgname}/${name}"
+        install -Dm644 "${srcdir}/${name}.png" "${pkgdir}/usr/share/${pkgname}/covers/${name}.png"
+
+        # /usr/bin/<name> is a wrapper that names the window. SDL would
+        # otherwise give every game the same class, and the session's game
+        # rules (rules.lua) match on the class being the game's name.
+        cat >"${pkgdir}/usr/bin/${name}" <<WRAP
+#!/bin/sh
+export SDL_APP_ID=${name} SDL_VIDEO_WAYLAND_WMCLASS=${name} SDL_VIDEO_X11_WMCLASS=${name}
+exec /usr/lib/${pkgname}/${name} "\$@"
+WRAP
+        chmod 755 "${pkgdir}/usr/bin/${name}"
+
+        # The games' own .desktop.in, with the real path (their Makefiles would
+        # bake in the build directory) and the Forge Arcade category.
+        app="${pkgdir}/usr/share/applications/${name}.desktop"
+        install -d "${pkgdir}/usr/share/applications"
+        sed -e "s|@BIN@|/usr/bin/${name}|" \
+            -e 's|^Categories=.*|Categories=Game;ArcadeGame;|' \
+            "${srcdir}/games/${dir}/${name}.desktop.in" >"${app}"
+        {
+            echo "StartupWMClass=${name}"
+            echo "X-Forge-Arcade=true"
+            if [[ ${gpu} == 1 ]]; then
+                echo "# Needs a GPU with OpenGL 3.3."
+                echo "X-Forge-Needs-GPU=true"
+            fi
+        } >>"${app}"
+        chmod 644 "${app}"
+    done
+}
