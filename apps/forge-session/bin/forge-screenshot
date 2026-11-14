@@ -7,7 +7,11 @@ set -euo pipefail
 
 mode="${1:-area}"
 if command -v forge-shot >/dev/null 2>&1 && forge-shot --hyprland-ready >/dev/null 2>&1; then
-    exec forge-shot "${mode}"
+    case "${mode}" in
+        area) exec forge-shot region ;;
+        screen) exec forge-shot full ;;
+        window) exec forge-shot window ;;
+    esac
 fi
 
 pictures="$(xdg-user-dir PICTURES 2>/dev/null || echo "${HOME}/Pictures")"

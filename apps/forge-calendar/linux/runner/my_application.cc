@@ -5,6 +5,8 @@
 // Closing the window hides it; "Quit" in the dock or `pkill` ends it.
 #include "my_application.h"
 
+#include "../../../forge_ui/linux/forge_titlebar.h"
+
 #include <flutter_linux/flutter_linux.h>
 
 #include <cstring>
@@ -46,6 +48,8 @@ static void create_window(MyApplication* self) {
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(self)));
   self->window = window;
   gtk_window_set_title(window, "Forge Calendar");
+  // A glass title bar: Hyprland draws none.
+  forge_add_titlebar(window, "Forge Calendar");
   gtk_window_set_icon_name(window, "x-office-calendar");
   gtk_window_set_default_size(window, 1180, 760);
   GdkVisual* visual = gdk_screen_get_rgba_visual(gtk_window_get_screen(window));

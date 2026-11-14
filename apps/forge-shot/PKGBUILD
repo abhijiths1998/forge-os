@@ -1,6 +1,6 @@
 # Forge Shot: the screenshot tool. Pick an area on the frozen screen, a
 # window or the whole screen; then copy it, save it, mark it up or copy the
-# text in it (Flutter, GTK runner; screenshots through KWin's ScreenShot2).
+# text in it (Flutter, GTK runner; screenshots through grim on Hyprland).
 # Built from this directory by apps/build-packages.sh during the ISO build.
 pkgname=forge-shot
 pkgver=1.0.0
@@ -10,9 +10,9 @@ arch=('x86_64')
 url="https://github.com/abhijiths1998/forge-os"
 license=('GPL-3.0-or-later')
 # Plus Jakarta Sans ships in /usr/share/fonts with the ISO, not as a package.
-depends=('gtk3' 'glib2' 'gtk-layer-shell' 'wl-clipboard' 'tesseract' 'tesseract-data-eng'
+depends=('gtk3' 'glib2' 'gtk-layer-shell' 'wl-clipboard' 'grim' 'slurp' 'jq' 'tesseract' 'tesseract-data-eng'
          'xdg-user-dirs')
-optdepends=('kdialog: Save as…' 'dolphin: Show in folder')
+
 makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
 options=('!strip' '!debug')
 

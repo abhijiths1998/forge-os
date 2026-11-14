@@ -127,9 +127,14 @@ class _ShotAppState extends State<ShotApp> {
   Future<void> _showInFolder() async {
     final f = _saved;
     if (f == null) return;
-    try {
-      await Process.start('dolphin', ['--select', f.path], mode: ProcessStartMode.detached);
-    } on ProcessException {
+    // The file manager, with the file selected (FileManager1: Forge Files
+    // and most others answer it); else just its folder.
+    final shown = await Process.run('gdbus', [
+      'call', '--session', '--dest', 'org.freedesktop.FileManager1',
+      '--object-path', '/org/freedesktop/FileManager1',
+      '--method', 'org.freedesktop.FileManager1.ShowItems', "['${f.uri}']", '',
+    ]).catchError((_) => ProcessResult(0, 1, '', ''));
+    if (shown.exitCode != 0) {
       await Process.start('xdg-open', [f.parent.path], mode: ProcessStartMode.detached);
     }
     await _quit();
