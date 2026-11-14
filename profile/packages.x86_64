@@ -280,6 +280,10 @@ forge-settings
 forge-wallpapers
 awww
 
+# Forge Code (packages/forge-code): Neovim with Forge's offline config.
+neovim
+forge-code
+
 # Forge Thermal (apps/forge-thermal): the app for forge-thermal's cooling
 # profiles and firmware limits.
 forge-thermal
