@@ -5,6 +5,12 @@ all in. Each release has one theme, and the plumbing a later release needs
 lands first. `docs/ROADMAP.md` keeps the detail and the history of what was
 built; this file is the plan.
 
+**Moving to Hyprland (2026-11-14, proposed).** Forge OS is moving from KDE
+Plasma to Hyprland with a Quickshell shell. The audit, the design and a
+proposed renumbering (Hyprland as 3.0, the 2.x line frozen, the releases
+below moving to 3.x) are in `docs/HYPRLAND.md`, waiting for approval. This
+table is rewritten once it's approved.
+
 A release is done when its ISO is built, installed in QEMU and on real
 hardware, and every feature in it has been tried on the installed system,
 not only in the live session or on the dev machine.
