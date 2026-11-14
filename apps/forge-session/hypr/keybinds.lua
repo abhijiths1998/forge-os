@@ -11,8 +11,10 @@ local snap = require(forge.dir .. "/lib/snap.lua")
 local SUPER = "SUPER"
 
 -- Forge's shell (forge-shell) draws the bar, panels and pickers; its keys
--- only exist when it's installed, so every shortcut listed works.
-local function shell(action) return exec("forge-shell " .. action) end
+-- only exist when it's installed, so every shortcut listed works. They're
+-- global shortcuts ("forge:<name>"), which reach the shell at once and tell
+-- it when a key is let go.
+local function shell(action) return hl.dsp.global("forge:" .. action) end
 local SHELL = has("forge-shell")
 
 -- Apps ----------------------------------------------------------------------
@@ -40,8 +42,9 @@ if SHELL then
     bind("Shell", "SUPER + V", "Clipboard history", shell("clipboard"))
     bind("Shell", "SUPER + period", "Emoji picker", shell("emoji"))
     bind("Shell", "SUPER + Tab", "Overview of workspaces", shell("overview"))
-    bind("Shell", "SUPER + SHIFT + K", "Show or hide the shortcut panel", shell("shortcuts-panel"))
-    -- Hold Super for half a second: what each next key does.
+    bind("Shell", "SUPER + SHIFT + K", "Show or hide the shortcut panel", shell("shortcutsPanel"))
+    -- Hold Super for half a second: what each next key does (gone when Super
+    -- is let go).
     bind("Shell", "SUPER + Super_L", "Hold for a list of shortcuts", shell("whichkey"),
         { long_press = true })
 else
@@ -66,8 +69,11 @@ bind("Windows", "SUPER + T", "Float or tile this window", hl.dsp.window.float({ 
 bind("Windows", "SUPER + SHIFT + T", "Tiling on or off for this workspace", function() forge.tiling.toggle() end)
 bind("Windows", "SUPER + P", "Keep on top of every workspace", hl.dsp.window.pin({ action = "toggle" }))
 if SHELL then
-    bind("Windows", "ALT + Tab", "Switch windows", shell("switcher next"))
-    bind("Windows", "ALT + SHIFT + Tab", "Switch windows, backwards", shell("switcher previous"))
+    bind("Windows", "ALT + Tab", "Switch windows", shell("switcherNext"))
+    bind("Windows", "ALT + SHIFT + Tab", "Switch windows, backwards", shell("switcherPrevious"))
+    -- Letting go of Alt picks the window the switcher shows.
+    bind("Windows", "ALT + Alt_L", "Pick the window (let go of Alt)", shell("switcherCommit"),
+        { release = true })
 else
     bind("Windows", "ALT + Tab", "Switch windows", function()
         hl.dispatch(hl.dsp.window.cycle_next({ next = true }))
@@ -132,7 +138,12 @@ bind("Screenshots", "SUPER + ALT + R", "Start or stop screen recording", exec("f
 
 -- System --------------------------------------------------------------------
 bind("System", "SUPER + L", "Lock the screen", exec("loginctl lock-session"))
-bind("System", "CTRL + ALT + Delete", "Power menu", exec("forge-power-menu"))
+if SHELL then
+    bind("System", "CTRL + ALT + Delete", "Power menu", shell("power"))
+    bind("System", "Caps_Lock", "Show Caps Lock on screen", shell("capsLock"), { non_consuming = true })
+else
+    bind("System", "CTRL + ALT + Delete", "Power menu", exec("forge-power-menu"))
+end
 bind("System", "SUPER + SHIFT + N", "Do not disturb on or off", exec("forged set dnd toggle"))
 bind("System", "SUPER + SHIFT + Escape", "Restart the shell", exec("forge-shell restart"))
 
@@ -142,8 +153,10 @@ bind("Media", "XF86AudioRaiseVolume", "Volume up", exec("wpctl set-volume -l 1.5
 bind("Media", "XF86AudioLowerVolume", "Volume down", exec("wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"), hw)
 bind("Media", "XF86AudioMute", "Mute", exec("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"), { locked = true })
 bind("Media", "XF86AudioMicMute", "Mute the microphone", exec("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"), { locked = true })
-bind("Media", "XF86MonBrightnessUp", "Brightness up", exec("brightnessctl -e4 -n2 set 5%+"), hw)
-bind("Media", "XF86MonBrightnessDown", "Brightness down", exec("brightnessctl -e4 -n2 set 5%-"), hw)
+-- Brightness goes through forged (logind), so the shell's display shows it
+-- at once; brightnessctl if forged isn't there.
+bind("Media", "XF86MonBrightnessUp", "Brightness up", exec("forged set brightness +5 || brightnessctl -e4 -n2 set 5%+"), hw)
+bind("Media", "XF86MonBrightnessDown", "Brightness down", exec("forged set brightness -5 || brightnessctl -e4 -n2 set 5%-"), hw)
 bind("Media", "XF86KbdBrightnessUp", "Keyboard light up", exec("brightnessctl -d '*::kbd_backlight' set 33%+"), hw)
 bind("Media", "XF86KbdBrightnessDown", "Keyboard light down", exec("brightnessctl -d '*::kbd_backlight' set 33%-"), hw)
 local media = { locked = true }

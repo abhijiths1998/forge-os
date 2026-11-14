@@ -22,14 +22,7 @@ WORK_DIR="${FORGE_WORK_DIR:-$REPO_ROOT/work}"
 OUT_DIR="${FORGE_OUT_DIR:-$REPO_ROOT/out}"
 
 build_image() {
-    # Arch's current kwin version: a change re-runs the Containerfile step
-    # that builds kwin-effects-glass, which must match KWin exactly.
-    local kwin_version
-    kwin_version="$(curl -fsSL https://archlinux.org/packages/extra/x86_64/kwin/json/ \
-        | python3 -c 'import json, sys; d = json.load(sys.stdin); print("%s:%s-%s" % (d["epoch"], d["pkgver"], d["pkgrel"]))' \
-        || echo unknown)"
-    docker build -t "$IMAGE_NAME" --build-arg KWIN_VERSION="$kwin_version" \
-        -f "$REPO_ROOT/build/Containerfile" "$REPO_ROOT/build"
+    docker build -t "$IMAGE_NAME" -f "$REPO_ROOT/build/Containerfile" "$REPO_ROOT/build"
 }
 
 fix_ownership() {
@@ -67,7 +60,7 @@ case "$cmd" in
         # same container run, so mkarchiso finds them there.
         # Named volume for pacman's package cache: each `docker run --rm` is
         # a fresh container, so without this every retry re-downloads the
-        # entire (large: KDE + gaming stack) package set from scratch.
+        # entire (large: desktop + gaming stack) package set from scratch.
         docker run --rm --privileged \
             -v "$REPO_ROOT:/build" \
             -v "$WORK_DIR:/work" \

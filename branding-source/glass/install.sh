@@ -27,8 +27,6 @@ install -Dm644 "${out}/wallpaper-dark-1920x1080.png" "${fs}/backgrounds/forge-os
 # Logos.
 install -Dm644 "${out}/emblem-gradient.png" "${fs}/pixmaps/forge-os-emblem.png"
 resize "${out}/logo-tile-light.png" "${fs}/pixmaps/forge-os-logo-tile.png" 512
-mkdir -p "${fs}/plasma/look-and-feel/org.forgeos.glass/contents/splash/images"
-resize "${out}/logo-tile-light.png" "${fs}/plasma/look-and-feel/org.forgeos.glass/contents/splash/images/logo.png" 384
 resize "${out}/logo-tile-light.png" "${fs}/sddm/themes/forge-glass/logo.png" 192
 
 # Plymouth.

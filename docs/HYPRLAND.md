@@ -637,3 +637,48 @@ Not verified yet: the ISO build, a QEMU install, the live session opening
 Calamares, and anything on the NVIDIA laptop's own session (NVIDIA env,
 explicit sync, VRR, suspend, hyprlock after resume, the touchpad gesture,
 the hardware keys).
+
+### M2: forge-shell (apps/forge-shell) and Plasma out
+
+Built and tested against Quickshell 0.3.2 and Hyprland 0.57.2.
+
+- **The shell**: the bar (Forge button, workspaces, window title, the
+  island with clock and now playing, mode badge, do-not-disturb badge, tray,
+  battery with the percentage inside, Wi-Fi, Bluetooth, sound, Control
+  Center button), the Wi-Fi, Bluetooth, sound and battery popups, the
+  Control Center, notifications (server, pop-ups, centre), OSDs, the desktop
+  shortcut panel, the Super+/ cheat sheet, the hold-Super popup, overview
+  with live previews, Alt+Tab with live previews, clipboard and emoji
+  pickers, and the power menu.
+- **Binds reach the shell as Hyprland global shortcuts**
+  (`hl.dsp.global("forge:<name>")` to Quickshell's `GlobalShortcut`), not a
+  process per key press. That gives key-release events for the hold-Super
+  popup and for Alt+Tab (an `ALT + Alt_L` release bind commits).
+- **forged** changed here rather than in M3, because the shell needs it:
+  brightness through sysfs and logind (polled once a second, since sysfs
+  can't be watched), dark from theme.json only, tiling from the shared
+  `tiling.json` for the focused workspace (Hyprland's event socket says
+  when that changes), do not disturb held by forged itself
+  (`~/.local/state/forge/dnd.json`), `toggle` and `+N`/`-N` values, `forged
+  watch`, and no crash without a system bus. The D-Bus API is unchanged.
+  `tests/test_forged.py` has 8 tests.
+- **Plasma is out of the ISO**: plasma-meta, the KDE apps, the KWin effects,
+  Darkly, Polonium, the KDE portal, plasma-nm, KWallet, the skel KDE files,
+  the look-and-feel and Plasma theme, the colour schemes, `forge-glass-check`,
+  and the KWin glass build in `build/Containerfile`. The Flutter Forge
+  Control panel and its Plasma widgets were retired (the Control Center is
+  in the shell now). Konsole stays until M5. The stopgap apps are in.
+
+Tests: `apps/forge-shell/tests/run.sh` runs the real shell with forged in
+Forge's Hyprland session (nested) and checks 11 things: it starts without
+QML errors, forged answers, Hyprland frosts its layers, notifications pop
+up, do not disturb holds them back, the cheat sheet opens, the clipboard
+history fills, a global shortcut opens the Control Center, Alt+Tab
+switches windows, and no QML errors after using everything. It also takes
+a screenshot of each panel and overlay. All pass.
+`build/check.sh qml` (qmllint) passes. Its warnings are mostly qmllint
+not knowing Quickshell's generated `qs.*` modules.
+
+Not verified: the shell on the laptop (real Wi-Fi, Bluetooth, PipeWire,
+UPower, backlight, tray apps), hold-Super's long press with a real
+keyboard, and the ISO.
