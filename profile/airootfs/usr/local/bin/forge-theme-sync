@@ -1,31 +1,28 @@
 #!/usr/bin/env python3
-"""forge-theme-sync: the Forge theme everywhere KDE's colour scheme doesn't reach.
+"""forge-theme-sync: the Forge theme everywhere.
 
   forge-theme-sync            bring everything in line with the Forge theme
   forge-theme-sync --status   what each place has now
+  forge-theme-sync --session  at login: everything but the login screen
   forge-theme-sync --no-login skip the login screen (it asks polkit)
 
-It runs after each theme change: the Theming Kit runs it (so `forge theme`
-and the Control Center's Dark switch do too), and forged runs it when KDE's
-colours change from anywhere else, System Settings included. Light or dark
-and the accent are what KDE shows now (kdeglobals: the window colour's
-lightness, the selection colour), so everything matches the screen;
-~/.config/forge/theme.json only fills in when kdeglobals has neither.
+The theme is ~/.config/forge/theme.json: the Theming Kit, `forge theme`,
+`forge glass` and the Control Center's dark switch write it, and forged runs
+this two seconds after it changes. Forge's own apps, the shell and Forge
+Code read theme.json themselves. This takes it to the rest:
 
-Already in step without this: Plasma, KDE and Qt apps, Forge's widgets
-(KDE's colour scheme); GTK 3 and 4 apps (KDE writes their colours.css);
-Firefox, Chromium/Brave, Electron apps and web pages' light/dark and accent
-(the freedesktop appearance portal, which KDE fills in); the Forge apps
-(theme.json). This adds:
-
+  hyprland  `hyprctl reload`: Hyprland's look.lua reads theme.json
+  gtk       GTK 3 and 4: Forge's colours (libadwaita's named colours, which
+            adw-gtk3 follows too), light/dark theme, icons, fonts, cursor,
+            and GNOME's settings that apps and the appearance portal read
+            (light/dark and accent for Firefox, Chromium, Electron, Flatpak)
+  qt        Qt 5 and 6 apps: a Forge Glass palette through qt5ct/qt6ct
   shell     ~/.config/forge/theme.sh: the zsh prompt's and `forge`'s colours
-  gnome     GNOME's light/dark and nearest named accent, for GTK apps that
-            read gsettings instead of the portal
-  flatpak   sandboxed apps may read the GTK colours KDE writes
-  login     the login screen's accent, light/dark and wallpaper
-            (forge-theme-login, through pkexec)
+  flatpak   sandboxed apps may read the GTK colours
+  login     the login screen's accent, light/dark (forge-theme-login, pkexec)
 """
 import colorsys
+import configparser
 import json
 import os
 import shutil
@@ -38,40 +35,34 @@ CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
 THEME = CONFIG / "forge/theme.json"
 SHELL = CONFIG / "forge/theme.sh"
 LOGIN = Path("/usr/share/sddm/themes/forge-glass/theme.conf.user")
+DEFAULTS = {"dark": True, "accent": "#7F8EF5"}
 # GNOME's named accents, by hue (slate is for greys).
 GNOME_ACCENTS = {"red": 0, "orange": 30, "yellow": 50, "green": 130, "teal": 180,
                  "blue": 215, "purple": 275, "pink": 330}
+FONT, MONO = "Plus Jakarta Sans", "JetBrainsMono Nerd Font"
+CURSOR = os.environ.get("XCURSOR_THEME", "Adwaita")
 
 
 def run(*cmd):
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, timeout=20)
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=20, check=False)
     except (OSError, subprocess.SubprocessError):
         return None
 
 
-def kde_colour(group, key):
-    """A kdeglobals colour ("r,g,b[,a]") as (r, g, b), or None."""
-    r = run("kreadconfig6", "--file", "kdeglobals", "--group", group, "--key", key)
-    try:
-        return tuple(int(x) for x in r.stdout.strip().split(",")[:3]) if r else None
-    except ValueError:
-        return None
-
-
 def theme():
-    """What the desktop shows now: KDE's colours, else the Forge theme file."""
+    """The Forge theme: theme.json, with Forge Glass for anything missing."""
     try:
-        t = json.loads(THEME.read_text())
-        saved = {"dark": bool(t.get("dark", True)), "accent": str(t.get("accent", "#7F8EF5")).upper()}
+        data = json.loads(THEME.read_text())
     except (OSError, ValueError):
-        saved = {"dark": True, "accent": "#7F8EF5"}
-    window = kde_colour("Colors:Window", "BackgroundNormal")
-    selection = kde_colour("Colors:Selection", "BackgroundNormal")
-    return {
-        "dark": colorsys.rgb_to_hls(*(c / 255 for c in window))[1] < 0.5 if window and len(window) == 3 else saved["dark"],
-        "accent": "#{:02X}{:02X}{:02X}".format(*selection) if selection and len(selection) == 3 else saved["accent"],
-    }
+        data = {}
+    t = dict(DEFAULTS)
+    if isinstance(data, dict):
+        if isinstance(data.get("dark"), bool):
+            t["dark"] = data["dark"]
+        if isinstance(data.get("accent"), str) and len(data["accent"].lstrip("#")) == 6:
+            t["accent"] = "#" + data["accent"].lstrip("#").upper()
+    return t
 
 
 def rgb(hex_colour):
@@ -84,6 +75,11 @@ def mix(hex_colour, other, amount):
     return "#{:02X}{:02X}{:02X}".format(*(round(x + (y - x) * amount) for x, y in zip(a, b)))
 
 
+def text_on(hex_colour):
+    r, g, b = rgb(hex_colour)
+    return "#16182E" if (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 else "#FFFFFF"
+
+
 def nearest_accent(hex_colour):
     r, g, b = (c / 255 for c in rgb(hex_colour))
     h, _, s = colorsys.rgb_to_hls(r, g, b)
@@ -93,7 +89,164 @@ def nearest_accent(hex_colour):
     return min(GNOME_ACCENTS, key=lambda n: min(abs(hue - GNOME_ACCENTS[n]), 360 - abs(hue - GNOME_ACCENTS[n])))
 
 
+def palette(t):
+    """Forge Glass's surfaces, light or dark, around the accent."""
+    if t["dark"]:
+        return {"window": "#1B1D2B", "view": "#161825", "header": "#22253A", "card": "#23263A",
+                "popover": "#24273C", "sidebar": "#191B28", "fg": "#F4F5FB", "dim": "#A3A7C2",
+                "border": "#33364D"}
+    return {"window": "#F4F5FB", "view": "#FFFFFF", "header": "#ECEEF8", "card": "#FFFFFF",
+            "popover": "#FFFFFF", "sidebar": "#ECEEF8", "fg": "#1F2236", "dim": "#5F6380",
+            "border": "#D9DCEB"}
+
+
+def write_if_changed(path, text):
+    """Write a file only when its contents change; True if it did."""
+    path = Path(path)
+    try:
+        if path.read_text() == text:
+            return False
+    except OSError:
+        pass
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".forge-tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+    return True
+
+
 # --- targets ---------------------------------------------------------------
+def hyprland(t):
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE") or not shutil.which("hyprctl"):
+        return "not in a Hyprland session"
+    r = run("hyprctl", "reload")
+    return "reloaded" if r and r.returncode == 0 else "couldn't reload"
+
+
+GTK_CSS = """/* Written by forge-theme-sync from ~/.config/forge/theme.json; it's
+   imported from gtk.css, so your own rules there still apply. */
+@define-color accent_color {accent};
+@define-color accent_bg_color {accent};
+@define-color accent_fg_color {on_accent};
+@define-color window_bg_color {window};
+@define-color window_fg_color {fg};
+@define-color view_bg_color {view};
+@define-color view_fg_color {fg};
+@define-color headerbar_bg_color {header};
+@define-color headerbar_fg_color {fg};
+@define-color headerbar_backdrop_color {window};
+@define-color sidebar_bg_color {sidebar};
+@define-color sidebar_fg_color {fg};
+@define-color card_bg_color {card};
+@define-color card_fg_color {fg};
+@define-color popover_bg_color {popover};
+@define-color popover_fg_color {fg};
+@define-color dialog_bg_color {popover};
+@define-color dialog_fg_color {fg};
+@define-color borders {border};
+"""
+IMPORT = '@import url("forge.css");'
+
+
+def gtk(t):
+    p = palette(t)
+    css = GTK_CSS.format(accent=t["accent"], on_accent=text_on(t["accent"]), **p)
+    changed = []
+    for version in ("gtk-3.0", "gtk-4.0"):
+        folder = CONFIG / version
+        if write_if_changed(folder / "forge.css", css):
+            changed.append(version)
+        main = folder / "gtk.css"
+        try:
+            current = main.read_text()
+        except OSError:
+            current = ""
+        if IMPORT not in current:
+            write_if_changed(main, IMPORT + "\n" + current)
+        settings = configparser.ConfigParser(interpolation=None)
+        settings.optionxform = str
+        settings.read(folder / "settings.ini")
+        if not settings.has_section("Settings"):
+            settings.add_section("Settings")
+        want = {"gtk-application-prefer-dark-theme": "true" if t["dark"] else "false",
+                "gtk-icon-theme-name": "WhiteSur-dark" if t["dark"] else "WhiteSur",
+                "gtk-font-name": f"{FONT} 11", "gtk-cursor-theme-name": CURSOR}
+        if version == "gtk-3.0":
+            want["gtk-theme-name"] = "adw-gtk3-dark" if t["dark"] else "adw-gtk3"
+        if any(settings.get("Settings", k, fallback=None) != v for k, v in want.items()):
+            for k, v in want.items():
+                settings.set("Settings", k, v)
+            with open(folder / "settings.ini", "w") as f:
+                settings.write(f, space_around_delimiters=False)
+    gnome_settings(t)
+    return ("updated " + ", ".join(changed)) if changed else "already in step"
+
+
+def gnome_settings(t):
+    """GNOME's interface settings: the GTK portal hands light/dark and the
+    accent to browsers, Electron and Flatpak apps from these."""
+    if not shutil.which("gsettings"):
+        return
+    want = {"color-scheme": "prefer-dark" if t["dark"] else "default",
+            "accent-color": nearest_accent(t["accent"]),
+            "gtk-theme": "adw-gtk3-dark" if t["dark"] else "adw-gtk3",
+            "icon-theme": "WhiteSur-dark" if t["dark"] else "WhiteSur",
+            "font-name": f"{FONT} 11", "document-font-name": f"{FONT} 11",
+            "monospace-font-name": f"{MONO} 11", "cursor-theme": CURSOR}
+    for key, value in want.items():
+        current = run("gsettings", "get", "org.gnome.desktop.interface", key)
+        if current is None or current.returncode != 0:
+            continue  # a key this GNOME schema doesn't have
+        if current.stdout.strip().strip("'") != value:
+            run("gsettings", "set", "org.gnome.desktop.interface", key, value)
+
+
+# Qt's palette roles, in the order qt5ct/qt6ct colour files list them.
+QT_ROLES = ["WindowText", "Button", "Light", "Midlight", "Dark", "Mid", "Text", "BrightText", "ButtonText",
+            "Base", "Window", "Shadow", "Highlight", "HighlightedText", "Link", "LinkVisited",
+            "AlternateBase", "NoRole", "ToolTipBase", "ToolTipText", "PlaceholderText", "Accent"]
+
+
+def qt(t):
+    p = palette(t)
+    accent, on = t["accent"], text_on(t["accent"])
+    role = {"WindowText": p["fg"], "Button": p["header"], "Light": mix(p["header"], "#FFFFFF", 0.15),
+            "Midlight": mix(p["header"], "#FFFFFF", 0.07), "Dark": mix(p["window"], "#000000", 0.35),
+            "Mid": p["border"], "Text": p["fg"], "BrightText": "#FFFFFF", "ButtonText": p["fg"],
+            "Base": p["view"], "Window": p["window"], "Shadow": "#000000", "Highlight": accent,
+            "HighlightedText": on, "Link": accent, "LinkVisited": mix(accent, p["fg"], 0.3),
+            "AlternateBase": p["card"], "NoRole": p["window"], "ToolTipBase": p["popover"],
+            "ToolTipText": p["fg"], "PlaceholderText": p["dim"], "Accent": accent}
+    active = ", ".join("#ff" + role[r].lstrip("#").lower() for r in QT_ROLES)
+    disabled = ", ".join("#ff" + (mix(role[r], p["window"], 0.55) if r in ("WindowText", "Text", "ButtonText")
+                                  else role[r]).lstrip("#").lower() for r in QT_ROLES)
+    scheme = f"[ColorScheme]\nactive_colors={active}\ndisabled_colors={disabled}\ninactive_colors={active}\n"
+    changed = False
+    for app in ("qt5ct", "qt6ct"):
+        folder = CONFIG / app
+        colours = folder / "colors/ForgeGlass.conf"
+        changed |= write_if_changed(colours, scheme)
+        conf = configparser.ConfigParser(interpolation=None)
+        conf.optionxform = str
+        conf.read(folder / f"{app}.conf")
+        for section in ("Appearance", "Fonts"):
+            if not conf.has_section(section):
+                conf.add_section(section)
+        want = {("Appearance", "color_scheme_path"): str(colours), ("Appearance", "custom_palette"): "true",
+                ("Appearance", "style"): "Fusion",
+                ("Appearance", "icon_theme"): "WhiteSur-dark" if t["dark"] else "WhiteSur",
+                ("Fonts", "general"): f'"{FONT},10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"',
+                ("Fonts", "fixed"): f'"{MONO},10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"'}
+        if any(conf.get(s, k, fallback=None) != v for (s, k), v in want.items()):
+            for (s, k), v in want.items():
+                conf.set(s, k, v)
+            folder.mkdir(parents=True, exist_ok=True)
+            with open(folder / f"{app}.conf", "w") as f:
+                conf.write(f, space_around_delimiters=False)
+            changed = True
+    return "Forge Glass palette" + (" written" if changed else ", already in step")
+
+
 def shell(t):
     """Colours for the zsh prompt and `forge`, in a file both shells can source."""
     dark, accent = t["dark"], t["accent"]
@@ -117,19 +270,6 @@ def shell(t):
     SHELL.parent.mkdir(parents=True, exist_ok=True)
     SHELL.write_text(text)
     return f"accent {accent}"
-
-
-def gnome(t):
-    if not shutil.which("gsettings"):
-        return "no gsettings"
-    want = {"color-scheme": "prefer-dark" if t["dark"] else "default", "accent-color": nearest_accent(t["accent"])}
-    for key, value in want.items():
-        current = run("gsettings", "get", "org.gnome.desktop.interface", key)
-        if current is None or current.returncode != 0:
-            continue  # an older GNOME schema without accent-color
-        if current.stdout.strip().strip("'") != value:
-            run("gsettings", "set", "org.gnome.desktop.interface", key, value)
-    return f"{want['color-scheme']}, accent {want['accent-color']}"
 
 
 def flatpak(t):
@@ -160,7 +300,7 @@ def login(t):
     return f"{mode}, accent {t['accent']}"
 
 
-TARGETS = {"shell": shell, "gnome": gnome, "flatpak": flatpak, "login": login}
+TARGETS = {"hyprland": hyprland, "gtk": gtk, "qt": qt, "shell": shell, "flatpak": flatpak, "login": login}
 
 
 def status(t):
@@ -187,7 +327,9 @@ def main(argv):
         status(t)
         return True
     for name, target in TARGETS.items():
-        if name == "login" and "--no-login" in argv:
+        if name == "login" and ("--no-login" in argv or "--session" in argv or "--hyprland" in argv):
+            continue
+        if name == "hyprland" and ("--session" in argv or "--hyprland" in argv):
             continue
         try:
             print(f"{name:8} {target(t)}")

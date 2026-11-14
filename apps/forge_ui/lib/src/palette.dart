@@ -163,10 +163,9 @@ class ForgePalette {
 
   factory ForgePalette.of(ForgeTheme theme) => ForgePalette._(ThemeColours(theme));
 
-  /// The desktop's current theme: the Theming Kit's if it was used, else
-  /// stock Forge Glass, light or dark as Plasma's colour scheme is.
-  static ForgePalette current() => ForgePalette.of(
-      ForgeTheme.current() ?? (_plasmaIsDark() ? forgeGlass : builtInThemes[1]));
+  /// The desktop's current theme: ~/.config/forge/theme.json, else stock
+  /// Forge Glass (dark).
+  static ForgePalette current() => ForgePalette.of(ForgeTheme.current() ?? forgeGlass);
 
   final ThemeColours colours;
 
@@ -176,7 +175,7 @@ class ForgePalette {
 
   Color _a(Color c, int alpha) => c.withAlpha(alpha.clamp(0, 255));
 
-  /// App window background: translucent, so KWin's Glass effect frosts it.
+  /// App window background: translucent, so Hyprland's blur frosts it.
   Color get window => _a(colours.tint(colours.base.window.$1), _alpha + 40);
 
   /// A floating card (the launcher): a little more solid than a window.
@@ -229,18 +228,6 @@ class ForgePalette {
       ),
     );
   }
-}
-
-/// Plasma's colour scheme is dark: the user's kdeglobals if they picked
-/// one, else the look-and-feel default.
-bool _plasmaIsDark() {
-  final home = Platform.environment['HOME'] ?? '';
-  final config = Platform.environment['XDG_CONFIG_HOME'] ?? '$home/.config';
-  for (final path in ['$config/kdeglobals', '$config/kdedefaults/kdeglobals']) {
-    final scheme = iniValue(path, 'General', 'ColorScheme');
-    if (scheme != null) return scheme.toLowerCase().contains('dark');
-  }
-  return true;
 }
 
 String? iniValue(String path, String group, String key) {

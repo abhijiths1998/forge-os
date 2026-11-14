@@ -53,6 +53,8 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
+# The launcher is a layer-shell surface on Hyprland.
+pkg_check_modules(LAYER_SHELL IMPORTED_TARGET gtk-layer-shell-0)
 
 # Application build; see runner/CMakeLists.txt.
 add_subdirectory("runner")

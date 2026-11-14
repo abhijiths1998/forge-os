@@ -68,7 +68,7 @@ class _LauncherAppState extends State<LauncherApp> {
       _selected = 0;
     });
     _resize();
-    // Files are slower (a Forge Mind or Baloo query): add them once typing
+    // Files are slower (a Forge Mind or file-name query): add them once typing
     // pauses, just above the web search row. A request of a few words then
     // gets a deeper look from the local model, if there is one, whose files
     // replace the first ones.
@@ -191,7 +191,7 @@ class _LauncherAppState extends State<LauncherApp> {
           decoration: BoxDecoration(
             color: p.surface,
             // No outline: the glass runs to the edge, like every window.
-            // The theme's window corners, which KWin rounds this window to.
+            // The theme's window corners.
             borderRadius: BorderRadius.circular(p.cornerRadius.toDouble()),
           ),
           child: Column(

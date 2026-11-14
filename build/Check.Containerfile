@@ -8,7 +8,7 @@ RUN pacman -Syu --noconfirm --needed \
         neovim lua luajit git base-devel \
         qemu-full edk2-ovmf socat jq imagemagick librsvg \
         weston sway foot grim wayland-utils mesa \
-        ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji unicode-emoji cliphist wl-clipboard wtype dbus libnotify \
+        ttf-jetbrains-mono-nerd noto-fonts noto-fonts-emoji unicode-emoji cliphist wl-clipboard wtype dbus libnotify gtk3 gtk-layer-shell adw-gtk-theme \
     && pacman -Scc --noconfirm
 
 # NVIDIA's userspace at the version the ISO pins, for headless Hyprland

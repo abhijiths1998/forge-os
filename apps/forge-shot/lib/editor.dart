@@ -230,14 +230,8 @@ class _EditorState extends State<Editor> {
   Future<void> _saveAs() async {
     _commitText();
     final start = '${(await Store.folder()).path}/${Store.fileName()}';
-    ProcessResult r;
-    try {
-      r = await Process.run('kdialog', ['--getsavefilename', start, 'image/png', '--title', 'Save screenshot']);
-    } on ProcessException {
-      return _say('Saving elsewhere needs kdialog');
-    }
-    final path = (r.stdout as String).trim();
-    if (r.exitCode != 0 || path.isEmpty) return;
+    final path = await Native.saveAs(start);
+    if (path == null || path.isEmpty) return;
     await File(path.endsWith('.png') ? path : '$path.png').writeAsBytes(await _png(), flush: true);
     _say('Saved to $path');
   }

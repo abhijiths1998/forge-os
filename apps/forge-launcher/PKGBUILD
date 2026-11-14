@@ -1,4 +1,5 @@
-# Forge Launcher: the Meta+Space command bar (Flutter, GTK runner).
+# Forge Launcher: the Super+Space command bar (Flutter, GTK runner, a
+# layer-shell surface on Hyprland).
 # Built from this directory by apps/build-packages.sh during the ISO build.
 pkgname=forge-launcher
 pkgver=1.0.0
@@ -8,7 +9,7 @@ arch=('x86_64')
 url="https://github.com/abhijiths1998/forge-os"
 license=('GPL-3.0-or-later')
 # Plus Jakarta Sans ships in /usr/share/fonts with the ISO, not as a package.
-depends=('gtk3' 'glib2' 'konsole' 'baloo')
+depends=('gtk3' 'glib2' 'gtk-layer-shell' 'xdg-terminal-exec')
 makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
 options=('!strip' '!debug')
 

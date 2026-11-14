@@ -682,3 +682,52 @@ not knowing Quickshell's generated `qs.*` modules.
 Not verified: the shell on the laptop (real Wi-Fi, Bluetooth, PipeWire,
 UPower, backlight, tray apps), hold-Super's long press with a real
 keyboard, and the ISO.
+
+### M3: the Forge apps without KDE (forged was done in M2)
+
+- **forge-theme-sync** now takes `theme.json` everywhere itself: Hyprland
+  (`hyprctl reload`), GTK 3 and 4 (an imported `forge.css` with
+  libadwaita's named colours, so a user's own `gtk.css` survives;
+  `settings.ini`; GNOME's interface settings, which the GTK portal hands to
+  browsers and Electron), Qt 5 and 6 (a 22-role Forge Glass palette through
+  qt5ct/qt6ct, Fusion style), the shell prompt, Flatpak and the login
+  screen. Files are only rewritten when they change. Kvantum was dropped in
+  favour of the qt6ct palette: no SVG theme to maintain.
+  `tests/test_theme_sync.py` has 4 tests.
+- **forge CLI**: `forge tile` drives forged (per workspace; `all on|off`
+  sets the default), `forge glass calm|liquid|bold` writes theme.json
+  presets, and `forge theme` works without Plasma.
+- **forge_ui**: the theme comes from theme.json only. Every Flutter app
+  window gets a transparent GTK header bar (`apps/forge_ui/linux/forge_titlebar.h`):
+  title, maximise, close, drag. That covers Store, Files, Theming Kit,
+  Thermal, Calendar and Forge Shot's editor.
+- **Theming Kit**: applies through theme.json and forge-theme-sync. The
+  lens sliders are now "Edge width" and "Edge light"; bevel, inner bending
+  and colour split are gone from the UI (themes keep their values).
+- **Launcher**: a layer-shell surface (`forge-launcher` namespace, overlay
+  layer, exclusive keyboard while it's up), commands in the user's terminal
+  (xdg-terminal-exec), power through logind and `forge-logout`, and file
+  names under home when Forge Mind isn't there (Baloo is gone). New action:
+  record the screen.
+- **Forge Shot**: grim captures (the focused screen, every screen, the
+  active window, or a window picked with a click through `slurp -r` over
+  Hyprland's window rectangles); GTK's save dialog for "Save as"; "Show in
+  folder" through `org.freedesktop.FileManager1`, else the folder. Recording
+  is `forge-record` (gpu-screen-recorder, NVENC/VA-API).
+- **Files**: "open terminal here" uses Forge Terminal or xdg-terminal-exec.
+- **Browser**: themed by the qt6ct palette.
+
+Not done in M3: Forge Files doesn't serve `org.freedesktop.FileManager1`
+yet, so "Show in folder" opens the folder. The Flutter Forge Terminal isn't
+ported, since M5 replaces it. The Launcher can't close on a click outside
+it (a layer surface with exclusive keyboard sees no focus-out), only on
+Escape.
+
+Tests for M3: `tests/test_theme_sync.py` (4) and `tests/test_forged.py` (8)
+pass in `build/check.sh`. In the nested Hyprland session, Forge Shot's grim
+captures (screen, every screen, active window) worked, and Forge Thermal
+opened floating with its new glass title bar. While checking that, an
+oversized window (980×800 on a 720-pixel-high screen) had its title bar
+off the top. forge-session now shrinks any new floating window that's
+bigger than its screen and centres it. All six changed Flutter apps pass
+`flutter analyze` and build.

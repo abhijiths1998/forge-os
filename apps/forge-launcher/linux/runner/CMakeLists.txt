@@ -23,4 +23,9 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 target_link_libraries(${BINARY_NAME} PRIVATE flutter)
 target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::GTK)
 
+if(LAYER_SHELL_FOUND)
+  target_link_libraries(${BINARY_NAME} PRIVATE PkgConfig::LAYER_SHELL)
+  target_compile_definitions(${BINARY_NAME} PRIVATE HAVE_LAYER_SHELL)
+endif()
+
 target_include_directories(${BINARY_NAME} PRIVATE "${CMAKE_SOURCE_DIR}")

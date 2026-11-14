@@ -3,7 +3,7 @@
 //   forge-shot [region]   capture the active screen, then pick a region of it
 //                         on a full-screen overlay showing that frozen image
 //   forge-shot full       the whole desktop, straight to the thumbnail
-//   forge-shot window     KWin asks for a click on a window, then the same
+//   forge-shot window     a click picks a window, then the same
 //   forge-shot edit FILE  the editor, in an ordinary window
 //   --delay N             wait N seconds first
 //
@@ -14,6 +14,8 @@
 // a normal window. Clipboard and capture go through the method channel
 // "forge/shot".
 #include "my_application.h"
+
+#include "../../../forge_ui/linux/forge_titlebar.h"
 
 #include <flutter_linux/flutter_linux.h>
 #ifdef HAVE_LAYER_SHELL
@@ -48,7 +50,7 @@ G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 // --- Clipboard ----------------------------------------------------------------
 // wl-copy keeps serving the clipboard after we quit; GTK's clipboard only
-// while we run (Plasma's clipboard history usually takes over).
+// while we run (the clipboard history keeps a copy after).
 
 static gboolean wl_copy(const char* type, const guint8* data, gsize length) {
   g_autofree gchar* wl_copy_path = g_find_program_in_path("wl-copy");
@@ -163,6 +165,26 @@ static void method_call_cb(FlMethodChannel*, FlMethodCall* call,
       response = FL_METHOD_RESPONSE(fl_method_error_response_new(
           "capture", error ? error->message : "no path", nullptr));
     }
+  } else if (strcmp(method, "saveAs") == 0) {
+    // GTK's own file chooser (the portal's when there is one).
+    const char* start = string_arg(args, "path");
+    GtkFileChooserNative* chooser = gtk_file_chooser_native_new(
+        "Save screenshot", self->window, GTK_FILE_CHOOSER_ACTION_SAVE, "_Save", "_Cancel");
+    GtkFileChooser* fc = GTK_FILE_CHOOSER(chooser);
+    gtk_file_chooser_set_do_overwrite_confirmation(fc, TRUE);
+    if (start != nullptr) {
+      g_autofree gchar* dir = g_path_get_dirname(start);
+      g_autofree gchar* name = g_path_get_basename(start);
+      gtk_file_chooser_set_current_folder(fc, dir);
+      gtk_file_chooser_set_current_name(fc, name);
+    }
+    g_autofree gchar* chosen = nullptr;
+    if (gtk_native_dialog_run(GTK_NATIVE_DIALOG(chooser)) == GTK_RESPONSE_ACCEPT) {
+      chosen = gtk_file_chooser_get_filename(fc);
+    }
+    g_object_unref(chooser);
+    response = FL_METHOD_RESPONSE(fl_method_success_response_new(
+        chosen != nullptr ? fl_value_new_string(chosen) : fl_value_new_null()));
   } else if (strcmp(method, "quit") == 0) {
     response = FL_METHOD_RESPONSE(fl_method_success_response_new(nullptr));
     fl_method_call_respond(call, response, nullptr);
@@ -189,6 +211,8 @@ static void create_window(MyApplication* self, const char* mode) {
   gtk_window_set_icon_name(window, "applets-screenshooter");
 
   if (editor) {
+    // A glass title bar: Hyprland draws none.
+    forge_add_titlebar(window, "Forge Shot");
     gtk_window_set_default_size(window, 1180, 780);
   } else {
     gtk_window_set_decorated(window, FALSE);
@@ -295,7 +319,7 @@ static gboolean my_application_local_command_line(GApplication* application,
                                                       : mode;
     g_autoptr(GError) error = nullptr;
     if (!forge_capture(what, path, &error)) {
-      // Cancelling KWin's window picker lands here too.
+      // Cancelling the window picker (Escape in slurp) lands here too.
       g_printerr("forge-shot: no screenshot (%s)\n", error->message);
       *exit_status = 1;
       return TRUE;

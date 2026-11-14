@@ -115,3 +115,21 @@ if s then
     T.workspaces = type(s.workspaces) == "table" and s.workspaces or {}
 end
 T.sync_rules()
+
+-- A floating window bigger than its screen (an app's default size on a
+-- small laptop panel) is shrunk to fit, with a margin, and centred, so its
+-- title bar is never off the top.
+hl.on("window.open", function(win)
+    if not win or not win.floating or not win.monitor then return end
+    local mon = win.monitor
+    local scale = mon.scale or 1
+    local r = mon.reserved or {}
+    local w = mon.width / scale - (r.left or 0) - (r.right or 0)
+    local h = mon.height / scale - (r.top or 0) - (r.bottom or 0)
+    local size = win.size or {}
+    if (size.x or 0) > w - 24 or (size.y or 0) > h - 24 then
+        hl.dispatch(hl.dsp.window.resize({ x = math.floor(math.min(size.x, w * 0.9)),
+                                           y = math.floor(math.min(size.y, h * 0.9)), window = win }))
+        hl.dispatch(hl.dsp.window.center({ window = win }))
+    end
+end)

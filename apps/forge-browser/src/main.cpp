@@ -1,7 +1,6 @@
 // Forge Browser: Forge OS's web browser. Qt WebEngine (Chromium) with
-// built-in ad and tracker blocking; Qt Widgets, so Darkly and the ForgeGlass
-// colours make its toolbar and tabs translucent glass like the rest of the
-// desktop.
+// built-in ad and tracker blocking; Qt Widgets, themed by forge-theme-sync's
+// Forge Glass palette (qt6ct) like every Qt app on the desktop.
 //
 // One process per user: `forge-browser URL...` from another app (or the
 // launcher) hands its URLs to the running browser over a local socket and

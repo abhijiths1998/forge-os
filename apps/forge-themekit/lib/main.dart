@@ -1,7 +1,8 @@
 // Forge Theming Kit: pick a theme or shape your own: colour (light/dark,
-// accent, glass tint), the liquid glass itself (blur, vibrancy, lens,
-// bevel, inner bending, colour split, grain), surface opacities and corner
-// radius. Glass and shape apply live as sliders move; colours on release.
+// accent, glass tint), the glass itself (blur, vibrancy, the lit edge,
+// grain), surface opacities and corner radius. Glass and shape apply live as
+// sliders move; colours on release. Hyprland has no refraction, so KWin's
+// bevel, inner bending and colour split are gone (themes keep the values).
 //
 //   forge-themekit                  the kit
 //   forge-themekit --apply <theme>  apply a built-in or saved theme (by id)
@@ -277,34 +278,16 @@ class _ThemeKitAppState extends State<ThemeKitApp> {
               onChanged: (v) => _edit(t.copyWith(saturation: v), glass: true),
             ),
             ForgeSlider(
-              palette: p, label: 'Lens width', value: t.lensWidth, min: 0, max: 4,
-              format: (v) => v == 0 ? 'Off' : '${(v * 10).round()} px',
-              hint: 'How far in from the edge the glass bends the background',
+              palette: p, label: 'Edge width', value: t.lensWidth, min: 0, max: 4,
+              format: (v) => v == 0 ? 'Off' : '${(v / 2).round().clamp(1, 3)} px',
+              hint: 'How wide the lit edge around each window is',
               onChanged: (v) => _edit(t.copyWith(lensWidth: v), glass: true),
             ),
             ForgeSlider(
-              palette: p, label: 'Lens strength', value: t.lensStrength.toDouble(), min: 0, max: 20,
-              divisions: 20,
-              hint: 'How much it bends',
-              onChanged: (v) => _edit(t.copyWith(lensStrength: v.round()), glass: true),
-            ),
-            ForgeSlider(
-              palette: p, label: 'Edge bevel', value: t.bevel.toDouble(), min: 5, max: 15,
-              divisions: 10,
-              hint: 'How rounded the glass edge is; high can look shaded',
-              onChanged: (v) => _edit(t.copyWith(bevel: v.round()), glass: true),
-            ),
-            ForgeSlider(
-              palette: p, label: 'Inner bending', value: t.innerBend.toDouble(), min: 0, max: 100,
-              divisions: 100, format: (v) => v == 0 ? 'Off' : '${v.round()}%',
-              hint: 'Bends the background across the pane too, not only at the edge',
-              onChanged: (v) => _edit(t.copyWith(innerBend: v.round()), glass: true),
-            ),
-            ForgeSlider(
-              palette: p, label: 'Colour split', value: t.colourSplit.toDouble(), min: 0, max: 20,
+              palette: p, label: 'Edge light', value: t.lensStrength.toDouble(), min: 0, max: 20,
               divisions: 20, format: (v) => v == 0 ? 'Off' : v.round().toString(),
-              hint: 'Prism-like red/blue fringes in the lens; off keeps edges clean',
-              onChanged: (v) => _edit(t.copyWith(colourSplit: v.round()), glass: true),
+              hint: 'How bright the edge catches the light',
+              onChanged: (v) => _edit(t.copyWith(lensStrength: v.round()), glass: true),
             ),
             ForgeSlider(
               palette: p, label: 'Grain', value: t.grain.toDouble(), min: 0, max: 14,

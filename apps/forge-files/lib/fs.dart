@@ -595,8 +595,8 @@ String? _desktopPath(String id) {
 Future<void> terminalHere(String dir) async {
   for (final (cmd, args) in [
     ('forge-terminal', ['--workdir', dir]),
-    ('konsole', ['--workdir', dir]),
-    ('kgx', ['--working-directory=$dir']),
+    ('xdg-terminal-exec', <String>[]),
+    ('foot', <String>[]),
     ('xterm', <String>[]),
   ]) {
     try {

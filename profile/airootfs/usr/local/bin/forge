@@ -9,7 +9,9 @@
 #                             Forge Glass light/dark (toggles if omitted), or any
 #                             Theming Kit theme; sync puts it on the login screen,
 #                             shell, GTK/GNOME and Flatpak apps too (status: where)
-#   forge tile [on|off]       Polonium auto-tiling (toggles if omitted)
+#   forge tile [on|off|all on|all off]
+#                             tiling for this workspace (toggles if omitted);
+#                             `all` sets it for every workspace
 #   forge glass [preset]      glass look: calm, liquid or bold (shows it if omitted)
 #   forge thermal [profile]   CPU/GPU clock profile (shows temps if omitted)
 #   forge find <request>      find files: "the pdf from march", "big videos"
@@ -60,38 +62,37 @@ pkg() { # pamac verb, pacman fallback args...
     fi
 }
 
-kwin_reconfigure() {
-    local q
-    for q in qdbus6 qdbus; do
-        if have "${q}"; then "${q}" org.kde.KWin /KWin reconfigure >/dev/null 2>&1; return; fi
-    done
+# A change to the Forge theme file (~/.config/forge/theme.json): keys and
+# values as JSON, merged in. forged sees the file change and runs
+# forge-theme-sync, which reloads Hyprland and themes GTK and Qt.
+THEME_JSON="${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.json"
+theme_set() {
+    python3 - "${THEME_JSON}" "$1" <<'PY'
+import json, sys
+from pathlib import Path
+path, change = Path(sys.argv[1]), json.loads(sys.argv[2])
+try:
+    theme = json.loads(path.read_text())
+except (OSError, ValueError):
+    theme = {"id": "forge-glass", "name": "Forge Glass"}
+theme.update(change)
+path.parent.mkdir(parents=True, exist_ok=True)
+tmp = path.with_suffix(".tmp")
+tmp.write_text(json.dumps(theme, indent=2) + "\n")
+tmp.replace(path)
+PY
+    have forge-theme-sync && forge-theme-sync --no-login >/dev/null 2>&1
 }
 
-# Glass looks: settings for KWin's Glass effect ([Effect-blurplus] in
-# kwinrc). They differ in how much the background bends near the edges: calm
-# is plain frosted glass with only a hint of it, liquid (the default, as in
-# /etc/skel/.config/kwinrc) bends it gently, bold more, and inside the pane
-# too. None draws a coloured border: the glass runs right to the edge.
+# Glass looks, in the Theming Kit's terms (theme.json). Hyprland has no
+# refraction, so the lens shows as a lit edge (forge-session's theme.lua):
+# calm is plain frosted glass with the faintest edge, liquid (the default)
+# a gentle one, bold a brighter one and a stronger blur.
 declare -A GLASS=(
-    [calm]="BlurStrength=11 DecorationBlurStrength=11 DockBlurStrength=11 Saturation=1.8
-            RefractionEdgeSize=1.2 RefractionStrength=5 RefractionBevelIntensity=5
-            RefractionRGBFringing=0 BodyRefraction=false RimSpecular=false"
-    [liquid]="BlurStrength=7 DecorationBlurStrength=7 DockBlurStrength=8 Saturation=1.7
-              RefractionEdgeSize=2.5 RefractionStrength=10 RefractionBevelIntensity=7
-              RefractionRGBFringing=0 BodyRefraction=false RimSpecular=false"
-    [bold]="BlurStrength=6 DecorationBlurStrength=6 DockBlurStrength=8 Saturation=1.7
-            RefractionEdgeSize=3 RefractionStrength=12 RefractionBevelIntensity=8
-            RefractionRGBFringing=0 BodyRefraction=true BodyRefractionReach=30
-            BodyRefractionStrength=12 RimSpecular=false"
+    [calm]='{"glassPreset": "calm", "blur": 11, "saturation": 1.8, "lensWidth": 1.2, "lensStrength": 5}'
+    [liquid]='{"glassPreset": "liquid", "blur": 7, "saturation": 1.7, "lensWidth": 2.5, "lensStrength": 10}'
+    [bold]='{"glassPreset": "bold", "blur": 6, "saturation": 1.9, "lensWidth": 3, "lensStrength": 14}'
 )
-
-# Reload the Glass effect so new settings show at once.
-glass_reload() {
-    have qdbus6 || return
-    qdbus6 org.kde.KWin /KWin reconfigure >/dev/null 2>&1
-    qdbus6 org.kde.KWin /Effects unloadEffect glass >/dev/null 2>&1
-    qdbus6 org.kde.KWin /Effects loadEffect glass >/dev/null 2>&1
-}
 
 usage() {
     cat <<EOF
@@ -102,7 +103,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}update${OFF}              update everything ${GREY}(packages + Flatpaks)${OFF}
   ${PERI}search${OFF} <query>      find packages
   ${PERI}theme${OFF} [light|dark|name] switch the look ${GREY}(list; sync and status: everywhere else)${OFF}
-  ${PERI}tile${OFF} [on|off]       auto-tiling windows
+  ${PERI}tile${OFF} [on|off|all ..] tiling for this workspace ${GREY}(all on|off: every one)${OFF}
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
   ${PERI}find${OFF} <request>       find files ${GREY}("the pdf from march", "big videos")${OFF}
@@ -154,9 +155,6 @@ case "${cmd}" in
             if [[ -z "${want}" ]]; then
                 grep -q '"dark": false' "${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.json" 2>/dev/null \
                     && want=dark || want=light
-                [[ -f "${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.json" ]] || {
-                    [[ "$(kreadconfig6 --file kdeglobals --group General --key ColorScheme)" == *Light* ]] \
-                        && want=dark || want=light; }
             fi
             case "${want}" in
                 light) want=forge-glass-light ;;
@@ -167,18 +165,16 @@ case "${cmd}" in
             ok "theme ${want}"
             exit 0
         fi
-        have plasma-apply-lookandfeel || fail "needs a Plasma session"
-        current="$(kreadconfig6 --file kdeglobals --group KDE --key LookAndFeelPackage 2>/dev/null)"
+        # Without the Theming Kit: Forge Glass, light or dark.
         want="${1:-}"
         if [[ -z "${want}" ]]; then
-            [[ "${current}" == "org.forgeos.glass.dark" ]] && want=light || want=dark
+            grep -q '"dark": false' "${THEME_JSON}" 2>/dev/null && want=dark || want=light
         fi
         case "${want}" in
-            light) lnf=org.forgeos.glass ;;
-            dark)  lnf=org.forgeos.glass.dark ;;
-            *) fail "theme is ${PERI}light${OFF} or ${PERI}dark${OFF}" ;;
+            light) theme_set '{"dark": false, "accent": "#6C7CF0"}' ;;
+            dark)  theme_set '{"dark": true, "accent": "#7F8EF5"}' ;;
+            *) fail "theme is ${PERI}light${OFF} or ${PERI}dark${OFF} (the Theming Kit has the rest)" ;;
         esac
-        plasma-apply-lookandfeel -a "${lnf}" >/dev/null || fail "couldn't apply ${lnf}"
         ok "Forge Glass ${want}"
         ;;
     thermal|temp)
@@ -198,33 +194,35 @@ case "${cmd}" in
         fi
         ;;
     tile)
-        have kwriteconfig6 || fail "needs a Plasma session"
-        current="$(kreadconfig6 --file kwinrc --group Plugins --key poloniumEnabled --default false)"
-        want="${1:-}"
-        if [[ -z "${want}" ]]; then
-            [[ "${current}" == "true" ]] && want=off || want=on
-        fi
-        case "${want}" in
-            on)  kwriteconfig6 --file kwinrc --group Plugins --key poloniumEnabled true ;;
-            off) kwriteconfig6 --file kwinrc --group Plugins --key poloniumEnabled false ;;
-            *) fail "tile is ${PERI}on${OFF} or ${PERI}off${OFF}" ;;
+        have forged || fail "forged is missing"
+        case "${1:-toggle}" in
+            on|off|toggle)
+                forged set tiling "${1:-toggle}" || exit 1
+                state="$(forged state | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiling"]; print(("on" if t["enabled"] else "off") + " for workspace " + str(t["workspace"]))')"
+                ok "tiling ${state}" ;;
+            all)
+                [[ "${2:-}" == on || "${2:-}" == off ]] || fail "forge tile all ${PERI}on${OFF}|${PERI}off${OFF}"
+                state_file="${XDG_STATE_HOME:-$HOME/.local/state}/forge/tiling.json"
+                python3 - "${state_file}" "$2" <<'PY'
+import json, sys
+from pathlib import Path
+path = Path(sys.argv[1])
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text(json.dumps({"default": sys.argv[2] == "on", "workspaces": {}}, indent=2) + "\n")
+PY
+                hyprctl eval 'forge.tiling.reload()' >/dev/null 2>&1
+                ok "tiling ${2} on every workspace" ;;
+            *) fail "tile is ${PERI}on${OFF}, ${PERI}off${OFF} or ${PERI}all on|off${OFF}" ;;
         esac
-        kwin_reconfigure
-        ok "tiling ${want}"
         ;;
     glass)
-        have kwriteconfig6 || fail "needs a Plasma session"
-        current="$(kreadconfig6 --file forgerc --group Glass --key preset --default liquid)"
+        current="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("glassPreset", "liquid"))' "${THEME_JSON}" 2>/dev/null || echo liquid)"
         if [[ $# -eq 0 ]]; then
             say "glass ${LILAC}${current}${OFF} ${GREY}(calm, liquid, bold)${OFF}"
             exit 0
         fi
         [[ -n "${GLASS[$1]:-}" ]] || fail "glass is ${PERI}calm${OFF}, ${PERI}liquid${OFF} or ${PERI}bold${OFF}"
-        for kv in ${GLASS[$1]}; do
-            kwriteconfig6 --file kwinrc --group Effect-blurplus --key "${kv%%=*}" "${kv#*=}"
-        done
-        kwriteconfig6 --file forgerc --group Glass --key preset "$1"
-        glass_reload
+        theme_set "${GLASS[$1]}"
         ok "glass $1"
         ;;
     find)

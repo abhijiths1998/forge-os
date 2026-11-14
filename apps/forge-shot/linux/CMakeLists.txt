@@ -53,7 +53,7 @@ add_subdirectory(${FLUTTER_MANAGED_DIR})
 # System-level dependencies.
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
-# File descriptors over D-Bus (KWin's screenshots come through a pipe).
+# GIO, for running grim and hyprctl.
 pkg_check_modules(GIO_UNIX REQUIRED IMPORTED_TARGET gio-unix-2.0)
 # The selection overlay and the thumbnail are layer-shell surfaces.
 pkg_check_modules(LAYER_SHELL IMPORTED_TARGET gtk-layer-shell-0)

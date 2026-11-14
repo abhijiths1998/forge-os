@@ -106,7 +106,7 @@ RUN grep -q "^\[chaotic-aur\]" /etc/pacman.conf \
     && pacman -Syu --noconfirm --needed \
         flutter-bin cmake ninja clang pkgconf gtk3 gtk-layer-shell pamac \
         qt6-base qt6-webengine glycin libjxl \
-        sdl2 mesa git make gcc neovim tree-sitter-cli \
+        sdl2 mesa imagemagick jq git make gcc neovim tree-sitter-cli \
         gtk4 vte4 gtk4-layer-shell meson \
         konsole extra-cmake-modules kdoctools \
     && pacman -Scc --noconfirm
