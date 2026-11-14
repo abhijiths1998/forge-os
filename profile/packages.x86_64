@@ -370,3 +370,24 @@ ollama-vulkan
 # (built from github.com/abhijiths1998/games by packages/forge-games)
 forge-games
 forge-arcade
+
+# Forge Code (packages/forge-code): Neovim with Forge's offline config, in
+# place of gnome-text-editor. Language servers are optional on purpose; these
+# are the ones Forge Code supports out of the box (docs/HYPRLAND.md, M8).
+forge-code
+ripgrep
+fd
+lua-language-server
+pyright
+ruff
+clang
+rust-analyzer
+bash-language-server
+shellcheck
+shfmt
+stylua
+prettier
+taplo-cli
+yaml-language-server
+vscode-json-languageserver
+marksman
