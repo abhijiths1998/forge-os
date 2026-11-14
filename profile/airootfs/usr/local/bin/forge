@@ -106,6 +106,7 @@ ${BOLD}forge${OFF} ${GREY}— one command for forge-os${OFF}
   ${PERI}tile${OFF} [on|off|all ..] tiling for this workspace ${GREY}(all on|off: every one)${OFF}
   ${PERI}glass${OFF} [preset]      glass look ${GREY}(calm, liquid, bold)${OFF}
   ${PERI}thermal${OFF} [profile]   CPU/GPU clock limits ${GREY}(silent, cool, balanced, performance)${OFF}
+  ${PERI}keys${OFF} [list|set <cat> <desc> <key>]  list or rebind shortcuts ${GREY}(writes ~/.config/hypr/keybinds.user.lua)${OFF}
   ${PERI}find${OFF} <request>       find files ${GREY}("the pdf from march", "big videos")${OFF}
   ${PERI}space${OFF} [cleanup]     what's using the disk, and what could go
   ${PERI}about${OFF}               this system, briefly
@@ -229,6 +230,100 @@ PY
         have forge-mind || fail "forge-mind is missing"
         [[ $# -gt 0 ]] || fail "find what?"
         forge-mind ask --deep "$@"
+        ;;
+    keys)
+        # List and rebind keybinds from hyprctl binds -j. A rebind writes
+        # ~/.config/hypr/keybinds.user.lua (loaded after keybinds.lua, so the
+        # user's overrides win) and reloads Hyprland's config. A key already
+        # in use is a conflict and is rejected.
+        case "${1:-}" in
+            list|'')
+                have hyprctl || fail "hyprctl isn't running"
+                hyprctl binds -j | python3 - <<'PY'
+import json, re, sys
+try:
+    binds = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+by_cat = {}
+for b in binds:
+    if not isinstance(b, dict): continue
+    desc = b.get('description') or ''
+    cat, text = 'Other', desc
+    m = re.match(r'^\[([^\]]+)\]\s*(.*)$', desc)
+    if m:
+        cat, text = m.group(1), m.group(2)
+    by_cat.setdefault(cat, []).append((text, b.get('keys') or ''))
+for cat in sorted(by_cat):
+    print(f'== {cat}')
+    for text, keys in by_cat[cat]:
+        print(f'  {keys:24}  {text}')
+    print()
+PY
+                ;;
+            set|rebind)
+                [[ $# -eq 3 ]] || fail "usage: forge keys set <category> <description> <new-key>"
+                want_cat="$1"; want_desc="$2"; newkey="$3"
+                have hyprctl || fail "hyprctl isn't running"
+                # Ask python to find the bind, check conflicts, and print
+                #   oldkey OK
+                # or
+                #   oldkey CONFLICT <owner-description>
+                # or exit 1 when there's no such bind.
+                result="$(hyprctl binds -j | python3 - "$want_cat" "$want_desc" "$newkey" <<'PY'
+import json, re, sys
+cat, desc, newkey = sys.argv[1], sys.argv[2], sys.argv[3]
+try:
+    binds = json.load(sys.stdin)
+except Exception:
+    sys.exit(1)
+for b in binds:
+    if not isinstance(b, dict): continue
+    d = b.get('description') or ''
+    m = re.match(r'^\[([^\]]+)\]\s*(.*)$', d)
+    if m and m.group(1) == cat and m.group(2) == desc:
+        old = b.get('keys') or ''
+        for b2 in binds:
+            if not isinstance(b2, dict): continue
+            k2 = b2.get('keys') or ''
+            if k2 == newkey and k2 != old:
+                d2 = b2.get('description') or ''
+                print(f'{old} CONFLICT {d2}')
+                sys.exit(0)
+        print(f'{old} OK')
+        sys.exit(0)
+sys.exit(1)
+PY
+)"
+                status="${result##* }"
+                oldkey="${result%% *}"
+                case "${status}" in
+                    CONFLICT)
+                        owner="${result#* }"; owner="${owner#* }"
+                        fail "keybind conflict: $newkey is already used by ${owner}"
+                        ;;
+                    OK)
+                        ;;
+                    *)
+                        fail "no such bind: [$want_cat] $want_desc"
+                        ;;
+                esac
+                hyprctl keyword unbind "${oldkey}" >/dev/null 2>&1 || true
+                hyprctl keyword bind "${newkey}" exec "${want_desc}" >/dev/null 2>&1 || true
+                mkdir -p "${XDG_CONFIG_HOME:-$HOME/.config}/hypr"
+                cat > "${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keybinds.user.lua" <<LUA
+-- Keybinds rewritten by Forge Settings (\`forge keys\`).
+-- Loaded after keybinds.lua, so these overrides win.
+hl.unbind("${oldkey}")
+hl.bind("${newkey}", hl.dsp.exec_cmd("${want_desc}"),
+    { description = "[${want_cat}] ${want_desc}" })
+LUA
+                hyprctl reload >/dev/null 2>&1 || true
+                ok "keybind [$want_cat] $want_desc is now $newkey"
+                ;;
+            *)
+                usage; exit 1 ;;
+        esac
         ;;
     space|disk)
         have forge-mind || fail "forge-mind is missing"

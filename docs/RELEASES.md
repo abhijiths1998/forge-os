@@ -16,7 +16,7 @@ not only in the live session or on the dev machine.
 | **3.0** | Hyprland: the session, forge-shell, every Forge app ported, one theme everywhere | M1–M3 | In progress |
 | 3.1 | Forge Arcade (Forge's games) and Forge Terminal + fastfetch | M4–M5 | Planned |
 | 3.2 | The Forge cast and Forge Wallpapers (was 2.2, living desktop) | M6 | Planned |
-| 3.3 | Forge Settings and the keybind editor (from the old 3.0) | M7 | Planned |
+| 3.3 | Forge Settings and the keybind editor (from the old 3.0) | M7 | In progress |
 | 3.4 | Forge Code, the Neovim distribution | M8 | Planned |
 | 3.5 | Onboarding: Welcome and Keyboard Dojo | M9 | Planned |
 | 3.6+ | Forge Assistant (was 2.3), safe updates and the Game Hub (2.4), Focus and the Dynamic Island (2.5) | — | Planned |
@@ -40,6 +40,13 @@ not only in the live session or on the dev machine.
   Hyprland, GTK, Qt, the terminal, Neovim, the login screen and fastfetch;
   Forge Shot on grim with recording; the `forge` CLI's tile, glass, theme
   and keys.
+- **M7, Forge Settings + keybind editor** (`apps/forge-settings`, Flutter on
+  `forge_ui`): displays, keyboard, mouse, default apps, startup, sound,
+  network/VPN (`nm-connection-editor` fallback), Bluetooth, users, about;
+  plus the shortcuts editor that rebinds any bind from `hyprctl binds -j`
+  with conflict detection, writing `~/.config/hypr/keybinds.user.lua`, and
+  the `forge keys` CLI equivalent. Config errors show as a readable
+  notification with file and line, never the raw red bar.
 
 ## The 2.x line (KDE, frozen)
 
