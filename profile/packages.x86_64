@@ -269,6 +269,17 @@ qt6-5compat
 wtype
 unicode-emoji
 
+# Forge Settings (apps/forge-settings, Flutter on forge_ui): displays,
+# keyboard, mouse, shortcuts with conflict detection, default apps, startup,
+# sound, network/VPN, Bluetooth, users, about. Writes keybinds.user.lua and
+# monitors.lua under ~/.config/hypr/.
+forge-settings
+
+# Forge Wallpapers (apps/forge-wallpapers, Flutter on forge_ui): the Forge
+# cast wallpaper grid and online source stubs; swww/awww integration.
+forge-wallpapers
+awww
+
 # Forge Thermal (apps/forge-thermal): the app for forge-thermal's cooling
 # profiles and firmware limits.
 forge-thermal

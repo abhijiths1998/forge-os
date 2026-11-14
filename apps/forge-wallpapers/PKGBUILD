@@ -1,0 +1,30 @@
+# Forge Wallpapers: Flutter wallpaper app on forge_ui. Shows the Forge cast
+# grid, online source stubs and daily rotation placeholders. Built from this
+# directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-wallpapers
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Wallpapers: cast wallpapers, online sources and daily rotation"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'glib2' 'awww')
+optdepends=('swww: animated wallpaper transitions')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    # Keep the whole icon font (Forge Shot found tree-shaking drops glyphs).
+    flutter build linux --release --no-tree-shake-icons
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-wallpapers" "${pkgdir}/usr/bin/forge-wallpapers"
+    install -Dm644 data/org.forgeos.wallpapers.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.wallpapers.desktop"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}
