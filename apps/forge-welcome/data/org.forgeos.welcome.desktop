@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Forge Welcome
+Comment=Forge OS first-boot choices and Keyboard Dojo shortcut tutorial
+Exec=forge-welcome
+Icon=org.forgeos.welcome
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;
