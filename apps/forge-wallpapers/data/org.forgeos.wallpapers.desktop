@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Forge Wallpapers
+Comment=Forge OS Wallpapers: cast wallpapers, online sources and daily rotation
+Exec=forge-wallpapers
+Icon=org.forgeos.wallpapers
+Terminal=false
+Type=Application
+Categories=Settings;DesktopSettings;
