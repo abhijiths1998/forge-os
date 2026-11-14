@@ -1,0 +1,10 @@
+[Unit]
+Description=Forge Mind: re-index home
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/forge-mind index
+# Background work: lowest CPU and I/O priority. It also waits out GameMode.
+Nice=19
+IOSchedulingClass=idle
+CPUSchedulingPolicy=idle

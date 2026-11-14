@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Shot
+GenericName=Screenshot
+Comment=Capture an area, a window or the whole screen, then mark it up, copy it or read its text
+# The Print keys are Hyprland binds (forge-session's keybinds.lua runs
+# forge-screenshot, which hands over to Forge Shot).
+Exec=forge-shot region
+Icon=applets-screenshooter
+Categories=Utility;
+Keywords=screenshot;screen;capture;snip;snipping;print;area;window;annotate;markup;ocr;text;
+StartupNotify=false
+Actions=full;window;
+
+[Desktop Action full]
+Name=Whole Screen
+Exec=forge-shot full
+
+[Desktop Action window]
+Name=A Window
+Exec=forge-shot window

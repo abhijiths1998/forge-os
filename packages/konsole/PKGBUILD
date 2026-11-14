@@ -1,0 +1,73 @@
+# Konsole with one fix, until KDE has it: open windows kept their
+# translucent background only until the desktop switched between a light
+# and a dark colour scheme. The new style that comes with the switch takes
+# WA_TranslucentBackground off Konsole's window, which only ever sets it
+# once, so every open terminal turned opaque (keep-translucency.patch puts
+# it back on style and palette changes).
+#
+# Arch's PKGBUILD otherwise (pkgrel 1.1: just above Arch's 26.08.2-1, so the
+# ISO gets this build; Arch's next Konsole replaces it on installed
+# systems). The source is pinned by its SHA-256; the .sig is left out
+# because the build container has no KDE signing keys.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=konsole
+pkgver=26.08.2
+pkgrel=1.1
+arch=(x86_64)
+url='https://apps.kde.org/konsole/'
+pkgdesc='KDE terminal emulator (Forge OS: keeps its translucency across light/dark switches)'
+license=(GPL-2.0-or-later
+         LGPL-2.0-or-later)
+groups=(kde-applications
+        kde-utilities)
+depends=(glibc
+         icu
+         kbookmarks
+         kcolorscheme
+         kconfig
+         kconfigwidgets
+         kcoreaddons
+         kcrash
+         kdbusaddons
+         kglobalaccel
+         kguiaddons
+         ki18n
+         kiconthemes
+         kio
+         knewstuff
+         knotifications
+         knotifyconfig
+         kparts
+         kpty
+         kservice
+         ktextwidgets
+         kwidgetsaddons
+         kwindowsystem
+         kxmlgui
+         libssh
+         libstdc++
+         libxkbcommon
+         qt6-base
+         qt6-multimedia
+         sh)
+makedepends=(extra-cmake-modules
+             kdoctools)
+optdepends=('keditbookmarks: to manage bookmarks')
+source=(https://download.kde.org/stable/release-service/$pkgver/src/$pkgname-$pkgver.tar.xz
+        keep-translucency.patch)
+sha256sums=('2154a03a952c29be435defffd4c88f9d2eff44a55cdfa33b16a8fc7bfd978217'
+            '06657342886b3919f9dd6c08a649110ef5e9ba533da35f66dd23eeb972d8b7fe')
+
+prepare() {
+  patch -d $pkgname-$pkgver -Np1 < keep-translucency.patch
+}
+
+build() {
+  cmake -B build -S $pkgname-$pkgver \
+    -DBUILD_TESTING=OFF
+  cmake --build build
+}
+
+package() {
+  DESTDIR="$pkgdir" cmake --install build
+}

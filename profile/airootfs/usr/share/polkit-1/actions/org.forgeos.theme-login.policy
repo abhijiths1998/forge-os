@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<!-- Lets the user at the machine give the login screen their desktop theme
+     (pkexec forge-theme-login <accent> <dark|light>) without a password, so
+     the Theming Kit can keep it in step. Remote sessions still need admin. -->
+<policyconfig>
+  <vendor>forge-os</vendor>
+  <action id="org.forgeos.theme-login">
+    <description>Match the login screen to the desktop theme</description>
+    <message>Authentication is required to change the login screen's colours</message>
+    <icon_name>preferences-desktop-theme</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/forge-theme-login</annotate>
+  </action>
+</policyconfig>

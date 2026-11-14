@@ -1,0 +1,30 @@
+# Forge shell: Forge OS's desktop shell in Quickshell (QML): the bar, the
+# Control Center and popups, notifications, OSDs, the desktop shortcut
+# panel and the overlays. No build step: the QML is the program.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-shell
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS desktop shell: bar, Control Center, notifications, shortcut panel"
+arch=('any')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# forged (the state service) ships in the ISO's airootfs.
+depends=('quickshell' 'forge-session' 'qt6-declarative' 'qt6-5compat' 'ttf-jetbrains-mono-nerd'
+         'cliphist' 'wl-clipboard' 'wtype' 'unicode-emoji' 'hyprsunset' 'libnotify'
+         'python-dbus' 'python-gobject')
+optdepends=('blueman: pairing new Bluetooth devices'
+            'nm-connection-editor: advanced network and VPN settings')
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/share/forge/shell"
+    cp -r shell/. "${pkgdir}/usr/share/forge/shell/"
+    install -Dm755 bin/forge-shell "${pkgdir}/usr/bin/forge-shell"
+    install -Dm644 systemd/forge-shell.service "${pkgdir}/usr/lib/systemd/user/forge-shell.service"
+    install -d "${pkgdir}/usr/lib/systemd/user/graphical-session.target.wants"
+    ln -s ../forge-shell.service "${pkgdir}/usr/lib/systemd/user/graphical-session.target.wants/forge-shell.service"
+    install -Dm644 data/org.forgeos.shortcuts.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.shortcuts.desktop"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

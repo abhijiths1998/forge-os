@@ -1,0 +1,31 @@
+# Forge Files: Forge OS's file manager (Flutter, forge_ui). Built from this
+# directory, next to ../forge_ui, by apps/build-packages.sh during the ISO
+# build.
+pkgname=forge-files
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Files: places, drives, trash, thumbnails and search"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# gio: open, trash and launch; udisks2: drives; xdg-utils: Open with.
+depends=('gtk3' 'glib2' 'udisks2' 'xdg-utils' 'coreutils' 'util-linux')
+optdepends=('ffmpeg: video thumbnails'
+            'poppler: PDF thumbnails'
+            'forge-terminal: Open terminal here')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    flutter build linux --release --no-tree-shake-icons
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-files" "${pkgdir}/usr/bin/forge-files"
+    install -Dm644 data/org.forgeos.files.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.files.desktop"
+}

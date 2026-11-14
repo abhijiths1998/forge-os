@@ -73,37 +73,42 @@ RUN pacman -Syu --noconfirm --needed sassc which gtk3 ncurses \
     && userdel -r builder \
     && rm -rf /tmp/whitesur-icon-theme
 
-# kwin-effects-glass (the Forge Glass frosting). Chaotic-AUR has it, but
-# KWin bakes its exact version into the effect plugin interface and refuses
-# a plugin built against any other ("Effect "glass" was built for a
-# different version of KWin"), and Chaotic's build often lags a KWin point
-# release. So build it here against the KWin the ISO will ship; the local
-# repo is listed first in profile/pacman.conf, so this build wins.
-# build.sh passes KWIN_VERSION (Arch's current kwin) so a KWin update
-# invalidates this layer and the effect is rebuilt to match.
-# pkgrel=100 keeps our package's filename distinct from Chaotic's same-
-# version build (they'd collide in the shared pacman cache volume and fail
-# the checksum), and stops an installed system "upgrading" to Chaotic's
-# build of the same commit; a newer upstream commit still replaces it.
-ARG KWIN_VERSION=unknown
-RUN echo "building kwin-effects-glass against kwin ${KWIN_VERSION}" \
-    && pacman -Syu --noconfirm --needed \
-        kwin kio knotifications kcrash kglobalaccel kcmutils libepoxy \
-        extra-cmake-modules qt6-tools vulkan-headers cmake git \
-    && useradd -m builder \
-    && su builder -c ' \
-        set -e; \
-        cd /tmp; \
-        git clone --depth 1 https://aur.archlinux.org/kwin-effects-glass-git.git; \
-        cd kwin-effects-glass-git; \
-        makepkg --nobuild --noconfirm --skippgpcheck; \
-        sed -i "s/^pkgrel=.*/pkgrel=100/" PKGBUILD; \
-        makepkg --noextract --noconfirm --skippgpcheck \
-    ' \
-    && cp /tmp/kwin-effects-glass-git/*.pkg.tar.zst /var/cache/forge-os-local-repo/ \
+# NVIDIA pinned to 610.57.04: 615.78.08 hard-freezes the RTX 3050 laptop in
+# games (GTA 5, Witcher 3; on both linux and linux-zen), and 610 doesn't.
+# The Arch Linux Archive keeps the old builds; the local repo is listed
+# first in profile/pacman.conf, so these win over extra/multilib. The
+# shipped pacman.conf has them in IgnorePkg so -Syu doesn't undo it.
+ARG NVIDIA_VERSION=610.57.04-1
+RUN cd /var/cache/forge-os-local-repo \
+    && for pkg in nvidia-open-dkms nvidia-utils lib32-nvidia-utils \
+            nvidia-settings opencl-nvidia; do \
+        curl -fLO "https://archive.archlinux.org/packages/${pkg:0:1}/${pkg}/${pkg}-${NVIDIA_VERSION}-x86_64.pkg.tar.zst" \
+            || exit 1; \
+    done \
     && repo-add /var/cache/forge-os-local-repo/forge-os-local.db.tar.gz \
-        /var/cache/forge-os-local-repo/*.pkg.tar.zst \
-    && userdel -r builder \
-    && rm -rf /tmp/kwin-effects-glass-git
+        /var/cache/forge-os-local-repo/*.pkg.tar.zst
+
+# Toolchains and build dependencies for the Forge apps (apps/), which
+# apps/build-packages.sh builds at ISO build time: Flutter (Chaotic-AUR) and
+# GTK for the launcher and store, gtk-layer-shell for the launcher and Forge
+# Shot, libpamac for the store, Qt WebEngine for the browser; SDL2 and Mesa
+# for Forge's games (packages/forge-games); Neovim, git and tree-sitter for
+# Forge Code's parsers (packages/forge-code); GTK4, VTE and
+# gtk4-layer-shell for Forge Terminal; and for Forge's own Konsole build
+# (packages/konsole, until Forge Terminal replaces it), Konsole itself with
+# extra-cmake-modules and kdoctools. A layer of its own so a Flutter or Qt
+# update only redoes this.
+# flutter-bin and pamac are Chaotic-AUR packages, so this container's own
+# pacman.conf gets that repo too (the keyring and mirrorlist are set up above).
+RUN grep -q "^\[chaotic-aur\]" /etc/pacman.conf \
+        || printf "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist\n" \
+            >> /etc/pacman.conf \
+    && pacman -Syu --noconfirm --needed \
+        flutter-bin cmake ninja clang pkgconf gtk3 gtk-layer-shell pamac \
+        qt6-base qt6-webengine glycin libjxl \
+        sdl2 mesa imagemagick jq git make gcc neovim tree-sitter-cli \
+        gtk4 vte4 gtk4-layer-shell meson \
+        konsole extra-cmake-modules kdoctools \
+    && pacman -Scc --noconfirm
 
 WORKDIR /build

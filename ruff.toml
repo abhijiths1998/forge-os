@@ -1,0 +1,11 @@
+# Forge OS's Python (forged, forge-mind, forge-theme-sync, the branding
+# generators, tests): checked by build/check.sh.
+line-length = 120
+target-version = "py313"
+
+[lint]
+select = ["E", "F", "W", "B", "UP", "SIM"]
+# Forge's tools are scripts that print and exit; long lines are wrapped by hand.
+# Small named lambdas, plain zip() over equal-length rows and try/except/pass
+# read fine in them; these are style, not bugs.
+ignore = ["E501", "E731", "B905", "SIM105", "SIM905"]

@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Store
+GenericName=Software Store
+Comment=Find, install, update and remove software
+Exec=forge-store %U
+Icon=system-software-install
+Categories=System;PackageManager;Settings;
+Keywords=install;software;apps;packages;update;upgrade;remove;pamac;aur;store;
+StartupNotify=true
+StartupWMClass=org.forgeos.store
+Actions=updates;
+
+[Desktop Action updates]
+Name=Updates
+Exec=forge-store --page updates

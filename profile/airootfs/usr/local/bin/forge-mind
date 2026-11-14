@@ -1,0 +1,776 @@
+#!/usr/bin/env python3
+"""forge-mind: the local file index and storage analyser behind Forge's AI.
+
+  forge-mind index            (re)index $HOME: metadata, download origin, names
+  forge-mind search <words>   find files by name/path words (FTS5, ranked)
+  forge-mind ask <request>    find files from a request in plain words
+                              ("the pdf from march", "big videos in downloads");
+                              --deep lets the local model (Ollama) read it too
+  forge-mind stats            what's using the disk, Forge-aware
+  forge-mind cleanup          cleanup candidates with sizes and reasons (no deletes)
+  forge-mind clean <path...>  clean candidates from that list (files go to the trash)
+  forge-mind serve            D-Bus service org.forgeos.Mind on the session bus
+  add --json to search/ask/stats/cleanup for machine-readable output
+
+Everything here is deterministic; a model only ever turns a request into
+these calls and explains the results. Requests are read by rules; the model
+is optional and only adds name words (synonyms): Ollama with qwen3:4b by
+default (~/.config/forge/mind.conf: model=, ollama=). It's unloaded from
+the GPU when GameMode starts. Indexing pauses while GameMode is
+active, so it never competes with a game. The index lives in
+$XDG_DATA_HOME/forge-mind/index.db (SQLite, FTS5). Snapshot sizes need
+btrfs quotas (forge-postinstall.sh runs `snapper setup-quota`).
+"""
+import functools
+import hashlib
+import json
+import os
+import re
+import shutil
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+DATA = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "forge-mind"
+DB = DATA / "index.db"
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache"))
+STEAM_ROOT = HOME / ".local/share/Steam"
+# Not indexed: noise (VCS, build trees, caches) and things analysed on their own.
+SKIP_NAMES = {".git", "node_modules", "__pycache__", ".dart_tool", ".venv"}
+SKIP_PATHS = {HOME / p for p in (".cache", ".local/share/Steam", ".local/share/Trash", ".npm",
+                                 ".pub-cache", ".cargo/registry", ".rustup", ".var", ".mozilla",
+                                 ".config/BraveSoftware", ".local/share/forge-mind", ".wine")}
+OLD_DAYS = 365
+BIG = 500 * 1024**2
+DUP_MIN = 10 * 1024**2
+
+
+def gamemode_active():
+    try:
+        out = subprocess.run(["gamemoded", "-s"], capture_output=True, text=True, timeout=3).stdout
+        return "is active" in out
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def du(path):
+    """Bytes on disk under path (allocated blocks, no symlinks followed)."""
+    total = 0
+    try:
+        if path.is_symlink():
+            return 0
+        if path.is_file():
+            return path.stat().st_blocks * 512
+        for root, _, files in os.walk(path):
+            for f in files:
+                try:
+                    total += os.lstat(os.path.join(root, f)).st_blocks * 512
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def human(n):
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024 or unit == "TB":
+            return f"{n:.0f} {unit}" if unit == "B" else f"{n:.1f} {unit}"
+        n /= 1024
+
+
+def skipped(root, name):
+    return name in SKIP_NAMES or Path(root, name) in SKIP_PATHS
+
+
+# --- index ---------------------------------------------------------------
+def db():
+    DATA.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB)
+    con.execute("PRAGMA journal_mode=WAL")
+    con.executescript("""
+        CREATE TABLE IF NOT EXISTS files(
+            path TEXT PRIMARY KEY, size INTEGER, mtime REAL, atime REAL,
+            ext TEXT, origin TEXT, seen INTEGER);
+        CREATE VIRTUAL TABLE IF NOT EXISTS names USING fts5(
+            path UNINDEXED, words, tokenize='unicode61');
+    """)
+    return con
+
+
+def origin(path):
+    """Where a download came from (browsers save it as an xattr)."""
+    try:
+        return os.getxattr(path, "user.xdg.origin.url").decode(errors="replace")
+    except OSError:
+        return None
+
+
+def index():
+    con, stamp, n, checked = db(), int(time.time()), 0, 0.0
+    for root, dirs, files in os.walk(HOME):
+        dirs[:] = [d for d in dirs if not skipped(root, d)]
+        if time.monotonic() - checked > 10:
+            while gamemode_active():
+                time.sleep(30)
+            checked = time.monotonic()
+        for f in files:
+            p = os.path.join(root, f)
+            try:
+                st = os.lstat(p)
+            except OSError:
+                continue
+            con.execute("INSERT OR REPLACE INTO files VALUES(?,?,?,?,?,?,?)",
+                        (p, st.st_size, st.st_mtime, st.st_atime, Path(f).suffix.lower(), origin(p), stamp))
+            n += 1
+    con.execute("DELETE FROM files WHERE seen < ?", (stamp,))
+    con.execute("DELETE FROM names")
+    con.execute("INSERT INTO names(path, words) SELECT path, replace(replace(replace(replace("
+                "substr(path, ?), '/', ' '), '_', ' '), '-', ' '), '.', ' ') FROM files", (len(str(HOME)) + 2,))
+    con.commit()
+    return n
+
+
+def search(words):
+    q = " ".join('"' + w.replace('"', "") + '"*' for w in words)
+    rows = db().execute("""SELECT f.path, f.size, f.mtime, f.origin FROM names n JOIN files f USING(path)
+                           WHERE names MATCH ? ORDER BY rank LIMIT 30""", (q,)).fetchall()
+    return [dict(zip(("path", "size", "mtime", "origin"), r)) for r in rows]
+
+
+# --- understanding requests ----------------------------------------------
+# A request like "the pdf from march" or "big videos in downloads" becomes
+# filters: kinds of file, a time range, a place, a size, a download site and
+# name words. Rules handle the common phrasings instantly; a local model
+# (Ollama, optional) handles the rest and adds synonyms for the name words.
+IMAGE = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".heic", ".avif", ".bmp", ".svg"]
+KINDS = {
+    "pdf": [".pdf"],
+    "image": IMAGE,
+    "screenshot": IMAGE,
+    "video": [".mp4", ".mkv", ".webm", ".mov", ".avi"],
+    "audio": [".mp3", ".flac", ".ogg", ".opus", ".m4a", ".wav"],
+    "document": [".pdf", ".doc", ".docx", ".odt", ".txt", ".md", ".rtf"],
+    "spreadsheet": [".xls", ".xlsx", ".ods", ".csv"],
+    "presentation": [".ppt", ".pptx", ".odp"],
+    "archive": [".zip", ".tar", ".gz", ".xz", ".zst", ".7z", ".rar"],
+    "disk-image": [".iso", ".img"],
+    "code": [".py", ".sh", ".dart", ".js", ".ts", ".c", ".cpp", ".h", ".rs", ".go", ".java"],
+    "installer": [".appimage", ".deb", ".rpm", ".exe", ".msi", ".flatpakref"],
+    "ebook": [".epub", ".mobi"],
+    "font": [".ttf", ".otf"],
+}
+KIND_WORDS = {
+    "pdf": "pdf", "image": "image", "photo": "image", "picture": "image", "pic": "image",
+    "wallpaper": "image", "screenshot": "screenshot", "video": "video", "movie": "video",
+    "clip": "video", "recording": "video", "music": "audio", "song": "audio", "audio": "audio",
+    "track": "audio", "document": "document", "doc": "document", "spreadsheet": "spreadsheet",
+    "sheet": "spreadsheet", "excel": "spreadsheet", "csv": "spreadsheet",
+    "presentation": "presentation", "slide": "presentation", "deck": "presentation",
+    "archive": "archive", "zip": "archive", "iso": "disk-image", "code": "code",
+    "script": "code", "installer": "installer", "appimage": "installer", "ebook": "ebook",
+    "book": "ebook", "epub": "ebook", "font": "font",
+}
+PLACES = {"downloads": "Downloads", "desktop": "Desktop", "documents": "Documents",
+          "pictures": "Pictures", "videos": "Videos", "music": "Music", "games": "Games"}
+SITES = {"github", "gitlab", "reddit", "google", "drive", "discord", "telegram", "whatsapp",
+         "youtube", "steam", "nexusmods", "itch", "dropbox", "mega", "archive"}
+MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august",
+          "september", "october", "november", "december"]
+STOP = set("""a an the my me i i'm im that this those these it its file files thing things stuff
+    which where wheres where's what whats what's with of for to on in at from around about
+    sent got had have was is were find show search look open get me some any all one ones
+    called named saved downloaded download made took taken there here and or please can you
+    near roughly sometime ago when may might something anything someone somebody
+    last past week weeks month months year years day days""".split())
+EXTS = {e for exts in KINDS.values() for e in exts}
+DAY = 86400
+
+
+def _month_start(year, month):
+    return time.mktime((year, month, 1, 0, 0, 0, 0, 0, -1))
+
+
+def _month_range(year, month):
+    end_y, end_m = (year + 1, 1) if month == 12 else (year, month + 1)
+    return _month_start(year, month), _month_start(end_y, end_m)
+
+
+MONTH_ABBR = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "jun": 6, "jul": 7, "aug": 8,
+              "sep": 9, "sept": 9, "oct": 10, "nov": 11, "dec": 12}
+
+
+def month_of(t, prev, nxt):
+    """1-12 if t names a month here. "may" only counts where it can't be the verb."""
+    if t == "may":
+        return 5 if prev in ("in", "from", "around", "about", "since", "of", "early", "late") \
+            or re.fullmatch(r"(19|20)\d\d", nxt) else None
+    if t in MONTHS:
+        return MONTHS.index(t) + 1
+    return MONTH_ABBR.get(t)
+
+
+def understand(text, now=None):
+    """Filters for a request, by rules. Unknown words are kept as name words."""
+    now = now or time.time()
+    lt = time.localtime(now)
+    today = time.mktime((lt.tm_year, lt.tm_mon, lt.tm_mday, 0, 0, 0, 0, 0, -1))
+    f = {"words": [], "also": [], "kinds": [], "after": None, "before": None, "place": None,
+         "origin": None, "min_size": None, "max_size": None, "exts": [], "downloaded": False}
+    toks = re.findall(r"[\w.+'-]+", text.lower())
+    i = 0
+
+    def span(a, b, widen=0):
+        f["after"], f["before"] = a - widen, b + widen
+
+    while i < len(toks):
+        t, nxt = toks[i], toks[i + 1] if i + 1 < len(toks) else ""
+        prev = toks[i - 1] if i else ""
+        around = prev in ("around", "about", "roughly", "near")
+        singular = t[:-1] if t.endswith("s") and len(t) > 3 else t
+        if t == "today":
+            span(today, now + DAY)
+        elif t == "yesterday":
+            span(today - DAY, today)
+        elif t in ("recent", "recently", "latest", "new", "newest"):
+            span(now - 30 * DAY, now + DAY)
+        elif t in ("this", "last", "past") and nxt in ("week", "month", "year"):
+            unit = {"week": 7, "month": 30, "year": 365}[nxt] * DAY
+            if t == "this":
+                start = {"week": today - lt.tm_wday * DAY,
+                         "month": _month_start(lt.tm_year, lt.tm_mon),
+                         "year": _month_start(lt.tm_year, 1)}[nxt]
+                span(start, now + DAY)
+            elif t == "past":
+                span(now - unit, now + DAY)
+            elif nxt == "month":
+                y, m = (lt.tm_year - 1, 12) if lt.tm_mon == 1 else (lt.tm_year, lt.tm_mon - 1)
+                span(*_month_range(y, m))
+            elif nxt == "year":
+                span(*(_month_start(lt.tm_year - 1, 1), _month_start(lt.tm_year, 1)))
+            else:
+                span(today - (lt.tm_wday + 7) * DAY, today - lt.tm_wday * DAY)
+            i += 1
+        elif t.isdigit() and nxt.rstrip("s") in ("day", "week", "month", "year") and \
+                toks[i + 2:i + 3] == ["ago"]:
+            unit = {"day": 1, "week": 7, "month": 30, "year": 365}[nxt.rstrip("s")] * DAY
+            at = now - int(t) * unit
+            span(at - unit / 2, at + unit / 2)
+            i += 2
+        elif (month := month_of(t, prev, nxt)):
+            year = int(nxt) if re.fullmatch(r"(19|20)\d\d", nxt) else \
+                lt.tm_year if month <= lt.tm_mon else lt.tm_year - 1
+            a, b = _month_range(year, month)
+            span(a, b, 15 * DAY if around else 0)
+            if nxt == str(year):
+                i += 1
+        elif re.fullmatch(r"(19|20)\d\d", t) and prev in ("in", "from", "during", "since", "around"):
+            a, b = _month_start(int(t), 1), _month_start(int(t) + 1, 1)
+            span(a, now + DAY if prev == "since" else b, 60 * DAY if around else 0)
+        elif singular in KIND_WORDS or t in KIND_WORDS:
+            kind = KIND_WORDS.get(t) or KIND_WORDS[singular]
+            if kind not in f["kinds"]:
+                f["kinds"].append(kind)
+            if kind == "screenshot":
+                f["words"].append("screenshot")
+        elif ("." + t in EXTS or "." + singular in EXTS) and t not in KIND_WORDS:
+            f["exts"].append("." + t if "." + t in EXTS else "." + singular)
+        elif t in ("downloaded", "download", "downloads") and prev not in ("in", "on", "from", "under"):
+            f["downloaded"] = True
+        elif t in PLACES and prev in ("in", "on", "from", "under"):
+            f["place"] = PLACES[t]
+        elif prev == "from" and (t in SITES or "." in t):
+            f["origin"] = t
+        elif t in ("big", "large", "bigger", "largest", "biggest"):
+            f["min_size"] = 100 * 1024**2
+        elif t in ("huge", "massive"):
+            f["min_size"] = 1024**3
+        elif t in ("small", "tiny", "little"):
+            f["max_size"] = 1024**2
+        elif m := re.fullmatch(r"(\d+(?:\.\d+)?)(kb|mb|gb)", t):
+            size = float(m[1]) * {"kb": 1024, "mb": 1024**2, "gb": 1024**3}[m[2]]
+            before = toks[i - 2] if prev == "than" and i >= 2 else prev
+            key = "max_size" if before in ("under", "below", "smaller", "less") else "min_size"
+            f["min_size" if key == "max_size" else "max_size"] = None
+            f[key] = int(size)
+        elif t in ("smaller", "less", "under", "below") and nxt in ("than",) or t == "than":
+            pass
+        elif t not in STOP:
+            f["words"].append(t.strip("'"))
+        i += 1
+    f["words"] = [w for w in dict.fromkeys(f["words"]) if w]
+    return f
+
+
+# The model, when there is one. Configured in /etc/forge/mind.conf, then
+# ~/.config/forge/mind.conf (model=..., ollama=http://...), then
+# FORGE_MIND_MODEL. The installer downloads /etc's (forge-mind-model).
+def model_config():
+    conf = {"model": "qwen3:4b", "ollama": "http://127.0.0.1:11434"}
+    user = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "forge/mind.conf"
+    for cfg in (Path("/etc/forge/mind.conf"), user):
+        try:
+            for line in cfg.read_text().splitlines():
+                k, _, v = line.partition("=")
+                if k.strip() in conf and v.strip():
+                    conf[k.strip()] = v.strip()
+        except OSError:
+            pass
+    conf["model"] = os.environ.get("FORGE_MIND_MODEL", conf["model"])
+    return conf
+
+
+WORDS_SCHEMA = {"type": "object", "properties": {"words": {"type": "array", "items": {"type": "string"}}},
+                "required": ["words"]}
+
+MODEL_PROMPT = """You help find a file on a Linux desktop by its name. Given a request,
+list 6-10 single lowercase words likely to appear in the file's NAME or its folder's:
+the request's key words, then at least 4 synonyms and the technical terms someone
+would name such a file with. Leave out dates, file types and filler.
+"the pdf my landlord sent": landlord, lease, rent, tenancy, agreement, rental
+"script that makes the wifi faster": wifi, network, wireless, speed, tune, iwd"""
+
+KEEP_ALIVE = "2m"   # short: the GPU is wanted for games
+model_used = [0.0]
+
+
+def model_words(text, timeout=8):
+    """Name words from the local model, or None when there's none (or it fails).
+    Only words: dates, kinds of file, places and sizes are the rules' job, since
+    a small model guesses those wrong and a wrong filter hides the right file."""
+    import urllib.request
+    if gamemode_active():
+        return None
+    conf = model_config()
+    body = json.dumps({
+        "model": conf["model"], "stream": False, "think": False, "keep_alive": KEEP_ALIVE,
+        "format": WORDS_SCHEMA, "options": {"temperature": 0},
+        "messages": [{"role": "system", "content": MODEL_PROMPT}, {"role": "user", "content": text}],
+    }).encode()
+    try:
+        req = urllib.request.Request(conf["ollama"] + "/api/chat", body, {"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            raw = json.loads(json.loads(r.read())["message"]["content"])
+    except (OSError, ValueError, KeyError):
+        return None
+    model_used[0] = time.monotonic()
+    words = [t for w in raw.get("words", []) if isinstance(w, str) for t in re.findall(r"\w+", w.lower())]
+    # A word the rules read as something else ("pdf", "march", "downloads") isn't a name word.
+    return [w for w in dict.fromkeys(words) if understand(w)["words"] == [w]][:12]
+
+
+def unload_model():
+    """Free the GPU now (a game is starting), instead of after KEEP_ALIVE."""
+    import urllib.request
+    conf = model_config()
+    try:
+        body = json.dumps({"model": conf["model"], "keep_alive": 0}).encode()
+        urllib.request.urlopen(urllib.request.Request(
+            conf["ollama"] + "/api/generate", body, {"Content-Type": "application/json"}), timeout=5).close()
+    except OSError:
+        pass
+    model_used[0] = 0.0
+
+
+def _kind_exts(f):
+    return sorted({e for k in f["kinds"] for e in KINDS.get(k, [])} | set(f.get("exts", [])))
+
+
+def _conditions(f, kinds=True):
+    where, args = [], []
+    exts = _kind_exts(f) if kinds else []
+    if exts:
+        where.append(f"f.ext IN ({','.join('?' * len(exts))})")
+        args += exts
+    for key, op in (("after", ">="), ("before", "<")):
+        if f.get(key):
+            where.append(f"f.mtime {op} ?")
+            args.append(f[key])
+    if f.get("place"):
+        where.append("f.path LIKE ?")
+        args.append(f"{HOME}/{f['place']}/%")
+    if f.get("downloaded") and not f.get("place"):
+        where.append("(f.origin IS NOT NULL OR f.path LIKE ?)")
+        args.append(f"{HOME}/Downloads/%")
+    if f.get("origin"):
+        where.append("f.origin LIKE ?")
+        args.append(f"%{f['origin']}%")
+    if f.get("min_size"):
+        where.append("f.size >= ?")
+        args.append(f["min_size"])
+    if f.get("max_size"):
+        where.append("f.size <= ?")
+        args.append(f["max_size"])
+    return " AND ".join(where) or "1", args
+
+
+def _word_score(f, text):
+    """How well a path's words match: each typed word found counts 3 (as a
+    prefix, it may be half-typed), each of the model's words 1 (whole word)."""
+    tokens = set(re.findall(r"\w+", text.lower()))
+    typed = sum(3 for w in f["words"] if any(t.startswith(w) for t in tokens))
+    return typed + sum(1 for w in f.get("also", []) if w in tokens)
+
+
+def find(f, limit=30):
+    """Files matching filters f, with whether the match is loose. Files any name
+    word matches are ranked by how many match and whether they're the kind of
+    file asked for (not a filter: scripts often have no extension); the other
+    filters must hold. With no name match, everything the filters allow comes
+    back, newest first. The user's own files rank above those in hidden app
+    folders."""
+    cols = "f.path, f.size, f.mtime, f.origin"
+    hidden = f"instr(substr(f.path, {len(str(HOME)) + 1}), '/.') > 0"
+    con, rows, loose = db(), [], False
+    # Typed words match as prefixes (they may be half-typed); the model's
+    # extra words ("also") only as whole words, so "fan" doesn't find "fancy".
+    phrase = lambda w: '"' + w.replace('"', "") + '"'
+    if f["words"] or f.get("also"):
+        q = " OR ".join([phrase(w) + "*" for w in f["words"]] + [phrase(w) for w in f.get("also", [])])
+        cond, args = _conditions(f, kinds=False)
+        rows = con.execute(f"""SELECT {cols}, {hidden}, n.words FROM names n JOIN files f USING(path)
+                               WHERE names MATCH ? AND {cond} ORDER BY rank LIMIT 400""",
+                           [q, *args]).fetchall()
+        exts = _kind_exts(f)
+        fits = lambda r: not exts or Path(r[0]).suffix.lower() in exts
+        # The kind of file counts like a typed word, not as a filter.
+        rows = sorted(rows, key=lambda r: (r[4], -_word_score(f, r[5]) - 3 * fits(r)))[:limit]
+        loose = bool(rows) and not fits(rows[0])
+        rows = [r[:4] for r in rows]
+    cond, args = _conditions(f)
+    if not rows and cond != "1":
+        loose = bool(f["words"] or f.get("also"))
+        rows = con.execute(f"SELECT {cols} FROM files f WHERE {cond} AND {user_file_sql()} "
+                           f"ORDER BY f.mtime DESC LIMIT ?", [*args, limit]).fetchall()
+    return [dict(zip(("path", "size", "mtime", "origin"), r)) for r in rows], loose
+
+
+def ask(text, deep=False):
+    """Find files for a request in plain words. deep: let the local model read it too."""
+    f, by = understand(text), "rules"
+    if deep and len(text.split()) >= 2:
+        words = model_words(text)
+        if words:
+            # For name words the model is the better judge: typed words it kept
+            # stay, filler it dropped goes, and its synonyms are added.
+            f["words"] = [w for w in f["words"] if w in words]
+            f["also"] = [w for w in words if w not in f["words"]]
+            by = "model"
+    results, loose = find(f)
+    return {"filters": f, "by": by, "loose": loose, "results": results}
+
+
+# --- storage -------------------------------------------------------------
+def steam_libraries():
+    """Every Steam library's steamapps folder (libraryfolders.vdf lists the extra drives)."""
+    libs = {STEAM_ROOT / "steamapps"}
+    try:
+        vdf = (STEAM_ROOT / "steamapps/libraryfolders.vdf").read_text(errors="replace")
+        libs |= {Path(m) / "steamapps" for m in re.findall(r'"path"\s+"([^"]+)"', vdf)}
+    except OSError:
+        pass
+    return sorted(lib for lib in libs if lib.is_dir())
+
+
+def steam_installed_ids():
+    return {m.stem.split("_", 1)[1] for lib in steam_libraries() for m in lib.glob("appmanifest_*.acf")}
+
+
+def file_hash(path):
+    h = hashlib.blake2b(digest_size=16)
+    with open(path, "rb") as f:
+        while chunk := f.read(1 << 20):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def user_file_sql():
+    """SQL condition: the path is a file of the user's own, not inside a hidden
+    (app-owned) folder like ~/.local or ~/.config, which only apps should prune."""
+    return f"instr(substr(path, {len(str(HOME)) + 1}), '/.') = 0"
+
+
+@functools.cache
+def in_repo(directory):
+    """True inside a git work tree: copies there are build outputs, not clutter."""
+    d = Path(directory)
+    return (d / ".git").exists() or (d != HOME and d.parent != d and in_repo(d.parent))
+
+
+def duplicates():
+    """Groups of identical user files (same size, then same hash), largest first.
+    Hard links share one copy on disk, so each inode counts once."""
+    groups = []
+    for size, paths in db().execute(f"""SELECT size, group_concat(path, char(10)) FROM files
+                                        WHERE size >= ? AND {user_file_sql()}
+                                        GROUP BY size HAVING count(*) > 1
+                                        ORDER BY size DESC""", (DUP_MIN,)):
+        by_hash, inodes = {}, set()
+        for p in paths.split("\n"):
+            if in_repo(os.path.dirname(p)):
+                continue
+            try:
+                st = os.stat(p)
+                if (st.st_dev, st.st_ino) in inodes:
+                    continue
+                inodes.add((st.st_dev, st.st_ino))
+                by_hash.setdefault(file_hash(p), []).append(p)
+            except OSError:
+                pass
+        groups += [(size, sorted(ps, key=len)) for ps in by_hash.values() if len(ps) > 1]
+    return groups
+
+
+def candidates():
+    """Cleanup candidates as dicts: category, path, bytes, reason. Nothing is deleted here."""
+    out = []
+
+    def add(category, path, size, reason):
+        out.append({"category": category, "path": str(path), "bytes": size, "reason": reason})
+
+    installed = steam_installed_ids()
+    for kind, lib in ((k, lib) for lib in steam_libraries() for k in ("compatdata", "shadercache")):
+        for d in (lib / kind).glob("*"):
+            if d.name.isdigit() and d.name not in installed and d.name != "0":
+                add("steam", d, du(d), f"{kind} for uninstalled game {d.name}")
+    for d, why in [(Path("/var/cache/pacman/pkg"), "pacman package cache (keeps the installed version)"),
+                   (HOME / ".local/share/Trash", "trash"),
+                   (CACHE / "yay", "AUR build files"), (CACHE / "paru", "AUR build files"),
+                   (CACHE / "pamac", "pamac build files"),
+                   (CACHE / "thumbnails", "thumbnails (regenerated when needed)")]:
+        size = du(d) if d.exists() else 0
+        if size > 50 * 1024**2:
+            add("system" if str(d).startswith("/var") else "cache", d, size, why)
+    for root, dirs, _ in os.walk(HOME):
+        if "node_modules" in dirs:
+            p = Path(root) / "node_modules"
+            add("dev", p, du(p), "node_modules (npm install restores it)")
+        dirs[:] = [d for d in dirs if not skipped(root, d)]
+    if DB.exists():
+        cutoff = time.time() - OLD_DAYS * 86400
+        for p, size in db().execute(f"SELECT path, size FROM files WHERE size > ? AND atime < ? "
+                                    f"AND mtime < ? AND {user_file_sql()}", (BIG, cutoff, cutoff)):
+            add("old", p, size, f"big file not opened in {OLD_DAYS}+ days")
+        for size, (keep, *copies) in duplicates():
+            for p in copies:
+                add("duplicate", p, size, f"identical to {keep}")
+    if shutil.which("flatpak"):
+        unused = subprocess.run(["flatpak", "uninstall", "--unused", "--assumeno"],
+                                capture_output=True, text=True).stdout
+        if any(line.strip()[:1].isdigit() for line in unused.splitlines()):
+            add("flatpak", "flatpak:unused", 0, "unused Flatpak runtimes")
+    return sorted(out, key=lambda c: -c["bytes"])
+
+
+def snapshots():
+    """Snapper snapshots of /, with the space each holds exclusively when quotas are on."""
+    try:
+        r = subprocess.run(["snapper", "--jsonout", "list"], capture_output=True, text=True, timeout=30)
+        snaps = [s for s in json.loads(r.stdout).get("root", []) if s.get("number")]
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+    used = [s.get("used-space") for s in snaps]
+    return {"count": len(snaps),
+            "bytes": sum(u for u in used if isinstance(u, int)) if any(isinstance(u, int) for u in used) else None,
+            "oldest": snaps[0].get("date") if snaps else None}
+
+
+def stats():
+    usage = shutil.disk_usage("/")
+    homes = sorted(((du(p), p.name) for p in HOME.iterdir() if p.is_dir() and not p.is_symlink()), reverse=True)
+    return {"disk": {"total": usage.total, "used": usage.used, "free": usage.free},
+            "home_top": [{"dir": n, "bytes": s} for s, n in homes[:10]],
+            "steam": sum(du(lib) for lib in steam_libraries()),
+            "snapshots": snapshots()}
+
+
+def clean(paths):
+    """Clean the given candidates. Home files go to the trash (restorable); only
+    paths `cleanup` currently lists are accepted, so this can't remove arbitrary files."""
+    allowed = {c["path"]: c for c in candidates()}
+    done = []
+    for p in paths:
+        c = allowed.get(p)
+        if not c:
+            print(f"forge-mind: {p} isn't a cleanup candidate, skipped", file=sys.stderr)
+            continue
+        if p == "/var/cache/pacman/pkg":
+            cmd = ["pkexec", "paccache", "-rk1"]
+        elif p == "flatpak:unused":
+            cmd = ["flatpak", "uninstall", "--unused", "-y"]
+        elif p == str(HOME / ".local/share/Trash"):
+            # Emptied directly: `gio trash --empty` needs gvfs's trash backend running.
+            for sub in ("files", "info", "expunged"):
+                shutil.rmtree(Path(p) / sub, ignore_errors=True)
+                (Path(p) / sub).mkdir(exist_ok=True)
+            done.append(c)
+            continue
+        elif Path(p).is_relative_to(HOME):
+            cmd = ["gio", "trash", "--", p]
+        else:
+            print(f"forge-mind: {p} needs cleaning by hand", file=sys.stderr)
+            continue
+        if subprocess.run(cmd).returncode == 0:
+            done.append(c)
+    return done
+
+
+# --- D-Bus ---------------------------------------------------------------
+def serve():
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+    iface = "org.forgeos.Mind"
+    # It exits after a while unused; D-Bus starts it again on the next call,
+    # so an update takes effect without anyone restarting it.
+    idle_exit = 600
+    last_call = [time.monotonic()]
+    loop = GLib.MainLoop()
+
+    def exit_if_idle():
+        if model_used[0] and gamemode_active():
+            unload_model()
+        busy = Mind.indexing and Mind.indexing.poll() is None
+        if not busy and time.monotonic() - last_call[0] > idle_exit:
+            loop.quit()
+        return True
+
+    def method(*sig, **kw):
+        """dbus.service.method, noting each call for the idle exit."""
+        def wrap(fn):
+            @functools.wraps(fn)
+            def called(*a):
+                last_call[0] = time.monotonic()
+                return fn(*a)
+            return dbus.service.method(iface, *sig, **kw)(called)
+        return wrap
+
+    class Mind(dbus.service.Object):
+        """Every method returns JSON, the same as `forge-mind <cmd> --json`."""
+        indexing = None
+
+        @method(in_signature="s", out_signature="s")
+        def Search(self, query):
+            return json.dumps(search(query.split()))
+
+        @method(in_signature="sb", out_signature="s")
+        def Ask(self, text, deep):
+            """{"filters", "by": "rules"|"model", "loose", "results"}; see ask()."""
+            return json.dumps(ask(str(text), bool(deep)))
+
+        @method(out_signature="s")
+        def Stats(self):
+            return json.dumps(stats())
+
+        @method(out_signature="s")
+        def Cleanup(self):
+            return json.dumps(candidates())
+
+        @method(in_signature="as", out_signature="s")
+        def Clean(self, paths):
+            return json.dumps(clean([str(p) for p in paths]))
+
+        @method(out_signature="b")
+        def Index(self):
+            """Start a re-index in the background; false if one is already running."""
+            if Mind.indexing and Mind.indexing.poll() is None:
+                return False
+            Mind.indexing = subprocess.Popen([sys.argv[0], "index"])
+            GLib.child_watch_add(Mind.indexing.pid, lambda *_: self.IndexFinished())
+            return True
+
+        @dbus.service.signal(iface)
+        def IndexFinished(self):
+            pass
+
+    bus = dbus.SessionBus()
+    name = dbus.service.BusName(iface, bus, do_not_queue=True)  # noqa: F841 (held while running)
+    Mind(bus, "/org/forgeos/Mind")
+    # A game starting frees the GPU at once (the idle check catches it too, later).
+    bus.add_signal_receiver(lambda *_: model_used[0] and unload_model(), signal_name="GameRegistered",
+                            dbus_interface="com.feralinteractive.GameMode")
+    GLib.timeout_add_seconds(60, exit_if_idle)
+    loop.run()
+
+
+# --- CLI -----------------------------------------------------------------
+def main(argv):
+    as_json, deep = "--json" in argv, "--deep" in argv
+    argv = [a for a in argv if a not in ("--json", "--deep")]
+    cmd, args = (argv[0], argv[1:]) if argv else ("help", [])
+    if cmd == "index":
+        print(f"indexed {index()} files")
+    elif cmd == "search" and args:
+        rows = search(args)
+        if as_json:
+            print(json.dumps(rows, indent=1))
+        for r in [] if as_json else rows:
+            print(f"{human(r['size']):>9}  {time.strftime('%Y-%m-%d', time.localtime(r['mtime']))}  {r['path']}"
+                  + (f"  ← {r['origin']}" if r["origin"] else ""))
+    elif cmd == "ask" and args:
+        a = ask(" ".join(args), deep)
+        if as_json:
+            print(json.dumps(a, indent=1))
+            return True
+        f = a["filters"]
+        day = lambda t: time.strftime("%Y-%m-%d", time.localtime(t))
+        print("understood (" + a["by"] + "): " + ", ".join(filter(None, [
+            f["kinds"] and "/".join(f["kinds"]),
+            f["after"] and f"from {day(f['after'])}", f["before"] and f"until {day(f['before'] - 1)}",
+            f["exts"] and "/".join(e[1:] for e in f["exts"]),
+            f["place"] and f"in ~/{f['place']}", f["origin"] and f"downloaded from {f['origin']}",
+            f["downloaded"] and not f["origin"] and "downloaded",
+            f["min_size"] and f"over {human(f['min_size'])}", f["max_size"] and f"under {human(f['max_size'])}",
+            (f["words"] or f["also"]) and "named like " + " ".join(f["words"] + f["also"])]))
+              or "nothing to go on")
+        if a["loose"]:
+            print("nothing matched all of it; closest:")
+        for r in a["results"][:15]:
+            print(f"{human(r['size']):>9}  {day(r['mtime'])}  {r['path']}"
+                  + (f"  ← {r['origin']}" if r["origin"] else ""))
+    elif cmd == "stats":
+        s = stats()
+        if as_json:
+            print(json.dumps(s, indent=1))
+            return True
+        d = s["disk"]
+        print(f"disk  {human(d['used'])} used of {human(d['total'])}, {human(d['free'])} free")
+        if s["steam"]:
+            print(f"steam {human(s['steam'])}")
+        snap = s["snapshots"]
+        if snap:
+            held = human(snap["bytes"]) if snap["bytes"] is not None else "size unknown (no btrfs quotas)"
+            print(f"snapshots {snap['count']}, {held}")
+        print("home:")
+        for h in s["home_top"]:
+            print(f"  {human(h['bytes']):>9}  {h['dir']}")
+    elif cmd == "cleanup":
+        c = candidates()
+        if as_json:
+            print(json.dumps(c, indent=1))
+            return True
+        for x in c:
+            print(f"{human(x['bytes']):>9}  {x['category']:<10} {x['path']}\n{'':>11}{x['reason']}")
+        print(f"\n{human(sum(x['bytes'] for x in c))} reclaimable. Nothing was deleted "
+              f"(forge-mind clean <path> cleans one).")
+    elif cmd == "clean" and args:
+        done = clean(args)
+        print(f"cleaned {len(done)}, {human(sum(c['bytes'] for c in done))} "
+              "(home files are in the trash until you empty it)")
+        return len(done) == len(args)
+    elif cmd == "serve":
+        serve()
+    else:
+        print(__doc__.strip())
+        return cmd in ("help", "-h", "--help")
+    return True
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main(sys.argv[1:]) else 1)

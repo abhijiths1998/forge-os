@@ -21,7 +21,7 @@ LIGHT = dict(
     link="#5A6BE0", visited="#9A6BD8",
     negative="#D9576E", neutral="#D98A3E", positive="#3E9E6C",
     wm_active=("#EDEBF8", "#1E2140"), wm_inactive=("#F3F2FA", "#8A8EAA"),
-    alpha=dict(window=125, header=115, view=160, tooltip=185, titlebar=120),
+    alpha=dict(window=105, header=95, view=145, tooltip=170, titlebar=100),
 )
 
 DARK = dict(
@@ -35,7 +35,7 @@ DARK = dict(
     link="#9AAAFF", visited="#C3B7EE",
     negative="#F28B9B", neutral="#F6CFA8", positive="#8FD3A8",
     wm_active=("#1F2240", "#E4E6F4"), wm_inactive=("#1A1C33", "#7C80A0"),
-    alpha=dict(window=125, header=115, view=160, tooltip=185, titlebar=120),
+    alpha=dict(window=105, header=95, view=145, tooltip=170, titlebar=100),
 )
 
 # Glass: the alpha values above make backgrounds translucent. Darkly (the
@@ -142,15 +142,14 @@ def konsole_scheme():
             out += f"[{key}Intense]\nColor={rgb(val)}\n\n[{key}Faint]\nColor={rgb(val)}\n\n"
         elif not key.endswith("Intense"):
             out += f"[{base}Faint]\nColor={rgb(val)}\n\n"
-    out += "[General]\nBlur=true\nColorRandomization=false\nDescription=Forge Glass\nOpacity=0.72\nWallpaper=\n"
+    out += "[General]\nBlur=true\nColorRandomization=false\nDescription=Forge Glass\nOpacity=0.64\nWallpaper=\n"
     return out
 
 
 def main():
-    cs = ROOT / "color-schemes"
-    cs.mkdir(parents=True, exist_ok=True)
-    (cs / "ForgeGlassLight.colors").write_text(kde_scheme(LIGHT, "ForgeGlassLight"))
-    (cs / "ForgeGlassDark.colors").write_text(kde_scheme(DARK, "ForgeGlassDark"))
+    # KDE colour schemes (kde_scheme) aren't shipped since the move to
+    # Hyprland; forge-theme-sync themes GTK and Qt from theme.json. The
+    # Konsole scheme stays while Konsole does.
     ko = ROOT / "konsole"
     ko.mkdir(parents=True, exist_ok=True)
     (ko / "ForgeGlass.colorscheme").write_text(konsole_scheme())

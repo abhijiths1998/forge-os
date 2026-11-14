@@ -1,0 +1,45 @@
+diff --git a/src/MainWindow.cpp b/src/MainWindow.cpp
+index 10cff02..721e861 100644
+--- a/src/MainWindow.cpp
++++ b/src/MainWindow.cpp
+@@ -1273,6 +1273,28 @@ void MainWindow::setRemoveWindowTitleBarAndFrame(bool frameless)
+     }
+ }
+ 
++void MainWindow::changeEvent(QEvent *event)
++{
++    KXmlGuiWindow::changeEvent(event);
++
++    // A new style (the desktop switching between a light and a dark colour
++    // scheme re-polishes every widget) can take WA_TranslucentBackground off
++    // the window, and the terminal is then painted opaque whatever the colour
++    // scheme's opacity. It is only set once, in the constructor, so set it again.
++    switch (event->type()) {
++    case QEvent::StyleChange:
++    case QEvent::PaletteChange:
++    case QEvent::ApplicationPaletteChange:
++        if (WindowSystemInfo::HAVE_TRANSPARENCY && !testAttribute(Qt::WA_TranslucentBackground)) {
++            setAttribute(Qt::WA_TranslucentBackground, true);
++            update();
++        }
++        break;
++    default:
++        break;
++    }
++}
++
+ void MainWindow::showEvent(QShowEvent *event)
+ {
+     // Apply this code on first show only
+diff --git a/src/MainWindow.h b/src/MainWindow.h
+index 6ee789b..69c5f31 100644
+--- a/src/MainWindow.h
++++ b/src/MainWindow.h
+@@ -159,6 +159,7 @@ protected:
+ 
+     // reimplemented from QWidget
+     bool focusNextPrevChild(bool next) override;
++    void changeEvent(QEvent *event) override;
+ 
+     // reimplemented from KXMLGUIBuilder
+     QWidget *createContainer(QWidget *parent, int index, const QDomElement &element, QAction *&containerAction) override;

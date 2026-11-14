@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# forge-theme-login: the login screen (SDDM's forge-glass theme) in the
+# desktop's theme: its accent, light or dark, and the matching wallpaper.
+#
+#   forge-theme-login <#RRGGBB> <dark|light>      (root)
+#
+# Run by forge-theme-sync through pkexec; polkit (org.forgeos.theme-login)
+# lets the user at the machine do it without a password, so it only ever
+# writes this one file, from strictly checked arguments.
+set -euo pipefail
+
+THEME=/usr/share/sddm/themes/forge-glass
+WALLPAPERS=/usr/share/wallpapers/ForgeGlass/contents
+
+fail() { echo "forge-theme-login: $*" >&2; exit 1; }
+(( EUID == 0 )) || fail "needs root (pkexec forge-theme-login ...)"
+[[ $# -eq 2 ]] || fail "usage: forge-theme-login <#RRGGBB> <dark|light>"
+[[ "$1" =~ ^#[0-9A-Fa-f]{6}$ ]] || fail "accent is #RRGGBB"
+[[ "$2" == dark || "$2" == light ]] || fail "mode is dark or light"
+[[ -d "${THEME}" ]] || fail "no forge-glass login theme"
+
+images="${WALLPAPERS}/images$([[ "$2" == dark ]] && echo _dark)"
+background="$(ls "${images}"/*.png 2>/dev/null | sort -V | tail -n1)"
+
+tmp="$(mktemp "${THEME}/.theme.conf.user.XXXXXX")"
+{
+    echo "# Written by forge-theme-sync (forge-theme-login): the desktop's Forge theme."
+    echo "[General]"
+    echo "accent=$1"
+    echo "dark=$([[ "$2" == dark ]] && echo true || echo false)"
+    [[ -n "${background}" ]] && echo "background=${background}"
+} > "${tmp}"
+chmod 644 "${tmp}"
+mv "${tmp}" "${THEME}/theme.conf.user"

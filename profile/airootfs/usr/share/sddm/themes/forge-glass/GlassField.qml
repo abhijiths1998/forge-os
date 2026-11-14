@@ -14,8 +14,8 @@ TextField {
     passwordCharacter: "•"
     background: Rectangle {
         radius: 12 * root.u
-        color: parent.activeFocus ? "#B3FFFFFF" : "#66FFFFFF"
-        border.color: parent.activeFocus ? root.accent : "#99FFFFFF"
+        color: root.glass(parent.activeFocus ? 0.7 : 0.4)
+        border.color: parent.activeFocus ? root.accent : root.glass(0.6)
         border.width: parent.activeFocus ? 1.5 : 1
         Behavior on color { ColorAnimation { duration: 150 } }
     }

@@ -1,0 +1,13 @@
+[Unit]
+Description=Forge idle: dim, lock, screens off and sleep (hypridle)
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/forge-idle
+Restart=on-failure
+Slice=background-graphical.slice
+
+[Install]
+WantedBy=graphical-session.target

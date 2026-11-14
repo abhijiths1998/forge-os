@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Theming Kit
+GenericName=Themes and Appearance
+Comment=Pick a theme or shape your own colour and liquid glass
+Exec=forge-themekit
+Icon=preferences-desktop-theme
+Categories=Settings;DesktopSettings;
+Keywords=theme;appearance;colour;color;accent;glass;blur;transparency;dark;light;wallpaper;
+StartupNotify=true
+StartupWMClass=org.forgeos.themekit

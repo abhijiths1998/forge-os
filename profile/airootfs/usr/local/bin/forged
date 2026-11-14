@@ -1,0 +1,712 @@
+#!/usr/bin/env python3
+"""forged: the state of the desktop, and the switches for it, in one place.
+
+  forged state                 everything, as JSON
+  forged set <key> <value>     change one thing (keys below)
+  forged media <action>        play-pause, next, previous
+  forged watch                 the state as one JSON line now and on every change
+  forged serve                 D-Bus service org.forgeos.Forged (session bus)
+
+Forge Control (the Control Center) is its first user; the Assistant, Focus
+and the Dynamic Island build on it later. It reads each part from the
+service that owns it and listens to that service's signals, so the state is
+live whoever changes it (a volume key, another app, `forge theme`):
+
+  wifi         NetworkManager           set: on | off | toggle  (+ nearby networks)
+  bluetooth    BlueZ                    set: on | off | toggle  (+ paired devices)
+  volume       PipeWire (wpctl)         set: 0-150 | +N | -N | mute | unmute | toggle
+  output       PipeWire (pactl)         set: an output's name (volume's outputs)
+  brightness   backlight (logind)       set: 0-100 | +N | -N
+  power        power-profiles-daemon    set: power-saver | balanced | performance
+  thermal      forge-thermal            set: a profile name
+  dark         Forge theme              set: on | off | toggle
+  tiling       Hyprland, per workspace  set: on | off | toggle  (the focused workspace)
+  dnd          do not disturb          set: on | off | toggle  (forge-shell holds pop-ups back)
+  battery      UPower                   (read only)
+  media        MPRIS players            (forged media ...)
+
+Things that take a while (joining a network, connecting a device) go
+through `forged do <action> [arg] [extra]`, which answers once it's done:
+
+  wifi-connect <ssid> [password]   wifi-disconnect   wifi-rescan
+  bt-connect <address>             bt-disconnect <address>
+
+D-Bus: State() -> s (JSON), Set(s key, s value) -> s (an error, or ""),
+Do(s action, s arg, s extra) -> s (an error, or "", when done),
+Media(s action) -> b, and the signal Changed(s state), sent with the whole
+state whenever any part of it changes.
+"""
+import contextlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+HOME = Path.home()
+CONFIG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+STATE = Path(os.environ.get("XDG_STATE_HOME", HOME / ".local/state")) / "forge"
+TILING = STATE / "tiling.json"   # shared with Hyprland's tiling.lua
+DND = STATE / "dnd.json"
+BACKLIGHT = Path("/sys/class/backlight")
+# Forge's other tools (forge, forge-thermal, forge-theme-sync) live beside
+# forged; looked up there first, so a copy in ~/.local/bin uses its siblings.
+TOOLS = f"{Path(__file__).resolve().parent}:{os.environ.get('PATH', '/usr/bin')}"
+IFACE = "org.forgeos.Forged"
+PATH = "/org/forgeos/Forged"
+
+
+def run(*cmd, timeout=3):
+    """A command's output, or "" if it failed or isn't there."""
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def start_capture(cmd, done):
+    """Run a command in the background; done(returncode, stderr) once it exits."""
+    from gi.repository import GLib
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    except OSError as e:
+        done(127, str(e))
+        return
+    GLib.child_watch_add(p.pid, lambda _pid, status: done(p.wait(), p.stderr.read().strip()))
+
+
+def read_json(path):
+    """A JSON object from a file, or {} if it's missing or broken."""
+    try:
+        value = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def write_json(path, value):
+    """Write a JSON file atomically."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(value, indent=2) + "\n")
+    tmp.replace(path)
+
+
+def nm_fields(line):
+    """nmcli -t fields: split on ':' but not '\\:', then unescape."""
+    return [f.replace("\\:", ":") for f in re.split(r"(?<!\\):", line)]
+
+
+def tool(name):
+    """A command by name, Forge's own tools first (see TOOLS)."""
+    return shutil.which(name, path=TOOLS) or name
+
+
+def start(*cmd, done=None):
+    """Run a command in the background; done() once it exits."""
+    from gi.repository import GLib
+    cmd = (tool(cmd[0]), *cmd[1:])
+    try:
+        p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError:
+        return False
+    GLib.child_watch_add(p.pid, lambda *_: done and done())
+    return True
+
+
+class Desktop:
+    """Reads and changes each part of the desktop's state."""
+
+    def __init__(self, session, system):
+        self.session, self.system = session, system
+        self.dnd_on = read_json(DND).get("enabled", False) is True
+        self.wifi_busy = None      # the SSID being joined
+        self.bt_busy = set()       # addresses being connected or disconnected
+
+    def _props(self, bus, name, path, iface):
+        import dbus
+        try:
+            return bus.get_object(name, path).GetAll(iface, dbus_interface="org.freedesktop.DBus.Properties")
+        except dbus.DBusException:
+            return None
+
+    # --- reading ---------------------------------------------------------
+    def wifi(self):
+        nm = self._props(self.system, "org.freedesktop.NetworkManager", "/org/freedesktop/NetworkManager",
+                         "org.freedesktop.NetworkManager")
+        if nm is None:
+            return {"available": False}
+        # Saved Wi-Fi connections, by name (NetworkManager names them by SSID).
+        known = {f[0] for f in map(nm_fields, run("nmcli", "-t", "-f", "NAME,TYPE", "connection", "show").splitlines())
+                 if len(f) == 2 and f[1] == "802-11-wireless"}
+        networks = {}
+        for f in map(nm_fields, run("nmcli", "-t", "-f", "IN-USE,SSID,SIGNAL,SECURITY", "device", "wifi", "list",
+                                    "--rescan", "no").splitlines()):
+            if len(f) != 4 or not f[1]:
+                continue  # hidden networks have no name to show
+            inuse, ssid, sig, sec = f[0] == "*", f[1], int(f[2] or 0), f[3]
+            old = networks.get(ssid)  # one row per name, its strongest access point
+            networks[ssid] = {"ssid": ssid, "signal": max(sig, old["signal"] if old else 0),
+                              "secure": sec not in ("", "--"), "known": ssid in known,
+                              "active": inuse or bool(old and old["active"])}
+        ranked = sorted(networks.values(), key=lambda n: (not n["active"], not n["known"], -n["signal"]))
+        current = next((n for n in ranked if n["active"]), None)
+        return {"available": bool(nm["WirelessHardwareEnabled"]), "enabled": bool(nm["WirelessEnabled"]),
+                "ssid": current and current["ssid"], "signal": current and current["signal"],
+                "wired": str(nm.get("PrimaryConnectionType", "")) == "802-3-ethernet",
+                "busy": self.wifi_busy, "networks": ranked[:15]}
+
+    def _bluez(self):
+        import dbus
+        try:
+            om = self.system.get_object("org.bluez", "/")
+            return om.GetManagedObjects(dbus_interface="org.freedesktop.DBus.ObjectManager")
+        except dbus.DBusException:
+            return {}
+
+    def bluetooth(self):
+        objects = self._bluez()
+        adapters = [i["org.bluez.Adapter1"] for i in objects.values() if "org.bluez.Adapter1" in i]
+        if not adapters:
+            return {"available": False}
+        powered = bool(adapters[0]["Powered"])
+        devices = []
+        for i in objects.values():
+            d = i.get("org.bluez.Device1")
+            if not d or not (d.get("Paired") or d.get("Connected")):
+                continue
+            battery = i.get("org.bluez.Battery1", {}).get("Percentage")
+            address = str(d.get("Address", ""))
+            devices.append({"name": str(d.get("Alias") or d.get("Name") or address), "address": address,
+                            "connected": bool(d.get("Connected")), "icon": str(d.get("Icon", "")),
+                            "battery": int(battery) if battery is not None else None,
+                            "busy": address in self.bt_busy})
+        devices.sort(key=lambda d: (not d["connected"], d["name"].lower()))
+        return {"available": True, "enabled": powered, "devices": devices,
+                "connected": [d["name"] for d in devices if d["connected"]]}
+
+    def volume(self):
+        out = run("wpctl", "get-volume", "@DEFAULT_AUDIO_SINK@")
+        m = re.search(r"Volume:\s*([\d.]+)", out)
+        if not m:
+            return {"available": False}
+        try:
+            sinks = json.loads(run("pactl", "-f", "json", "list", "sinks") or "[]")
+        except ValueError:
+            sinks = []
+        default = run("pactl", "get-default-sink").strip()
+        outputs = []
+        for sink in sinks:
+            props = sink.get("properties", {})
+            port = next((p for p in sink.get("ports", []) if p.get("name") == sink.get("active_port")), {})
+            bus = props.get("device.bus", "")
+            # Plain names: the port ("Speakers", "Headphones", "HDMI / DisplayPort")
+            # for built-in sound, the product for Bluetooth and USB devices.
+            label = (props.get("device.description") if bus in ("bluetooth", "usb") or not port
+                     else port.get("description")) or sink.get("description", sink["name"])
+            kind = ("bluetooth" if bus == "bluetooth" else "usb" if bus == "usb"
+                    else "hdmi" if "hdmi" in port.get("name", "") else
+                    "headphones" if "headphone" in port.get("name", "") else "speaker")
+            outputs.append({"name": sink["name"], "label": label, "kind": kind, "default": sink["name"] == default})
+        device = next((o["label"] for o in outputs if o["default"]), None)
+        return {"available": True, "level": round(float(m[1]) * 100), "muted": "MUTED" in out,
+                "device": device, "outputs": outputs}
+
+    def _backlight(self):
+        """The screen's backlight device in sysfs (the built-in panel's)."""
+        devices = sorted(BACKLIGHT.glob("*")) if BACKLIGHT.is_dir() else []
+        # Firmware interfaces (acpi_video) last: the GPU's own is the one that works.
+        devices.sort(key=lambda d: (d.joinpath("type").read_text().strip() == "firmware"
+                                    if d.joinpath("type").exists() else True))
+        return devices[0] if devices else None
+
+    def brightness(self):
+        dev = self._backlight()
+        if dev is None:
+            return {"available": False}
+        try:
+            level, top = int(dev.joinpath("brightness").read_text()), int(dev.joinpath("max_brightness").read_text())
+        except (OSError, ValueError):
+            return {"available": False}
+        return {"available": True, "level": round(100 * level / top) if top else 0, "display": dev.name}
+
+    def power(self):
+        p = self._props(self.system, "net.hadess.PowerProfiles", "/net/hadess/PowerProfiles", "net.hadess.PowerProfiles")
+        if p is None:
+            return {"available": False}
+        return {"available": True, "profile": str(p["ActiveProfile"]),
+                "profiles": [str(x["Profile"]) for x in p["Profiles"]]}
+
+    def battery(self):
+        p = self._props(self.system, "org.freedesktop.UPower", "/org/freedesktop/UPower/devices/DisplayDevice",
+                        "org.freedesktop.UPower.Device")
+        if not p or not p.get("IsPresent"):
+            return {"available": False}
+        # UPower states: 1 charging, 2 discharging, 4 fully charged.
+        return {"available": True, "percent": round(float(p["Percentage"])),
+                "charging": int(p["State"]) in (1, 4), "minutes_left": int(p["TimeToEmpty"]) // 60 or None}
+
+    def thermal(self):
+        if not shutil.which("forge-thermal", path=TOOLS):
+            return {"available": False}
+        status = dict(line.split("=", 1) for line in run(tool("forge-thermal"), "status").splitlines() if "=" in line)
+        # Profiles that set firmware limits (the 6th column) only where the
+        # firmware takes them.
+        firmware = any(k.startswith("fw_") for k in status)
+        profiles = []
+        for line in run(tool("forge-thermal"), "list").splitlines():
+            f = line.split("\t")
+            needs_fw = len(f) > 5 and any(k in f[5] for k in ("_LIMIT=", "_W="))
+            if line.strip() and (firmware or not needs_fw):
+                profiles.append(f[0])
+        return {"available": bool(profiles), "profile": status.get("profile"), "profiles": profiles,
+                "cpu_temp": int(status["cpu_temp_c"]) if status.get("cpu_temp_c", "").isdigit() else None}
+
+    def dark(self):
+        theme = read_json(CONFIG / "forge/theme.json")
+        return {"available": True, "enabled": theme.get("dark", True) is not False}
+
+    def _workspace(self):
+        """The focused Hyprland workspace's id, or None outside Hyprland."""
+        try:
+            return int(json.loads(run("hyprctl", "activeworkspace", "-j") or "{}").get("id"))
+        except (TypeError, ValueError):
+            return None
+
+    def tiling(self):
+        ws = self._workspace()
+        if ws is None:
+            return {"available": False}
+        state = read_json(TILING)
+        per = state.get("workspaces", {}) if isinstance(state.get("workspaces"), dict) else {}
+        on = per.get(str(ws), state.get("default", False))
+        return {"available": True, "enabled": on is True, "workspace": ws, "default": state.get("default", False) is True}
+
+    def dnd(self):
+        return {"available": True, "enabled": self.dnd_on}
+
+    def _players(self):
+        names = [str(n) for n in self.session.list_names() if str(n).startswith("org.mpris.MediaPlayer2.")]
+        players = []
+        for n in names:
+            p = self._props(self.session, n, "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2.Player")
+            if p is not None:
+                players.append((n, p))
+        rank = {"Playing": 0, "Paused": 1}
+        players.sort(key=lambda np: rank.get(str(np[1].get("PlaybackStatus")), 2))
+        return players
+
+    def media(self):
+        players = self._players()
+        if not players:
+            return {"available": False}
+        name, p = players[0]
+        meta = p.get("Metadata", {})
+        artists = meta.get("xesam:artist", [])
+        ident = self._props(self.session, name, "/org/mpris/MediaPlayer2", "org.mpris.MediaPlayer2") or {}
+        return {"available": True, "player": str(ident.get("Identity", name.rsplit(".", 1)[-1])),
+                "playing": str(p.get("PlaybackStatus")) == "Playing",
+                "title": str(meta.get("xesam:title", "")), "artist": ", ".join(str(a) for a in artists),
+                "art": str(meta.get("mpris:artUrl", "")) or None,
+                "can_next": bool(p.get("CanGoNext")), "can_previous": bool(p.get("CanGoPrevious"))}
+
+    PARTS = ("wifi", "bluetooth", "volume", "brightness", "power", "battery", "thermal", "dark", "tiling",
+             "dnd", "media")
+
+    def read(self, part):
+        try:
+            return getattr(self, part)()
+        except Exception as e:  # one broken part must not take the rest down
+            return {"available": False, "error": str(e)}
+
+    # --- changing --------------------------------------------------------
+    def set(self, key, value, done):
+        """Change key to value; done() when it has taken effect. An error, or ""."""
+        import dbus
+        on = {"on": True, "off": False, "true": True, "false": False}.get(value.lower())
+        if value.lower() == "toggle" and key in ("wifi", "bluetooth", "dark", "tiling", "dnd"):
+            on = not self.read(key).get("enabled", False)
+        if key in ("wifi", "bluetooth", "dark", "tiling", "dnd") and on is None:
+            return f"{key} is on, off or toggle"
+        if key == "wifi":
+            start("nmcli", "radio", "wifi", "on" if on else "off", done=done)
+        elif key == "bluetooth":
+            adapters = [p for p, i in self._bluez().items() if "org.bluez.Adapter1" in i]
+            if not adapters:
+                return "no Bluetooth adapter"
+            if on:
+                run("rfkill", "unblock", "bluetooth")
+            try:
+                self.system.get_object("org.bluez", adapters[0]).Set(
+                    "org.bluez.Adapter1", "Powered", dbus.Boolean(on), dbus_interface="org.freedesktop.DBus.Properties")
+            except dbus.DBusException as e:
+                return e.get_dbus_message() or "couldn't switch Bluetooth"
+            done()
+        elif key == "volume":
+            if value in ("mute", "unmute", "toggle"):
+                start("wpctl", "set-mute", "@DEFAULT_AUDIO_SINK@",
+                      {"mute": "1", "unmute": "0", "toggle": "toggle"}[value], done=done)
+            elif re.fullmatch(r"[+-]\d+", value):
+                level = max(0, min(150, self.volume().get("level", 0) + int(value)))
+                start("wpctl", "set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", f"{level / 100:.2f}", done=done)
+            elif value.isdigit() and int(value) <= 150:
+                start("wpctl", "set-volume", "-l", "1.5", "@DEFAULT_AUDIO_SINK@", f"{int(value) / 100:.2f}", done=done)
+            else:
+                return "volume is 0-150, mute or unmute"
+        elif key == "output":
+            if value not in [o["name"] for o in self.volume().get("outputs", [])]:
+                return "no such output; see volume.outputs"
+            start("pactl", "set-default-sink", value, done=done)
+        elif key == "brightness":
+            dev = self._backlight()
+            if dev is None:
+                return "no display with adjustable brightness"
+            now = self.brightness().get("level", 0)
+            if re.fullmatch(r"[+-]\d+", value):
+                level = max(1, min(100, now + int(value)))
+            elif value.isdigit() and int(value) <= 100:
+                level = max(1, int(value))
+            else:
+                return "brightness is 0-100, +N or -N"
+            top = int(dev.joinpath("max_brightness").read_text())
+            # logind lets the user at the machine set it, no root or udev rule needed.
+            try:
+                self.system.get_object("org.freedesktop.login1", "/org/freedesktop/login1/session/auto").SetBrightness(
+                    "backlight", dev.name, dbus.UInt32(round(top * level / 100)),
+                    dbus_interface="org.freedesktop.login1.Session")
+            except dbus.DBusException as e:
+                return e.get_dbus_message() or "couldn't set the brightness"
+            done()
+        elif key == "power":
+            if value not in self.power().get("profiles", []):
+                return "power is " + ", ".join(self.power().get("profiles", [])) or "no power profiles"
+            start("powerprofilesctl", "set", value, done=done)
+        elif key == "thermal":
+            if value not in self.thermal().get("profiles", []):
+                return "thermal is " + ", ".join(self.thermal().get("profiles", []))
+            start("pkexec", "/usr/local/bin/forge-thermal", "apply", value, done=done)
+        elif key == "dark":
+            start("forge", "theme", "dark" if on else "light", done=done)
+        elif key == "tiling":
+            ws = self._workspace()
+            if ws is None:
+                return "tiling needs a Hyprland session"
+            state = read_json(TILING)
+            per = state.get("workspaces") if isinstance(state.get("workspaces"), dict) else {}
+            per[str(ws)] = on
+            write_json(TILING, {"default": state.get("default", False) is True, "workspaces": per})
+            # Hyprland's tiling.lua re-reads the file and floats or tiles the windows.
+            start("hyprctl", "eval", "forge.tiling.reload()", done=done)
+        elif key == "dnd":
+            self.dnd_on = on
+            write_json(DND, {"enabled": on})
+            done()
+        else:
+            return f"no {key}; try: wifi bluetooth volume output brightness power thermal dark tiling dnd"
+        return ""
+
+    def do(self, action, arg, extra, finish, changed):
+        """A slow action; finish(error or "") when it's done. changed(part) as it goes."""
+
+        if action == "wifi-connect":
+            ssid, password = arg, extra
+            if not ssid:
+                return finish("which network?")
+            known = any(n["ssid"] == ssid and n["known"] for n in self.wifi().get("networks", []))
+            if known and not password:
+                cmd = ["nmcli", "--wait", "20", "connection", "up", "id", ssid]
+            else:
+                cmd = ["nmcli", "--wait", "20", "device", "wifi", "connect", ssid] + (["password", password] if password else [])
+            self.wifi_busy = ssid
+            changed("wifi")
+
+            def joined(rc, err):
+                self.wifi_busy = None
+                changed("wifi")
+                if rc == 0:
+                    return finish("")
+                if "Secrets were required" in err or "password" in err.lower() or "802-11-wireless-security" in err:
+                    return finish("needs-password")
+                finish(err.split("Error: ", 1)[-1] or "couldn't join " + ssid)
+            start_capture(cmd, joined)
+        elif action == "wifi-disconnect":
+            dev = next((f[0] for f in map(nm_fields, run("nmcli", "-t", "-f", "DEVICE,TYPE", "device").splitlines())
+                        if len(f) == 2 and f[1] == "wifi"), None)
+            if not dev:
+                return finish("no Wi-Fi device")
+            start_capture(["nmcli", "device", "disconnect", dev], lambda rc, err: (changed("wifi"), finish(err if rc else "")))
+        elif action == "wifi-rescan":
+            # Results arrive over the next few seconds; NetworkManager's signals bring them in.
+            start_capture(["nmcli", "device", "wifi", "rescan"], lambda rc, err: (changed("wifi"), finish("")))
+        elif action in ("bt-connect", "bt-disconnect"):
+            path = next((p for p, i in self._bluez().items()
+                         if str(i.get("org.bluez.Device1", {}).get("Address", "")) == arg), None)
+            if not path:
+                return finish("no such device")
+            self.bt_busy.add(arg)
+            changed("bluetooth")
+
+            def done(err=""):
+                self.bt_busy.discard(arg)
+                changed("bluetooth")
+                finish(err)
+            device = self.system.get_object("org.bluez", path)
+            getattr(device, "Connect" if action == "bt-connect" else "Disconnect")(
+                dbus_interface="org.bluez.Device1", timeout=30,
+                reply_handler=lambda: done(),
+                error_handler=lambda e: done(e.get_dbus_message() or str(e)))
+        else:
+            finish(f"no {action}; try: wifi-connect wifi-disconnect wifi-rescan bt-connect bt-disconnect")
+
+    def media_action(self, action):
+        import dbus
+        method = {"play-pause": "PlayPause", "next": "Next", "previous": "Previous"}.get(action)
+        players = self._players()
+        if not method or not players:
+            return False
+        try:
+            self.session.get_object(players[0][0], "/org/mpris/MediaPlayer2").get_dbus_method(
+                method, "org.mpris.MediaPlayer2.Player")()
+        except dbus.DBusException:
+            return False
+        return True
+
+
+# --- D-Bus service --------------------------------------------------------
+def serve():
+    import dbus
+    import dbus.service
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import Gio, GLib
+
+    DBusGMainLoop(set_as_default=True)
+    session = dbus.SessionBus()
+    # Without a system bus (a container, a broken boot) the parts it serves
+    # read as unavailable; the rest still works.
+    try:
+        system = dbus.SystemBus()
+    except dbus.DBusException:
+        system = None
+    desk = Desktop(session, system)
+
+    class Forged(dbus.service.Object):
+        def __init__(self):
+            super().__init__(session, PATH)
+            self.state = {part: desk.read(part) for part in Desktop.PARTS}
+            self.dirty, self.flush_id = set(), None
+
+        def refresh(self, *parts):
+            """Re-read parts soon (signals come in bursts), and announce a change."""
+            self.dirty.update(parts or Desktop.PARTS)
+            if self.flush_id is None:
+                self.flush_id = GLib.timeout_add(120, self.flush)
+
+        def flush(self):
+            self.flush_id = None
+            parts, self.dirty = self.dirty, set()
+            changed = False
+            for part in parts:
+                new = desk.read(part)
+                changed |= new != self.state.get(part)
+                self.state[part] = new
+            if changed:
+                self.Changed(json.dumps(self.state))
+            return False
+
+        @dbus.service.method(IFACE, out_signature="s")
+        def State(self):
+            return json.dumps(self.state)
+
+        @dbus.service.method(IFACE, in_signature="ss", out_signature="s")
+        def Set(self, key, value):
+            key, value = str(key), str(value)
+            part = key if key in Desktop.PARTS else None
+            err = desk.set(key, value, lambda: part and self.refresh(part))
+            if not err and part:
+                self.refresh(part)
+            return err
+
+        @dbus.service.method(IFACE, in_signature="sss", out_signature="s",
+                             async_callbacks=("reply", "error"))
+        def Do(self, action, arg, extra, reply, error):
+            desk.do(str(action), str(arg), str(extra), lambda err: reply(err), lambda part: self.refresh(part))
+
+        @dbus.service.method(IFACE, in_signature="s", out_signature="b")
+        def Media(self, action):
+            ok = desk.media_action(str(action))
+            self.refresh("media")
+            return ok
+
+        @dbus.service.signal(IFACE, signature="s")
+        def Changed(self, state):
+            pass
+
+    name = dbus.service.BusName(IFACE, session, do_not_queue=True)  # noqa: F841 (held while running)
+    forged = Forged()
+    props = "org.freedesktop.DBus.Properties"
+
+    def on(bus, part, **match):
+        if bus is not None:
+            bus.add_signal_receiver(lambda *a, **k: forged.refresh(part), **match)
+
+    # Each part's own service says when it changed.
+    on(system, "wifi", bus_name="org.freedesktop.NetworkManager", signal_name="PropertiesChanged", dbus_interface=props)
+    on(system, "wifi", bus_name="org.freedesktop.NetworkManager", signal_name="StateChanged")
+    for sig in ("PropertiesChanged", "InterfacesAdded", "InterfacesRemoved"):
+        on(system, "bluetooth", bus_name="org.bluez", signal_name=sig)
+    on(system, "power", bus_name="net.hadess.PowerProfiles", signal_name="PropertiesChanged", dbus_interface=props)
+    on(system, "battery", bus_name="org.freedesktop.UPower", signal_name="PropertiesChanged", dbus_interface=props)
+    on(session, "media", path="/org/mpris/MediaPlayer2", signal_name="PropertiesChanged", dbus_interface=props)
+    session.add_signal_receiver(
+        lambda n, *_: n.startswith("org.mpris.MediaPlayer2.") and forged.refresh("media"),
+        signal_name="NameOwnerChanged", dbus_interface="org.freedesktop.DBus")
+
+    # Volume: PipeWire's pulse server reports every sink and server change.
+    if shutil.which("pactl"):
+        sub = subprocess.Popen(["pactl", "subscribe"], stdout=subprocess.PIPE, text=True)
+
+        def on_pactl(source, _cond):
+            line = sub.stdout.readline()
+            if not line:
+                return False
+            if "sink" in line or "server" in line:
+                forged.refresh("volume")
+            return True
+        GLib.io_add_watch(sub.stdout, GLib.IO_IN | GLib.IO_HUP, on_pactl)
+
+    # Theme, tiling and quiet live in files. A new theme, from the Theming
+    # Kit or `forge theme` alike, also goes everywhere (forge-theme-sync),
+    # once the writes settle.
+    theme_sync = [None]
+
+    def sync_theme():
+        theme_sync[0] = None
+        if shutil.which("forge-theme-sync", path=TOOLS):
+            start("forge-theme-sync")
+        return False
+
+    def file_changed(part):
+        forged.refresh(part)
+        if part == "dark":
+            if theme_sync[0] is not None:
+                GLib.source_remove(theme_sync[0])
+            theme_sync[0] = GLib.timeout_add_seconds(2, sync_theme)
+
+    monitors = []
+    for path, part in ((CONFIG / "forge/theme.json", "dark"), (TILING, "tiling"), (DND, "dnd")):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        m = Gio.File.new_for_path(str(path)).monitor_file(Gio.FileMonitorFlags.NONE, None)
+        m.connect("changed", lambda *_, part=part: file_changed(part))
+        monitors.append(m)
+
+    # The focused workspace decides what "tiling" shows: Hyprland's event
+    # socket says when it changes.
+    def watch_hyprland():
+        sig = os.environ.get("HYPRLAND_INSTANCE_SIGNATURE")
+        sock = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "hypr" / (sig or "") / ".socket2.sock"
+        if not sig or not sock.exists():
+            return
+        conn = Gio.SocketClient().connect(Gio.UnixSocketAddress.new(str(sock)), None)
+        lines = Gio.DataInputStream.new(conn.get_input_stream())
+
+        def on_line(stream, result):
+            try:
+                line, _ = stream.read_line_finish_utf8(result)
+            except GLib.Error:
+                return
+            if line is None:
+                return
+            if line.startswith(("workspace>>", "workspacev2>>", "focusedmon>>", "configreloaded>>")):
+                forged.refresh("tiling")
+            stream.read_line_async(GLib.PRIORITY_LOW, None, on_line)
+        lines.read_line_async(GLib.PRIORITY_LOW, None, on_line)
+        monitors.append(conn)
+    with contextlib.suppress(GLib.Error):
+        watch_hyprland()
+
+    # Brightness changes (keys, idle dimming) have no signal; sysfs can't be
+    # watched. A cheap read once a second covers it.
+    last_brightness = [desk.brightness().get("level")]
+
+    def poll_brightness():
+        level = desk.brightness().get("level")
+        if level != last_brightness[0]:
+            last_brightness[0] = level
+            forged.refresh("brightness")
+        return True
+    GLib.timeout_add_seconds(1, poll_brightness)
+    # Wi-Fi signal and temperatures drift without a signal worth listening to.
+    GLib.timeout_add_seconds(30, lambda: forged.refresh("wifi", "thermal") or True)
+
+    GLib.MainLoop().run()
+
+
+# --- CLI ------------------------------------------------------------------
+def watch():
+    """The state as one JSON line now, then a line on every change (forge-shell
+    reads this; Quickshell has no D-Bus client of its own)."""
+    import dbus
+    from dbus.mainloop.glib import DBusGMainLoop
+    from gi.repository import GLib
+
+    DBusGMainLoop(set_as_default=True)
+    bus = dbus.SessionBus()
+
+    def emit(state):
+        try:
+            print(json.dumps(json.loads(str(state))), flush=True)
+        except BrokenPipeError:
+            loop.quit()
+
+    loop = GLib.MainLoop()
+    bus.add_signal_receiver(emit, signal_name="Changed", dbus_interface=IFACE, path=PATH)
+
+    # forged starts on demand (D-Bus activation); retry until it answers.
+    def first():
+        try:
+            emit(bus.get_object(IFACE, PATH).State(dbus_interface=IFACE, timeout=30))
+            return False
+        except dbus.DBusException:
+            return True
+    if first():
+        GLib.timeout_add_seconds(2, first)
+    loop.run()
+    return True
+
+
+
+def main(argv):
+    cmd, args = (argv[0], argv[1:]) if argv else ("help", [])
+    if cmd == "serve":
+        serve()
+        return True
+    if cmd not in ("state", "set", "media", "do", "watch") or (cmd == "set" and len(args) != 2) \
+            or (cmd == "media" and len(args) != 1) or (cmd == "do" and not 1 <= len(args) <= 3):
+        print(__doc__.strip())
+        return cmd in ("help", "-h", "--help")
+    import dbus
+    if cmd == "watch":
+        return watch()
+    proxy = dbus.SessionBus().get_object(IFACE, PATH)
+    if cmd == "state":
+        print(json.dumps(json.loads(proxy.State(dbus_interface=IFACE)), indent=1))
+        return True
+    if cmd == "media":
+        return bool(proxy.Media(args[0], dbus_interface=IFACE))
+    if cmd == "do":
+        args += [""] * (3 - len(args))
+        err = str(proxy.Do(*args, dbus_interface=IFACE, timeout=60))
+        if err:
+            print(f"forged: {err}", file=sys.stderr)
+        return not err
+    err = str(proxy.Set(args[0], args[1], dbus_interface=IFACE))
+    if err:
+        print(f"forged: {err}", file=sys.stderr)
+    return not err
+
+
+if __name__ == "__main__":
+    sys.exit(0 if main(sys.argv[1:]) else 1)

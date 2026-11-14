@@ -1,0 +1,10 @@
+[Unit]
+Description=Forge Mind: re-index home a few minutes after login, then every 6 hours
+
+[Timer]
+OnStartupSec=5min
+OnUnitActiveSec=6h
+RandomizedDelaySec=10min
+
+[Install]
+WantedBy=timers.target
