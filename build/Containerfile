@@ -94,9 +94,7 @@ RUN cd /var/cache/forge-os-local-repo \
 # Shot, libpamac for the store, Qt WebEngine for the browser; SDL2 and Mesa
 # for Forge's games (packages/forge-games); Neovim, git and tree-sitter for
 # Forge Code's parsers (packages/forge-code); GTK4, VTE and
-# gtk4-layer-shell for Forge Terminal; and for Forge's own Konsole build
-# (packages/konsole, until Forge Terminal replaces it), Konsole itself with
-# extra-cmake-modules and kdoctools. A layer of its own so a Flutter or Qt
+# gtk4-layer-shell for Forge Terminal. A layer of its own so a Flutter or Qt
 # update only redoes this.
 # flutter-bin and pamac are Chaotic-AUR packages, so this container's own
 # pacman.conf gets that repo too (the keyring and mirrorlist are set up above).
@@ -108,7 +106,6 @@ RUN grep -q "^\[chaotic-aur\]" /etc/pacman.conf \
         qt6-base qt6-webengine glycin libjxl \
         sdl2 mesa imagemagick jq git make gcc neovim tree-sitter-cli \
         gtk4 vte4 gtk4-layer-shell meson \
-        konsole extra-cmake-modules kdoctools \
     && pacman -Scc --noconfirm
 
 WORKDIR /build
