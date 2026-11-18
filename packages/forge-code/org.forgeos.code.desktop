@@ -1,0 +1,18 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Code
+GenericName=Code Editor
+Comment=Edit code and text with Forge's Neovim setup
+Exec=forge-code %F
+Icon=nvim
+Terminal=true
+Categories=Development;TextEditor;
+Keywords=neovim;vim;editor;code;
+StartupNotify=false
+MimeType=text/plain;text/markdown;text/x-python;text/x-csrc;text/x-chdr;text/x-c++src;text/x-c++hdr;text/x-rust;text/x-lua;text/x-shellscript;text/x-sql;text/x-qml;application/json;application/x-yaml;application/toml;application/x-shellscript;application/sql;application/x-dart;
+Actions=Gui;
+
+[Desktop Action Gui]
+Name=Open in Neovide
+Exec=forge-code --gui %F
+Terminal=false

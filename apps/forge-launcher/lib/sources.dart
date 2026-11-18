@@ -2,8 +2,8 @@
 //
 // Typing searches apps, Forge actions (theme, tiling, thermal, updates),
 // power actions and a calculator all at once; files come in a moment later
-// from Forge Mind (or Baloo, without it). Two prefixes switch modes: `>`
-// runs a shell command in Konsole, `?` searches the web. Anything else can
+// from Forge Mind (or file names, without it). Two prefixes switch modes: `>`
+// runs a shell command in the terminal, `?` searches the web. Anything else can
 // fall through to a web search, which is always the last row.
 import 'dart:convert';
 import 'dart:io';
@@ -113,9 +113,10 @@ Future<void> sh(String command) async {
   await Process.start('sh', ['-c', command], mode: ProcessStartMode.detached);
 }
 
-/// A command in a Konsole window that stays open afterwards.
-Future<void> inTerminal(String command) =>
-    sh('konsole --hold -e sh -c ${_quote(command)}');
+/// A command in the user's terminal (Forge Terminal, through
+/// xdg-terminal-exec), kept open afterwards so its output can be read.
+Future<void> inTerminal(String command) => sh('xdg-terminal-exec sh -c '
+    '${_quote('$command; echo; printf "Press Enter to close. "; read -r _')}');
 
 Future<void> openUrl(String url) => sh('xdg-open ${_quote(url)}');
 
@@ -157,6 +158,9 @@ const actions = [
   ForgeAction('Screenshot', 'An area, then copy, save or mark it up',
       'applets-screenshooter', 'forge-shot region',
       keywords: 'capture snip print screen grab'),
+  ForgeAction('Record the screen', 'Start or stop; saved in Videos/Recordings',
+      'media-record', 'forge-record toggle',
+      keywords: 'record recording video capture screencast'),
   ForgeAction('Screenshot of the whole screen', 'Saved and copied',
       'applets-screenshooter', 'forge-shot full',
       keywords: 'capture print screen grab'),
@@ -165,12 +169,10 @@ const actions = [
   ForgeAction('Sleep', 'Suspend to RAM', 'system-suspend', 'systemctl suspend',
       keywords: 'suspend'),
   ForgeAction('Log out', '', 'system-log-out',
-      'qdbus6 org.kde.Shutdown /Shutdown logout', keywords: 'logout sign out'),
-  ForgeAction('Restart', '', 'system-reboot',
-      'qdbus6 org.kde.Shutdown /Shutdown logoutAndReboot',
+      'forge-logout', keywords: 'logout sign out'),
+  ForgeAction('Restart', '', 'system-reboot', 'systemctl reboot',
       keywords: 'reboot'),
-  ForgeAction('Shut down', '', 'system-shutdown',
-      'qdbus6 org.kde.Shutdown /Shutdown logoutAndShutdown',
+  ForgeAction('Shut down', '', 'system-shutdown', 'systemctl poweroff',
       keywords: 'power off poweroff'),
 ];
 
@@ -215,7 +217,7 @@ class Sources {
         Result(
           kind: Kind.command,
           title: cmd,
-          subtitle: 'Run in Konsole',
+          subtitle: 'Run in the terminal',
           iconName: 'utilities-terminal',
           score: 100,
           run: () => inTerminal(cmd),
@@ -283,10 +285,15 @@ class Sources {
         subtitle: 'Repos, Chaotic-AUR and AUR',
         iconName: 'system-software-install',
         score: 95,
-        // Forge Store if it's installed, else `forge install` in Konsole.
-        run: () => sh('if command -v forge-store >/dev/null; then '
-            'forge-store --search ${_quote(pkgs)}; else '
-            'konsole --hold -e forge install $pkgs; fi'),
+        // Forge Store if it's installed, else `forge install` in a terminal.
+        run: () async {
+          final store = await Process.run('sh', ['-c', 'command -v forge-store']);
+          if (store.exitCode == 0) {
+            await sh('forge-store --search ${_quote(pkgs)}');
+          } else {
+            await inTerminal('forge install $pkgs');
+          }
+        },
       ));
     }
 
@@ -325,7 +332,7 @@ class Sources {
           RegExp(r'^[\w\-]+(\.[\w\-]+)*\.[a-z]{2,}(/\S*)?$').hasMatch(q));
 
   /// Files for a query: from Forge Mind, which understands requests like
-  /// "the pdf from march", or else from Baloo (KDE's file index). `deep`
+  /// "the pdf from march", or else names under home that match. `deep`
   /// asks Forge Mind to let its local model read the request too; it
   /// returns nothing when no model answered, so the first results stay.
   Future<List<Result>> files(String raw, {bool deep = false}) async {
@@ -333,7 +340,7 @@ class Sources {
     if (query.length < 3 || '>?'.contains(query[0])) return [];
     final mind = await _mindFiles(query, deep);
     if (mind != null || deep) return mind ?? [];
-    return _balooFiles(query);
+    return _nameFiles(query);
   }
 
   /// Forge Mind's answer over D-Bus (org.forgeos.Mind.Ask), or null if it
@@ -361,18 +368,19 @@ class Sources {
     }
   }
 
-  Future<List<Result>> _balooFiles(String query) async {
+  /// Without Forge Mind: file names under home containing the query (four
+  /// levels deep, hidden folders skipped), newest first.
+  Future<List<Result>> _nameFiles(String query) async {
+    final home = Platform.environment['HOME'] ?? '';
     try {
-      final r = await Process.run('baloosearch6', ['-l', '5', query])
-          .timeout(const Duration(seconds: 2));
-      if (r.exitCode != 0) return [];
-      final home = Platform.environment['HOME'] ?? '';
+      final r = await Process.run('find', [
+        home, '-maxdepth', '4', '-not', '-path', '*/.*', '-iname', '*$query*',
+        '-printf', '%T@ %p\n',
+      ]).timeout(const Duration(seconds: 2));
+      final lines = (r.stdout as String).split('\n').where((l) => l.contains(' /')).toList()
+        ..sort((a, b) => b.compareTo(a));
       return [
-        for (final path in (r.stdout as String)
-            .split('\n')
-            .map((l) => l.trim())
-            .where((l) => l.startsWith('/')))
-          _fileResult(path, home),
+        for (final l in lines.take(5)) _fileResult(l.substring(l.indexOf(' ') + 1), home),
       ];
     } catch (_) {
       return [];

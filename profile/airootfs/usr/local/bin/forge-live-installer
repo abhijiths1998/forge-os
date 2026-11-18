@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# forge-live-installer: open Calamares in the live session (run from the
+# live user's Hyprland config). Calamares runs as root; the live user has
+# passwordless sudo, and -E keeps the Wayland display it draws on.
+sleep 2
+exec sudo -E QT_QPA_PLATFORM=wayland calamares

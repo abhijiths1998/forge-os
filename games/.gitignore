@@ -1,0 +1,15 @@
+# compiled binaries (built by make)
+/lumen-drift/lumen-drift
+/prism-smash/prism-smash
+/orbit-golf/orbit-golf
+/bramble-bound/bramble-bound
+*.o
+*.desktop
+*.bmp
+/vintage/relic-runner/relic-runner
+/vintage/ember-isle/ember-isle
+/vintage/nova-lancer/nova-lancer
+/vintage/deep-delve/deep-delve
+/hardlight/hardlight
+/port-calder/port-calder
+.claude/

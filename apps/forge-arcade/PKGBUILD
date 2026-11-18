@@ -1,0 +1,30 @@
+# Forge Arcade: a launcher for the forge-games collection (Flutter, forge_ui).
+# Built from this directory, next to ../forge_ui, by apps/build-packages.sh
+# during the ISO build.
+pkgname=forge-arcade
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Arcade: pick and play the Forge OS games"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+# The games, their covers and games.json come from forge-games.
+depends=('gtk3' 'forge-games')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    # Keep the whole icon font (Forge Shot found tree-shaking drops glyphs).
+    flutter build linux --release --no-tree-shake-icons
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    # Super+G in the session runs `forge-arcade`.
+    ln -s "/usr/lib/${pkgname}/forge-arcade" "${pkgdir}/usr/bin/forge-arcade"
+    install -Dm644 data/org.forgeos.arcade.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.arcade.desktop"
+}

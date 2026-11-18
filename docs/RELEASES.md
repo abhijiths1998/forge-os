@@ -1,25 +1,58 @@
-# Forge OS releases: 2.0 to 3.0
+# Forge OS releases
 
-Forge OS 2 ships the ideas below one release at a time; 3.0 is when they are
-all in. Each release has one theme, and the plumbing a later release needs
-lands first. `docs/ROADMAP.md` keeps the detail and the history of what was
-built; this file is the plan.
+Forge OS 3 moves the desktop from KDE Plasma to Hyprland, with Forge's own
+shell in Quickshell (decided 2026-11-14; the audit and design are in
+`docs/HYPRLAND.md`). Each release has one theme, and the plumbing a later
+release needs lands first. `docs/ROADMAP.md` keeps the detail and the
+history of what was built; this file is the plan.
 
 A release is done when its ISO is built, installed in QEMU and on real
 hardware, and every feature in it has been tried on the installed system,
 not only in the live session or on the dev machine.
 
-| Version | Theme | Status |
-|---|---|---|
-| 2.0 | The Forge look and the first Forge apps | Built, not yet released |
-| 2.1 | Control Center | In progress: forged and the panel built |
-| 2.2 | Living desktop: wallpapers | Planned |
-| 2.3 | Forge Assistant | Planned |
-| 2.4 | Safe updates and the Game Hub | Planned |
-| 2.5 | Focus and the Dynamic Island | Planned |
-| 3.0 | Forge apps everywhere | Planned |
+| Version | Theme | Milestones (HYPRLAND.md) | Status |
+|---|---|---|---|
+| 2.x | KDE Plasma line: 2.0 (the Forge look, the first apps) and 2.1 (Control Center) | — | Frozen: never released as an ISO; its work carries into 3.0 |
+| **3.0** | Hyprland: the session, forge-shell, every Forge app ported, one theme everywhere | M1–M3 | In progress |
+| 3.1 | Forge Arcade (Forge's games) and Forge Terminal + fastfetch | M4–M5 | Planned |
+| 3.2 | The Forge cast and Forge Wallpapers (was 2.2, living desktop) | M6 | Planned |
+| 3.3 | Forge Settings and the keybind editor (from the old 3.0) | M7 | In progress |
+| 3.4 | Forge Code, the Neovim distribution | M8 | Planned |
+| 3.5 | Onboarding: Welcome and Keyboard Dojo | M9 | Planned |
+| 3.6+ | Forge Assistant (was 2.3), safe updates and the Game Hub (2.4), Focus and the Dynamic Island (2.5) | — | Planned |
 
-## 2.0: the Forge look and the first Forge apps
+## 3.0: Hyprland
+
+- **M1, the session** (`apps/forge-session`): Hyprland 0.57 through uwsm,
+  Forge's defaults in Lua under `/usr/share/forge/hypr` (updated with the
+  system) and the user's own files in `~/.config/hypr` (never touched).
+  Forge Glass in Hyprland's terms, NVIDIA set up by `forge-gpu-env`,
+  Windows/macOS-style shortcuts, each with a category and a description,
+  resize and move modes with hints, snapping, per-workspace tiling (off by
+  default), game rules, hypridle and a Forge Glass hyprlock. The live ISO
+  boots into Hyprland and opens Calamares.
+- **M2, forge-shell** (`apps/forge-shell`, Quickshell): the bar, Control
+  Center, popups, notifications with do-not-disturb, OSDs, the desktop
+  shortcut panel, the Super+/ cheat sheet, the hold-Super popup, overview,
+  window switcher, clipboard, emoji and colour pickers. Plasma leaves the
+  ISO.
+- **M3, the apps**: forged and every Forge app without KDE, theme sync to
+  Hyprland, GTK, Qt, the terminal, Neovim, the login screen and fastfetch;
+  Forge Shot on grim with recording; the `forge` CLI's tile, glass, theme
+  and keys.
+- **M7, Forge Settings + keybind editor** (`apps/forge-settings`, Flutter on
+  `forge_ui`): displays, keyboard, mouse, default apps, startup, sound,
+  network/VPN (`nm-connection-editor` fallback), Bluetooth, users, about;
+  plus the shortcuts editor that rebinds any bind from `hyprctl binds -j`
+  with conflict detection, writing `~/.config/hypr/keybinds.user.lua`, and
+  the `forge keys` CLI equivalent. Config errors show as a readable
+  notification with file and line, never the raw red bar.
+
+## The 2.x line (KDE, frozen)
+
+Kept as the record of what 2.0 and 2.1 brought; all of it moves to 3.0.
+
+### 2.0: the Forge look and the first Forge apps
 
 Everything built so far, released together.
 
@@ -40,7 +73,7 @@ To release: version plumbing; a full ISO build; a QEMU install that checks
 the model download in the installer and on first boot; the items in
 ROADMAP's "Verification status" that are still open.
 
-## 2.1: Control Center
+### 2.1: Control Center
 
 Built so far (2026-10-24, tried on the dev machine, not yet in an ISO):
 `forged`, Forge Control with its top-bar button, Forge Battery, and Forge
@@ -69,7 +102,7 @@ gtk-layer-shell anchoring works.
 - **gtk-layer-shell** for Forge's panels, so they anchor to the screen edge;
   the Launcher moves to it too.
 
-## 2.2: Living desktop
+### Was 2.2, now 3.2: Living desktop
 
 - **Live wallpapers:** shader wallpapers (GLSL, nearly free on CPU and
   battery) and video wallpapers (mpv), paused while a game runs full
@@ -81,7 +114,7 @@ gtk-layer-shell anchoring works.
 - **Accent colours from the wallpaper:** the accent, glass tint and every
   Forge app follow the wallpaper (through the Theming Kit).
 
-## 2.3: Forge Assistant
+### Was 2.3, now 3.6+: Forge Assistant
 
 Builds on Forge Mind and `forged`.
 
@@ -98,7 +131,7 @@ Builds on Forge Mind and `forged`.
   logs.
 - An optional cloud model, off by default.
 
-## 2.4: Safe updates and the Game Hub
+### Was 2.4, now 3.6+: Safe updates and the Game Hub
 
 - **Undo for updates:** Forge Store takes a snapshot before each update and
   offers "Undo last update" in one click.
@@ -107,16 +140,17 @@ Builds on Forge Mind and `forged`.
   starts.
 - Forge Mind knows Lutris and Heroic games' folders and leftover prefixes.
 
-## 2.5: Focus and the Dynamic Island
+### Was 2.5, now 3.6+: Focus and the Dynamic Island
 
 - **Focus spaces:** Work, Gaming and Study, each setting wallpaper, apps,
   thermal profile and notifications together.
 - **Dynamic Island:** the clock in the top bar shows the current song, a
   download, a timer or a call.
 
-## 3.0: Forge apps everywhere
+### Was 3.0, now 3.3 and later: Forge apps everywhere
 
-The KDE base stays; the apps people use every day are Forge apps.
+(Written for Plasma; Hyprland replaced the KDE base instead.) The apps
+people use every day are Forge apps.
 
 - **Forge Files:** a file manager with the Assistant built in (search by
   what you remember, storage and cleanup in place).

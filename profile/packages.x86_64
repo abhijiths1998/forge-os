@@ -160,38 +160,31 @@ gst-plugins-bad
 gst-plugins-ugly
 gst-libav
 
-# KDE Plasma desktop: plasma-meta (shell/workspace) + a curated set of
-# apps, not kde-applications-meta (which drags in the entire KDE
-# Applications release - office suite, education apps, kdevelop, games...
-# far more than a gaming/desktop spin needs).
-plasma-meta
-dolphin
-dolphin-plugins
+# The desktop is Hyprland with Forge's shell (forge-session, forge-shell,
+# below; docs/HYPRLAND.md). KDE Plasma and its apps are gone: Forge's own
+# apps and these stopgaps cover what they did, until Forge versions exist.
+# Konsole stays until Forge Terminal's rewrite (milestone 5).
 konsole
-kate
-ark
-gwenview
-okular
-spectacle
-kcalc
-kdeconnect
-filelight
-partitionmanager
-ffmpegthumbs
-kdegraphics-thumbnailers
-kimageformats
-print-manager
+gnome-text-editor
+file-roller
+loupe
+papers
+gnome-calculator
+gparted
+system-config-printer
+cups
+seahorse
+ffmpegthumbnailer
+qt6-imageformats
 sddm
-xdg-desktop-portal-kde
 pipewire
 pipewire-alsa
 pipewire-pulse
 pipewire-jack
 wireplumber
 networkmanager
-plasma-nm
 # VPN protocol plugins: NetworkManager itself was already here, but without
-# these its Plasma applet has no way to actually configure a VPN connection
+# these nm-connection-editor has no way to actually configure a VPN connection
 # (WireGuard needs no plugin, just the userspace tools - NM has supported it
 # natively since 1.16).
 networkmanager-openvpn
@@ -200,43 +193,103 @@ networkmanager-openconnect
 wireguard-tools
 bluez
 bluez-utils
-kwalletmanager
 
 # Forge Theming Kit (apps/forge-themekit, built into the local repo by
 # apps/build-packages.sh): themes and sliders for colour and liquid glass.
 forge-themekit
 
-# Forge Glass default look (pastel liquid glass; see docs/ROADMAP.md). The
-# theme itself (look-and-feel, colour schemes, wallpaper, SDDM theme,
-# Plymouth) is forge-os's own and ships in the airootfs overlay; these are
-# the pieces it builds on:
+# Forge Glass (pastel liquid glass; Hyprland draws the glass itself, see
+# forge-session's look.lua). The pieces it builds on:
 # - whitesur-icon-theme: the rounded-square app icons (built from AUR, see
 #   build/Containerfile; its Apple start-here icons get replaced in
 #   customize_airootfs.sh)
-# - ttf-jetbrains-mono-nerd: terminal type
-# - kwin-effect-rounded-corners-git: rounded window corners
-# - kwin-effects-glass-git: frosted/liquid glass (blur, refraction, edge
-#   lighting) behind every translucent surface; replaces the stock blur
-# - darkly-qt6-git: widget style + window decoration that makes app windows
-#   translucent (the ForgeGlass colour schemes carry the alpha)
-# - kwin-polonium: auto-tiling, off by default (`forge tile on`)
+# - ttf-jetbrains-mono-nerd: terminal type, and the shell's icons
 # The UI font, Plus Jakarta Sans, isn't packaged; it ships in
 # airootfs/usr/share/fonts/plus-jakarta-sans.
 whitesur-icon-theme
 ttf-jetbrains-mono-nerd
-kwin-effect-rounded-corners-git
-kwin-effects-glass-git
-darkly-qt6-git
-kwin-polonium
+
+# Forge's Hyprland session (forge-session, apps/forge-session): Hyprland
+# started through uwsm, Forge's defaults in /usr/share/forge/hypr, the
+# portals, polkit agent, idle/lock, clipboard history, auto-mount and the
+# wallpaper. See docs/HYPRLAND.md.
+forge-session
+hyprland
+uwsm
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+hyprpolkitagent
+hypridle
+hyprlock
+hyprpicker
+hyprsunset
+hyprland-guiutils
+qt6-wayland
+qt5-wayland
+qt6ct
+kvantum
+adw-gtk-theme
+adwaita-cursors
+awww
+grim
+slurp
+wl-clipboard
+cliphist
+wl-clip-persist
+brightnessctl
+playerctl
+udiskie
+gnome-keyring
+libsecret
+upower
+jq
+libnotify
+xdg-user-dirs
+xdg-terminal-exec
+foot
+btop
+nm-connection-editor
+network-manager-applet
+blueman
+nwg-displays
+gpu-screen-recorder
+noto-fonts
+noto-fonts-emoji
+noto-fonts-cjk
 
 # Forge Launcher (apps/forge-launcher, built into the local repo by
 # apps/build-packages.sh): the Meta+Space command bar, in place of KRunner.
 forge-launcher
 
-# Forge Control (apps/forge-control): the Control Center, and the top bar's
-# Forge widgets (its button, Wi-Fi, Bluetooth, Sound, Battery), which the
-# Forge Glass layout puts there.
-forge-control
+# Forge shell (apps/forge-shell, Quickshell): the bar, Control Center,
+# notifications, OSDs, the desktop shortcut panel and the overlays.
+forge-shell
+quickshell
+qt6-5compat
+wtype
+unicode-emoji
+
+# Forge Settings (apps/forge-settings, Flutter on forge_ui): displays,
+# keyboard, mouse, shortcuts with conflict detection, default apps, startup,
+# sound, network/VPN, Bluetooth, users, about. Writes keybinds.user.lua and
+# monitors.lua under ~/.config/hypr/.
+forge-settings
+
+# Forge Wallpapers (apps/forge-wallpapers, Flutter on forge_ui): the Forge
+# cast wallpaper grid and online source stubs; swww/awww integration.
+forge-wallpapers
+awww
+
+# Forge Code (packages/forge-code): Neovim with Forge's offline config.
+neovim
+forge-code
+
+# Forge Welcome (apps/forge-welcome): first-boot choices + Keyboard Dojo.
+forge-welcome
+
+# Forge Thermal (apps/forge-thermal): the app for forge-thermal's cooling
+# profiles and firmware limits.
+forge-thermal
 
 # Forge Shot (apps/forge-shot): screenshots, in place of Spectacle on the
 # Print keys (Spectacle stays, for screen recording).
@@ -257,10 +310,21 @@ forge-store
 pamac
 
 # Default browser: Forge Browser (apps/forge-browser), with built-in ad
-# blocking. Brave stays for sites that need Widevine DRM (Netflix, Spotify
-# web), which Qt WebEngine doesn't ship.
+# blocking, and Widevine for DRM sites (Netflix, Spotify web), which Qt
+# WebEngine doesn't ship. Brave stays as a second browser.
 forge-browser
+chromium-widevine
 brave-bin
+
+# Forge's everyday apps (apps/forge-terminal, forge-files, forge-calendar):
+# Forge's terminal, file manager and calendar on Plasma, opening by default
+# in place of Konsole and Dolphin (which stay installed). Videos and PDFs get
+# thumbnails from ffmpeg and poppler.
+forge-terminal
+forge-files
+forge-calendar
+ffmpeg
+poppler
 
 # Gaming stack
 steam
@@ -309,14 +373,39 @@ chaotic-keyring
 chaotic-mirrorlist
 calamares
 
-# Forge Mind (forge-mind) and Forge Thermal's GUI: Python, its D-Bus and Qt
-# bindings, and paccache for cleaning the package cache
+# Forge Mind (forge-mind): Python, its D-Bus and GObject bindings, and
+# paccache for cleaning the package cache
 python
 python-dbus
 python-gobject
-pyside6
 pacman-contrib
 # Forge Mind's local model runtime; the model itself is downloaded at install
 # time (forge-mind-model). Vulkan, not CUDA: 40 MB instead of 6 GB, any GPU.
 ollama
 ollama-vulkan
+
+# Forge Arcade (forge-arcade): the launcher for the games in forge-games
+# (built from games/ in this repo by packages/forge-games)
+forge-games
+forge-arcade
+
+# Forge Code (packages/forge-code): Neovim with Forge's offline config, in
+# place of gnome-text-editor. Language servers are optional on purpose; these
+# are the ones Forge Code supports out of the box (docs/HYPRLAND.md, M8).
+forge-code
+ripgrep
+fd
+lua-language-server
+pyright
+ruff
+clang
+rust-analyzer
+bash-language-server
+shellcheck
+shfmt
+stylua
+prettier
+taplo-cli
+yaml-language-server
+vscode-json-languageserver
+marksman

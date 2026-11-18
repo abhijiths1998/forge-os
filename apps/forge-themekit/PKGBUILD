@@ -8,7 +8,8 @@ pkgdesc="Forge OS Theming Kit: presets and sliders for colour and liquid glass"
 arch=('x86_64')
 url="https://github.com/abhijiths1998/forge-os"
 license=('GPL-3.0-or-later')
-depends=('gtk3' 'kconfig' 'qt6-tools' 'plasma-workspace' 'kwin-effects-glass-git')
+# Hyprland and forge-theme-sync do the applying (forge-session, the airootfs).
+depends=('gtk3' 'forge-session')
 makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
 options=('!strip' '!debug')
 

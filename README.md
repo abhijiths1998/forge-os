@@ -2,16 +2,17 @@
 
 *Built hot. Runs cool.*
 
-Forge OS is an Arch-based Linux distro for gaming on KDE Plasma, with
+Forge OS is an Arch-based Linux distro for gaming on Hyprland, with
 first-class NVIDIA support. It cherry-picks ideas from CachyOS, Nobara,
 Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
 `docs/ROADMAP.md` for the feature rationale and what's still ahead.
 
-**Forge OS 2** arrives in steps: 2.0 is the Forge look and the first Forge
-apps, then one theme per release (Control Center, living wallpapers, the
-Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
-everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
-version is set in `forge-os-release` (`forge about` shows it).
+**Forge OS 3** moves the desktop from KDE Plasma to Hyprland, with Forge's
+own shell in Quickshell; Plasma is gone. It arrives in steps (3.0 the
+Hyprland desktop, then Forge Arcade and Forge Terminal, the Forge cast and
+wallpapers, Forge Settings, Forge Code, onboarding). The plan is in
+`docs/RELEASES.md`, the move itself in `docs/HYPRLAND.md`; the version is
+set in `forge-os-release` (`forge about` shows it).
 
 ## What you get
 
@@ -23,7 +24,7 @@ version is set in `forge-os-release` (`forge about` shows it).
   Xbox controllers over Bluetooth (xpadneo).
 - **Tuned like Nobara/Bazzite/CachyOS:** linux-zen kernel, zram swap,
   ananicy-cpp with CachyOS's rules, irqbalance, split-lock throttling off,
-  per-drive I/O schedulers, Plasma power profiles.
+  per-drive I/O schedulers, power profiles.
 - **Forge Thermal:** CPU and GPU clock profiles to keep temperatures down,
   from the app or `forge thermal`. The default, Balanced, runs the CPU at
   90% of its maximum.
@@ -31,19 +32,26 @@ version is set in `forge-os-release` (`forge about` shows it).
   (grub-btrfs).
 - **Installer:** Calamares, for UEFI and legacy BIOS machines.
 
-## The look: Forge Glass
+## The desktop: Forge Glass on Hyprland
 
-A calm pastel "liquid glass" desktop on KDE Plasma 6: a slim floating top
-bar, a compact floating dock, frosted glass windows, menus, panels and
-terminal, macOS-style dots under running apps in the dock, Plus Jakarta Sans
-type, and a light and a dark variant. Press **Super+Space** or **Alt+Space** for the command
-bar. In a terminal:
+A calm pastel "liquid glass" desktop: Hyprland frosts translucent windows,
+menus and panels, with rounded squircle corners, a soft lit edge and a deep
+shadow (`apps/forge-session`). Forge's shell (`apps/forge-shell`, Quickshell)
+draws a slim floating glass bar with workspaces, the clock and what's
+playing, the Control Center, notifications with do not disturb, volume and
+brightness displays, and a shortcut panel on the desktop that teaches the
+keys (Super+/ shows them all, holding Super shows what each next key does).
+Shortcuts follow Windows and macOS habits: Super+Q closes, Super+E opens
+files, Super+L locks, Super+arrows snap, Super+1 to 9 switch workspaces,
+Alt+Tab switches windows, Super+Space opens the command bar, Print takes a
+screenshot. Tiling is a per-workspace switch (Super+Shift+T), off to begin
+with. Plus Jakarta Sans type, light and dark. In a terminal:
 
 ```sh
 forge install obs-studio   # repos, Chaotic-AUR, AUR (via pamac)
 forge update               # packages + Flatpaks
 forge theme dark           # or light; no argument toggles
-forge tile on              # auto-tiling (Polonium)
+forge tile on              # tiling on for this workspace
 forge thermal              # temperatures, clocks and the active profile
 forge thermal cool         # silent, cool, balanced or performance
 ```
@@ -57,38 +65,40 @@ theme set in the Theming Kit:
 
 | App | Replaces | Built with |
 |---|---|---|
-| **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner |
+| **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner (layer shell) |
 | **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
 | **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
-| **Forge Control**: the Control Center, a glass panel from the top bar: Wi-Fi, Bluetooth, quiet, dark mode, tiling, brightness, volume, power and cooling profiles, now playing; `forged state` / `forged set` | Plasma's tray popups, in one place | Flutter (forge_ui) + `forged` (Python, D-Bus) |
-| **Forge Shot**: screenshots on the Print keys: an area on the frozen screen (loupe, handles), a window or the whole screen; a thumbnail after; an editor (arrows, boxes, text, highlighter, pixelate, numbered steps, crop); copy, save, copy the text in it | Spectacle (kept for recording) | Flutter (forge_ui) + KWin ScreenShot2 |
-| **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
+| **Forge Shell**: the bar, the Control Center (Wi-Fi, Bluetooth, quiet, dark mode, tiling, night light, brightness, volume, power and cooling profiles, now playing), notifications, OSDs, the desktop shortcut panel, the cheat sheet, overview, Alt+Tab, clipboard and emoji pickers; state from `forged` | Plasma's panels and tray | Quickshell (QML) + `forged` (Python, D-Bus) |
+| **Forge Shot**: screenshots on the Print keys: an area on the frozen screen (loupe, handles), a window (click it) or the whole screen; a thumbnail after; an editor (arrows, boxes, text, highlighter, pixelate, numbered steps, crop); copy, save, copy the text in it. Super+Alt+R records the screen (gpu-screen-recorder, NVENC) | Spectacle | Flutter (forge_ui) + grim |
+| **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and glass (blur, vibrancy, lit edge, grain), opacities and corners; `forge theme <name>` | Plasma's colour and effect settings, for the Forge look | Flutter (forge_ui) |
+| **Forge Settings**: displays, keyboard, mouse, shortcuts with conflict detection, default apps, startup, sound, network/VPN, Bluetooth, users, about; writes `keybinds.user.lua` and `monitors.lua` | System Settings on Hyprland (which has none) | Flutter (forge_ui) |
 
-Each is translucent, so KWin's Glass effect frosts it like the rest of the
-desktop. Brave stays installed for sites that need Widevine DRM.
+Each is translucent, so Hyprland's blur frosts it like the rest of the
+desktop, and each draws a glass title bar of its own (Hyprland draws none). Brave stays installed for sites that need Widevine DRM.
 
 ## One theme everywhere
 
-A theme set in the Theming Kit (or System Settings, or `forge theme`)
+A theme set in the Theming Kit (or with `forge theme`, `forge glass`, or the
+Control Center's dark switch) is one file, `~/.config/forge/theme.json`, and
 reaches as much of the system as can take one:
 
 | Where | How |
 |---|---|
-| Plasma, KDE and Qt apps, Forge's top-bar widgets | KDE's colour scheme |
-| Forge apps (Launcher, Store, Control Center...) | `~/.config/forge/theme.json` |
-| GTK 3 and 4 apps | the `colors.css` KDE writes for them, Breeze GTK |
-| Firefox, Chromium/Brave, Electron apps, web pages | the freedesktop appearance portal (light/dark and the accent) |
-| Flatpak apps | allowed to read those GTK colours; Breeze for GTK 3 apps from Flathub |
-| GNOME settings (`gsettings`), for older GTK apps | light/dark and the nearest named accent |
+| Hyprland: blur, the lit edge, corners, shadows | forge-session's `theme.lua` reads theme.json; `hyprctl reload` |
+| Forge's shell (bar, Control Center, panels) | reads theme.json live |
+| Forge apps (Launcher, Store, Files, Terminal...) and Forge Code | read theme.json |
+| GTK 3 and 4 apps | `forge.css` (libadwaita's named colours, which adw-gtk3 follows), light/dark, icons, fonts, cursor |
+| Qt 5 and 6 apps | a Forge Glass palette through qt5ct/qt6ct |
+| Firefox, Chromium/Brave, Electron apps, web pages | the appearance portal (light/dark and the accent, from GNOME's settings) |
+| Flatpak apps | allowed to read the GTK colours; adw-gtk3 for GTK 3 apps from Flathub |
 | The terminal prompt and `forge`'s output | `~/.config/forge/theme.sh`; open terminals follow at their next prompt |
-| The login screen | its accent, light/dark and wallpaper (`forge-theme-login`, through polkit) |
-| Konsole | its colour scheme (new windows); Forge's Konsole keeps open windows translucent through a light/dark switch |
+| The login screen | its accent and light/dark (`forge-theme-login`, through polkit) |
 
-`forge-theme-sync` does the part KDE doesn't. The Theming Kit runs it, and
-forged runs it whenever KDE's colours change from anywhere else; it follows
-what KDE shows. `forge theme status` shows where each place stands, and
-`forge theme sync` runs it by hand. Not reached: Steam (its own skin) and
-apps with their own theme settings (Discord, Brave's own theme).
+`forge-theme-sync` does all of it. forged runs it two seconds after
+theme.json changes, from anywhere. `forge theme status` shows where each
+place stands, and `forge theme sync` runs it by hand. Not reached: Steam
+(its own skin) and apps with their own theme settings (Discord, Brave's own
+theme).
 
 ## Forge Thermal
 
@@ -100,18 +110,22 @@ allows, so the machine runs cooler and quieter:
 | Silent | 60% | 60% | reading, video |
 | Cool | 75% | 80% | lower temperatures, most of the speed |
 | **Balanced** (default) | 90% | 100% | everyday use |
+| Cool gaming | 100% | 100% | games: the firmware holds the CPU at 90 °C / 45 W and the GPU at 80 °C (Lenovo LOQ/Legion only) |
 | Performance | 100% | 100% | no limits |
 | Custom | 30–100% | 30–100% | your own, set with sliders in the app |
 
 The CPU limit works with amd-pstate, intel_pstate and acpi-cpufreq. On the
 GPU it's a clock lock on NVIDIA, a power cap on AMD and a maximum frequency
-on Intel. The choice is kept across reboots and suspend, and the user at the
+on Intel. Where the firmware takes limits itself (Lenovo LOQ/Legion, through
+`lenovo-wmi-other`), profiles can also set the CPU and GPU temperature limits
+and the CPU's sustained and boost watts, which costs less speed than a clock
+cap; the app (`apps/forge-thermal`) shows the live temperatures, a two-minute
+graph, the fan speed and sliders for those limits. The choice is kept across reboots and suspend, and the user at the
 machine can switch without a password. Profiles live in
 `/etc/forge-thermal/profiles/` and are plain `KEY=value` files.
 
 The artwork is generated: `branding-source/glass/generate.py` (wallpapers,
-logo, boot assets), `colors.py` (colour schemes) and `desktoptheme.py`
-(Plasma theme: dock dots), then `install.sh`
+logo, boot assets) and `colors.py` (the terminal scheme), then `install.sh`
 copies them into the profile. See `docs/ROADMAP.md` → "Forge Glass revamp".
 
 ## Forge Mind
@@ -191,7 +205,7 @@ build/build.sh shell   # interactive shell in the build container, for debugging
 ```
 
 The first `build` run compiles Calamares from its AUR PKGBUILD (it's not
-in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full KDE + gaming
+in the official repos or Chaotic-AUR), builds the Forge apps, and downloads the full desktop + gaming
 package set, so it's slow. A persistent Docker volume
 (`forge-os-pkgcache`) caches downloaded packages across retries. A full build
 takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.iso`.
@@ -204,11 +218,15 @@ takes about 40 minutes; the ISO lands in `out/forge-os-<version>-<date>-x86_64.i
   the installed system.
 - `profile/airootfs/etc/calamares/` — the installer configuration.
 - `profile/airootfs/usr/local/bin/` — Forge OS's own tools: `forge`,
-  `forge-thermal` and its app `forge-thermal-gui`, and `forge-postinstall.sh`
+  `forge-thermal` (its app is `apps/forge-thermal`), and `forge-postinstall.sh`
   (run by the installer).
 - `apps/` — Forge OS's in-house apps (see "Forge apps"), each with a
   PKGBUILD; `apps/build-packages.sh` builds every one into the local repo
   during `build/build.sh build`, before mkarchiso.
+- `utils/` — scripts for working on a real machine: install an app or
+  `forge-thermal` from the checkout, check a gaming setup, catch and report
+  hard freezes, switch the default kernel, pin the NVIDIA driver (see
+  `utils/README.md`).
 - `packages/` — Forge's builds of other packages, built the same way:
   `packages/konsole` is Konsole with a fix (open terminals kept turning
   opaque when the desktop switched between light and dark), until KDE has it.

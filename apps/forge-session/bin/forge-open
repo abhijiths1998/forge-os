@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# forge-open: open one of the session's standard places, honouring the
+# user's own defaults where there are any (keybinds.lua calls this).
+#   forge-open terminal|files|browser|launcher|settings|control|monitor
+set -u
+
+run() { exec "$@"; }
+first() { # the first installed command of a list
+    for c in "$@"; do command -v "${c}" >/dev/null 2>&1 && { echo "${c}"; return 0; }; done
+    return 1
+}
+
+case "${1:-}" in
+    terminal)
+        # xdg-terminal-exec follows ~/.config/xdg-terminals.list (Forge Terminal).
+        if command -v xdg-terminal-exec >/dev/null 2>&1; then run xdg-terminal-exec
+        else run "$(first forge-terminal foot)"; fi ;;
+    files)
+        run xdg-open "${HOME}" ;;
+    browser)
+        desktop="$(xdg-settings get default-web-browser 2>/dev/null)"
+        if [[ -n "${desktop}" ]] && command -v gtk-launch >/dev/null 2>&1; then
+            run gtk-launch "${desktop%.desktop}"
+        fi
+        run "$(first forge-browser brave firefox chromium)" ;;
+    launcher)
+        run forge-launcher ;;
+    settings)
+        run "$(first forge-settings forge-themekit)" ;;
+    control)
+        run forge-shell control ;;
+    monitor)
+        if command -v xdg-terminal-exec >/dev/null 2>&1; then run xdg-terminal-exec btop
+        else run foot btop; fi ;;
+    *)
+        echo "usage: forge-open terminal|files|browser|launcher|settings|control|monitor" >&2
+        exit 2 ;;
+esac

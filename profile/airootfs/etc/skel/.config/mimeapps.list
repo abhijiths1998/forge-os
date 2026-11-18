@@ -1,12 +1,17 @@
-# Forge Browser opens web links and pages (Brave stays installed for sites
-# that need Widevine DRM).
+# Forge's own apps open what they're for: Forge Browser web links and pages
+# (Widevine included, Brave stays as a second browser), Forge Files folders,
+# Forge Calendar .ics files.
 [Default Applications]
+inode/directory=org.forgeos.files.desktop
+text/calendar=org.forgeos.calendar.desktop
 text/html=org.forgeos.browser.desktop
 application/xhtml+xml=org.forgeos.browser.desktop
 x-scheme-handler/http=org.forgeos.browser.desktop
 x-scheme-handler/https=org.forgeos.browser.desktop
 
 [Added Associations]
+inode/directory=org.forgeos.files.desktop;
+text/calendar=org.forgeos.calendar.desktop;
 text/html=org.forgeos.browser.desktop;
 x-scheme-handler/http=org.forgeos.browser.desktop;
 x-scheme-handler/https=org.forgeos.browser.desktop;

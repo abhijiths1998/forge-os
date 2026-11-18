@@ -1,5 +1,6 @@
 // Forge Launcher's GTK side: one long-lived, frameless, translucent window
-// (KWin's Glass effect frosts it like the rest of the desktop) and a method
+// (a layer-shell surface that Hyprland frosts like the rest of Forge's shell)
+// and a method
 // channel that hands the Dart UI what GIO already does well: the list of
 // installed apps (desktop files, OnlyShowIn/NoDisplay rules, keywords), their
 // icons from the current icon theme, and launching them.
@@ -16,6 +17,10 @@
 #include <cstring>
 
 #include "flutter/generated_plugin_registrant.h"
+
+#ifdef HAVE_LAYER_SHELL
+#include <gtk-layer-shell.h>
+#endif
 
 namespace {
 constexpr int kWidth = 680;
@@ -36,9 +41,9 @@ struct _MyApplication {
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
 
 static void show_launcher(MyApplication* self) {
-  // Map at full height: KWin centres the window (kwinrulesrc), which puts
-  // its top edge high on the screen, Spotlight-style. The UI then shrinks it
-  // to its content (setHeight) and the top edge stays put.
+  // Map at full height, its top edge a fifth of the way down the screen
+  // (layer shell: anchored to the top, centred across), Spotlight-style.
+  // The UI then shrinks it to its content (setHeight); the top edge stays.
   gtk_widget_set_size_request(self->view, kWidth, kMaxHeight);
   gtk_window_resize(self->window, kWidth, kMaxHeight);
   gtk_window_present(self->window);
@@ -54,7 +59,7 @@ static void hide_launcher(MyApplication* self) {
 }
 
 // Clicking anywhere else, or switching windows, closes the launcher, the way
-// KRunner and Spotlight behave.
+// Spotlight does.
 static gboolean focus_out_cb(GtkWidget*, GdkEvent*, MyApplication* self) {
   hide_launcher(self);
   return FALSE;
@@ -221,6 +226,22 @@ static void create_window(MyApplication* self) {
   gtk_window_set_skip_pager_hint(window, TRUE);
   gtk_window_set_keep_above(window, TRUE);
   gtk_window_set_type_hint(window, GDK_WINDOW_TYPE_HINT_DIALOG);
+#ifdef HAVE_LAYER_SHELL
+  // On Hyprland: an overlay surface that takes the keyboard while it's up,
+  // in the "forge-launcher" namespace (Hyprland's layer rules blur it).
+  if (gtk_layer_is_supported()) {
+    gtk_layer_init_for_window(window);
+    gtk_layer_set_namespace(window, "forge-launcher");
+    gtk_layer_set_layer(window, GTK_LAYER_SHELL_LAYER_OVERLAY);
+    gtk_layer_set_anchor(window, GTK_LAYER_SHELL_EDGE_TOP, TRUE);
+    GdkMonitor* monitor = gdk_display_get_primary_monitor(gdk_display_get_default());
+    GdkRectangle area = {0, 0, 1920, 1080};
+    if (monitor != nullptr) gdk_monitor_get_workarea(monitor, &area);
+    gtk_layer_set_margin(window, GTK_LAYER_SHELL_EDGE_TOP, area.height / 5);
+    gtk_layer_set_keyboard_mode(window, GTK_LAYER_SHELL_KEYBOARD_MODE_EXCLUSIVE);
+    gtk_layer_set_exclusive_zone(window, -1);
+  }
+#endif
 
   // Translucent: an RGBA visual and a transparent Flutter background.
   GdkScreen* screen = gtk_window_get_screen(window);

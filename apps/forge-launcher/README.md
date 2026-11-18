@@ -1,7 +1,7 @@
 # Forge Launcher
 
 The Meta+Space command bar: a Forge Glass card (Flutter UI, GTK runner) that
-finds apps, files (Forge Mind, else Baloo), Forge actions (theme, tiling, thermal profiles,
+finds apps, files (Forge Mind, else file names under home), Forge actions (theme, tiling, thermal profiles,
 updates) and power actions, does quick maths, and runs commands.
 
 | Type | Does |
@@ -12,13 +12,14 @@ updates) and power actions, does quick maths, and runs commands.
 | `lock`, `sleep`, `restart` | power actions |
 | `install <pkg>` | find it in Forge Store (or `forge install` without it) |
 | `the pdf from march`, `screenshots last week` | files, from Forge Mind; a request of three or more words gets a second look from its local model, when there is one |
-| `> command` | run it in Konsole |
+| `> command` | run it in the terminal |
 | `? words`, or any URL | web search / open the page |
 
 It starts hidden at login (`forge-launcher --background`) and stays running,
 so Meta+Space only shows the window. Running `forge-launcher` again toggles
-it. The window is translucent; KWin's Glass effect frosts it, and a KWin rule
-(`/etc/skel/.config/kwinrulesrc`) takes the border off and centres it.
+it. The window is translucent: a layer-shell surface (namespace
+`forge-launcher`) that Hyprland frosts like the rest of Forge's shell,
+centred a fifth of the way down the screen. Escape closes it.
 
 Build: `flutter build linux --release` (the bundle is in
 `build/linux/x64/release/bundle/`). `FORGE_LAUNCHER_QUERY=text` pre-fills the

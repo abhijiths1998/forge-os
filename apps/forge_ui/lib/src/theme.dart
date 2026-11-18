@@ -45,7 +45,9 @@ class ForgeTheme {
   /// How coloured the glass is: 0 neutral grey, 1 Forge Glass, 2 vivid.
   final double tintStrength;
 
-  // --- Liquid glass (KWin's Glass effect, [Effect-blurplus] in kwinrc)
+  // --- Liquid glass (Hyprland's blur, through forge-session's theme.lua;
+  // the lens is drawn as a lit edge, and bevel, inner bend and colour split
+  // have no Hyprland equivalent, so the Theming Kit hides them)
   final int blur; // BlurStrength, 1-15
   final double saturation; // vibrancy, 0.5-2.5
   final double lensWidth; // RefractionEdgeSize, x10 px
@@ -57,8 +59,8 @@ class ForgeTheme {
 
   // --- Surfaces, in percent opaque
   final int windowOpacity; // colour scheme backgrounds
-  final int menuOpacity; // Darkly menus, toolbars, tab bars
-  final int terminalOpacity; // Konsole
+  final int menuOpacity; // the shell's panels and popups
+  final int terminalOpacity; // Forge Terminal
 
   // --- Shape
   final int cornerRadius; // window corners, px
@@ -208,8 +210,8 @@ Color? parseHex(Object? v) {
 }
 
 // --- Built-in themes ---------------------------------------------------------
-// Forge Glass is the desktop as shipped (etc/skel/.config/kwinrc, the
-// ForgeGlass colour schemes, darklyrc); the rest vary colour and glass.
+// Forge Glass is the desktop as shipped (forge-session's theme.lua
+// defaults); the rest vary colour and glass.
 
 const forgeGlass = ForgeTheme(id: 'forge-glass', name: 'Forge Glass');
 

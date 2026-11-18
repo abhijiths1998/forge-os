@@ -31,6 +31,12 @@ if [ -d "${REPO_ROOT}/apps/forge_ui" ]; then
     rm -rf "${work}/forge_ui/.dart_tool"
     chown -R builder: "${work}/forge_ui"
 fi
+# The games' source, which packages/forge-games builds (it looks for ../games
+# beside its copy).
+if [ -d "${REPO_ROOT}/games" ]; then
+    cp -r "${REPO_ROOT}/games" "${work}/games"
+    chown -R builder: "${work}/games"
+fi
 
 # Everything built here must be in the ISO's package list too, or mkarchiso
 # quietly leaves it out (forge-control once was).

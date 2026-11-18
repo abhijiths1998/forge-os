@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# forge-wallpaper: the desktop's wallpaper, through awww (animated
+# transitions). Forge Wallpapers (M6) adds sources and rotation; this keeps
+# the chosen picture across logins.
+#   forge-wallpaper restore        show the saved choice (or Forge Glass)
+#   forge-wallpaper set <file>     show and remember a picture
+set -u
+
+state="${XDG_STATE_HOME:-${HOME}/.local/state}/forge/wallpaper"
+theme="${XDG_CONFIG_HOME:-${HOME}/.config}/forge/theme.json"
+glass=/usr/share/wallpapers/ForgeGlass/contents
+
+default() {
+    if grep -q '"dark": *false' "${theme}" 2>/dev/null; then
+        echo "${glass}/images/3840x2160.png"
+    else
+        echo "${glass}/images_dark/3840x2160.png"
+    fi
+}
+
+show() {
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        awww query >/dev/null 2>&1 && break
+        sleep 0.3
+    done
+    awww img --transition-type "${2:-fade}" --transition-duration 0.8 --transition-fps 60 "$1"
+}
+
+case "${1:-restore}" in
+    restore)
+        file="$(cat "${state}" 2>/dev/null)"
+        [[ -f "${file}" ]] || file="$(default)"
+        show "${file}" fade ;;
+    set)
+        [[ -f "${2:-}" ]] || { echo "forge-wallpaper: no such file: ${2:-}" >&2; exit 1; }
+        mkdir -p "$(dirname "${state}")"
+        realpath "$2" > "${state}"
+        show "$(realpath "$2")" grow ;;
+    *)
+        echo "usage: forge-wallpaper restore|set <file>" >&2
+        exit 2 ;;
+esac

@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Settings
+GenericName=Settings
+Comment=Displays, keyboard, mouse, shortcuts and the rest Hyprland doesn't have an app for
+Exec=forge-settings
+Icon=preferences-system
+Categories=Settings;DesktopSettings;
+Keywords=settings;preferences;displays;keyboard;mouse;shortcuts;sound;network;bluetooth;
+StartupNotify=true
+StartupWMClass=org.forgeos.settings

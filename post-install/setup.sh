@@ -160,6 +160,8 @@ OPT_CHOICES=$(gum choose --no-limit --height 10 \
 OPT_PACKAGES=()
 DO_ZRAM=0 DO_ANANICY=0 DO_IRQBALANCE=0 DO_REFLECTOR=0 DO_FSTRIM=0 DO_PPD=0 DO_ZEN=0
 while IFS= read -r choice; do
+    # DO_ZEN is set for symmetry; the package is all linux-zen needs.
+    # shellcheck disable=SC2034
     case "${choice}" in
         "zram (compressed swap in RAM)") OPT_PACKAGES+=(zram-generator); DO_ZRAM=1 ;;
         "ananicy-cpp (auto process priority)") OPT_PACKAGES+=(ananicy-cpp ananicy-rules-git); DO_ANANICY=1 ;;

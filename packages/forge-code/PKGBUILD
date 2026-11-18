@@ -1,0 +1,116 @@
+# Forge Code: Neovim set up for Forge OS (lazy.nvim, LSP, completion,
+# treesitter, Telescope, which-key, a file tree, git signs, a terminal).
+# Offline by design: every plugin is cloned here, at the commit pinned below
+# and in nvim/lazy-lock.json, and installed read-only under
+# /usr/share/forge/nvim/lazy. Treesitter parsers and telescope-fzf-native are
+# compiled in build(). Language servers come from Arch packages, not Mason.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-code
+pkgver=1.0.0
+pkgrel=1
+pkgdesc='Forge OS code editor: Neovim with a ready-made, offline configuration'
+arch=(x86_64)
+url="https://github.com/abhijiths1998/forge-os"
+license=(GPL-3.0-or-later)
+depends=(neovim
+         git
+         ripgrep
+         fd
+         ttf-jetbrains-mono-nerd)
+makedepends=(git
+             gcc
+             make
+             curl
+             tar
+             tree-sitter-cli)
+optdepends=('lua-language-server: Lua support'
+            'pyright: Python language server'
+            'ruff: Python lint and format'
+            'clang: C and C++ (clangd)'
+            'rust-analyzer: Rust support'
+            'bash-language-server: Bash support'
+            'shellcheck: Bash lint'
+            'shfmt: Bash format'
+            'stylua: Lua format'
+            'prettier: JSON, YAML and Markdown format'
+            'taplo-cli: TOML support'
+            'yaml-language-server: YAML support'
+            'vscode-json-languageserver: JSON support'
+            'marksman: Markdown support'
+            'qt6-declarative: QML support (qmlls)'
+            'sqlfluff: SQL lint and format'
+            'neovide: forge-code --gui')
+options=(!strip)
+
+# name::url#commit, in the same order and at the same commits as
+# nvim/lazy-lock.json (the README says how to bump them).
+_gh=git+https://github.com
+source=("lazy.nvim::$_gh/folke/lazy.nvim#commit=85c7ff3711b730b4030d03144f6db6375044ae82"
+        "mini.icons::$_gh/echasnovski/mini.icons#commit=e56797f90192d81f1fda02e662fc3e8e3d775027"
+        "nvim-treesitter::$_gh/nvim-treesitter/nvim-treesitter#commit=60c0f468de3e636fa660a419d537e8033aca4e39"
+        "nvim-lspconfig::$_gh/neovim/nvim-lspconfig#commit=4d363f93c3581b9212a24f7a830d7590b3f050af"
+        "blink.cmp::$_gh/saghen/blink.cmp#commit=78336bc89ee5365633bcf754d93df01678b5c08f"
+        "nvim-lint::$_gh/mfussenegger/nvim-lint#commit=52107ce2076a27a285af781248e2c59bad817cd0"
+        "conform.nvim::$_gh/stevearc/conform.nvim#commit=3543d000dafbc41cc7761d860cfdb24e82154f75"
+        "telescope.nvim::$_gh/nvim-telescope/telescope.nvim#commit=5255aa27c422de944791318024167ad5d40aad20"
+        "plenary.nvim::$_gh/nvim-lua/plenary.nvim#commit=50012918b2fc8357b87cff2a7f7f0446e47da174"
+        "telescope-fzf-native.nvim::$_gh/nvim-telescope/telescope-fzf-native.nvim#commit=b25b749b9db64d375d782094e2b9dce53ad53a40"
+        "which-key.nvim::$_gh/folke/which-key.nvim#commit=fcbf4eea17cb299c02557d576f0d568878e354a4"
+        "nvim-tree.lua::$_gh/nvim-tree/nvim-tree.lua#commit=5cc8d425c2bf3c09041a2db3cfff6197e2dce34d"
+        "gitsigns.nvim::$_gh/lewis6991/gitsigns.nvim#commit=a462f416e2ce4744531c6256252dee99a7d34a83"
+        "toggleterm.nvim::$_gh/akinsho/toggleterm.nvim#commit=50ea089fc548917cc3cc16b46a8211833b9e3c7c"
+        "lualine.nvim::$_gh/nvim-lualine/lualine.nvim#commit=221ce6b2d999187044529f49da6554a92f740a96")
+sha256sums=(SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP SKIP)
+
+_plugins=(lazy.nvim mini.icons nvim-treesitter nvim-lspconfig blink.cmp
+          nvim-lint conform.nvim telescope.nvim plenary.nvim
+          telescope-fzf-native.nvim which-key.nvim nvim-tree.lua
+          gitsigns.nvim toggleterm.nvim lualine.nvim)
+
+# Parsers Forge Code ships (qmljs is the grammar for QML files); the revisions come from the pinned nvim-treesitter.
+_parsers='python sql bash c cpp rust dart qmljs lua json yaml toml markdown markdown_inline vim vimdoc query regex'
+
+
+build() {
+  make -C "$srcdir/telescope-fzf-native.nvim"
+
+  # Compile the parsers into $srcdir/parsers with the pinned nvim-treesitter.
+  # Throwaway HOME so nothing lands in the builder's own config.
+  export HOME="$srcdir/home" XDG_DATA_HOME="$srcdir/home/data" \
+         XDG_STATE_HOME="$srcdir/home/state" XDG_CACHE_HOME="$srcdir/home/cache"
+  mkdir -p "$HOME"
+  FORGE_PARSERS="$_parsers" FORGE_PARSER_DIR="$srcdir/parsers" \
+  nvim --headless -u NONE --cmd "set rtp^=$srcdir/nvim-treesitter" \
+    -c 'lua local d = vim.env.FORGE_PARSER_DIR
+          require("nvim-treesitter").setup({ install_dir = d })
+          local ok = require("nvim-treesitter").install(vim.split(vim.env.FORGE_PARSERS, " ")):wait(600000)
+          if not ok then vim.cmd("cquit 1") end' \
+    -c 'qa'
+}
+
+check() {
+  local lang
+  for lang in $_parsers; do
+    [ -f "$srcdir/parsers/parser/$lang.so" ] || { echo "parser missing: $lang"; return 1; }
+  done
+}
+
+package() {
+  local dest="$pkgdir/usr/share/forge/nvim"
+  install -dm755 "$dest"
+  cp -r "$startdir/nvim/." "$dest/"
+
+  local p
+  for p in "${_plugins[@]}"; do
+    install -dm755 "$dest/lazy/$p"
+    cp -r "$srcdir/$p/." "$dest/lazy/$p/"
+    rm -rf "$dest/lazy/$p/.git" "$dest/lazy/$p/.github"
+  done
+  rm -f "$dest/lazy/telescope-fzf-native.nvim/build"/*.o
+
+  cp -r "$srcdir/parsers" "$dest/parsers"
+
+  install -Dm755 "$startdir/forge-code" "$pkgdir/usr/bin/forge-code"
+  install -Dm644 "$startdir/org.forgeos.code.desktop" \
+    "$pkgdir/usr/share/applications/org.forgeos.code.desktop"
+}

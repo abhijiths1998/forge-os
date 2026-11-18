@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# forge-record toggle|start|stop: record the screen you're on, with the
+# computer's sound, to ~/Videos/Recordings. gpu-screen-recorder encodes on
+# the GPU (NVENC on NVIDIA, VA-API on AMD/Intel), so games keep their frames.
+set -uo pipefail
+
+state="${XDG_RUNTIME_DIR:-/tmp}/forge-record.pid"
+videos="$(xdg-user-dir VIDEOS 2>/dev/null || echo "${HOME}/Videos")"
+dir="${videos}/Recordings"
+
+say() { notify-send --app-name="Screen recording" --icon=media-record "$@" 2>/dev/null || true; }
+
+running() { [[ -f "${state}" ]] && kill -0 "$(cat "${state}")" 2>/dev/null; }
+
+start() {
+    command -v gpu-screen-recorder >/dev/null 2>&1 || { say "Can't record" "gpu-screen-recorder isn't installed"; exit 1; }
+    mkdir -p "${dir}"
+    output="$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')"
+    file="${dir}/Recording $(date +'%Y-%m-%d %H-%M-%S').mp4"
+    gpu-screen-recorder -w "${output}" -f 60 -a default_output -c mp4 -o "${file}" \
+        >/dev/null 2>&1 &
+    echo $! > "${state}"
+    say "Recording the screen" "Super+Alt+R stops it"
+}
+
+stop() {
+    if running; then
+        kill -INT "$(cat "${state}")"
+        rm -f "${state}"
+        say "Recording saved" "In ${dir/#${HOME}/\~}"
+    fi
+}
+
+case "${1:-toggle}" in
+    start) running || start ;;
+    stop) stop ;;
+    toggle) if running; then stop; else start; fi ;;
+    status) running && echo recording || echo idle ;;
+    *) echo "usage: forge-record toggle|start|stop|status" >&2; exit 2 ;;
+esac

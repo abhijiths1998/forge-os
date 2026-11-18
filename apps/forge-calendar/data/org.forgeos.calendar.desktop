@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Calendar
+GenericName=Calendar
+Comment=Your events, repeats and reminders
+Exec=forge-calendar
+Icon=x-office-calendar
+Terminal=false
+Categories=Office;Calendar;
+Keywords=calendar;events;agenda;schedule;reminder;appointment;ics;
+MimeType=text/calendar;
+StartupNotify=true
+StartupWMClass=org.forgeos.calendar
