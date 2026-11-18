@@ -389,6 +389,12 @@ ollama-vulkan
 forge-games
 forge-arcade
 
+# Forge Gaming: the game library and launcher (docs/FORGE-GAMING.md).
+# forge-gamed is the C++ daemon (also reads the controllers), forge-gaming
+# the Flutter UI. sdl3, jsoncpp, sqlite and curl come in as dependencies.
+forge-gamed
+forge-gaming
+
 # Forge Code (packages/forge-code): Neovim with Forge's offline config, in
 # place of gnome-text-editor. Language servers are optional on purpose; these
 # are the ones Forge Code supports out of the box (docs/HYPRLAND.md, M8).

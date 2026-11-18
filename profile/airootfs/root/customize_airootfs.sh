@@ -41,6 +41,9 @@ systemctl enable power-profiles-daemon.service
 systemctl enable forge-thermal.service
 # forge-mind keeps its file index fresh per user (systemd --user)
 systemctl --global enable forge-mind-index.timer
+# forge-gamed: game library + controller reader; the Guide button opens
+# Forge Gaming from anywhere (systemd --user, graphical session)
+systemctl --global enable forge-gamed.service
 systemctl enable fwupd.service
 # Printing (system-config-printer sets printers up).
 systemctl enable cups.socket

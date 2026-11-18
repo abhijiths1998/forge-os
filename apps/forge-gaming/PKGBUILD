@@ -1,0 +1,34 @@
+# Forge Gaming: the game library and launcher UI (Flutter, forge_ui). The
+# work is done by forge-gamed (apps/forge-gamed). Built from this directory,
+# next to ../forge_ui, by apps/build-packages.sh during the ISO build.
+pkgname=forge-gaming
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Forge OS Gaming: one library for Steam, Heroic, Lutris and your own games, made for controllers"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'forge-gamed')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    # Keep the whole icon font (Forge Shot found tree-shaking drops glyphs).
+    flutter build linux --release --no-tree-shake-icons
+}
+
+check() {
+    cd "${startdir}"
+    flutter test
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    # forge-gamed starts `forge-gaming --couch` when the Guide button is pressed.
+    ln -s "/usr/lib/${pkgname}/forge-gaming" "${pkgdir}/usr/bin/forge-gaming"
+    install -Dm644 data/org.forgeos.gaming.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.gaming.desktop"
+}

@@ -30,6 +30,9 @@ bind("Apps", "CTRL + SHIFT + Escape", "Open system monitor", exec("forge-open mo
 if has("forge-arcade") then
     bind("Apps", "SUPER + G", "Open Forge Arcade", exec("forge-arcade"))
 end
+if has("forge-gaming") then
+    bind("Apps", "SUPER + SHIFT + G", "Open Forge Gaming", exec("forge-gaming"))
+end
 if has("forge-terminal") and SHELL then
     bind("Apps", "SUPER + grave", "Drop-down terminal", exec("forge-terminal --dropdown"))
 end

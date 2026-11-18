@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Gaming
+GenericName=Game Library
+Comment=All your games in one place: Steam, Heroic, Lutris and your own
+Exec=forge-gaming
+Icon=applications-games
+Categories=Game;
+Keywords=games;library;launcher;steam;lutris;heroic;proton;controller;
+StartupNotify=true
+StartupWMClass=org.forgeos.gaming
+Actions=couch;
+
+[Desktop Action couch]
+Name=Couch mode
+Exec=forge-gaming --couch

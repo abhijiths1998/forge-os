@@ -1,0 +1,15 @@
+[Unit]
+Description=Forge Gaming daemon (game library, launcher, controllers)
+Documentation=https://github.com/abhijiths1998/forge-os/blob/master/docs/FORGE-GAMING.md
+# Part of the graphical session, so the Guide button can open the UI on it.
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/forge-gamed
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=graphical-session.target

@@ -138,6 +138,9 @@ Builds on Forge Mind and `forged`.
 - **Game Hub:** one library for Steam, Heroic and Lutris games, with per-game
   profiles (thermal profile, MangoHud, Proton version) applied when a game
   starts.
+  Started early as **Forge Gaming** (forge-gamed + forge-gaming, see
+  docs/FORGE-GAMING.md): milestone 1 is the library, launcher, runners and
+  controller support; per-game thermal profiles are still to come.
 - Forge Mind knows Lutris and Heroic games' folders and leftover prefixes.
 
 ### Was 2.5, now 3.6+: Focus and the Dynamic Island
