@@ -15,5 +15,9 @@ class Native {
   static Future<void> present(String mode) =>
       _channel.invokeMethod('present', {'mode': mode});
 
+  /// GTK's save dialog, starting at [path]; the chosen path, or null.
+  static Future<String?> saveAs(String path) =>
+      _channel.invokeMethod<String>('saveAs', {'path': path});
+
   static Future<void> quit() => _channel.invokeMethod('quit');
 }

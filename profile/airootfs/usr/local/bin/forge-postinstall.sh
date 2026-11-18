@@ -165,11 +165,12 @@ rm -f /etc/sddm.conf.d/autologin.conf
 # With no remembered session SDDM preselects the first one alphabetically,
 # gamescope-session-steam.desktop, so a new install's first login went to
 # Steam Big Picture: a black screen or login loop with Steam not yet set
-# up, and SDDM then remembered it for every login after. Preselect Plasma;
-# SDDM still remembers whatever the user picks from then on.
+# up, and SDDM then remembered it for every login after. Preselect Forge's
+# Hyprland session (started through uwsm); SDDM still remembers whatever
+# the user picks from then on.
 install -Dm644 /dev/stdin /var/lib/sddm/state.conf <<'EOF'
 [Last]
-Session=/usr/share/wayland-sessions/plasma.desktop
+Session=/usr/share/wayland-sessions/hyprland-uwsm.desktop
 EOF
 
 # archiso's "To install Arch Linux follow the installation guide" banner.

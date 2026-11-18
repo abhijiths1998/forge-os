@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# forge-logout: end the Hyprland session cleanly (uwsm stops its services).
+if command -v uwsm >/dev/null 2>&1 && uwsm check is-active >/dev/null 2>&1; then
+    exec uwsm stop
+fi
+exec hyprctl dispatch 'hl.dsp.exit()'

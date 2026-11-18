@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# forge-power-menu: lock, log out, restart or shut down (Ctrl+Alt+Delete).
+# Forge's shell draws it when it's running; this dialog is the fallback.
+set -u
+if command -v forge-shell >/dev/null 2>&1 && forge-shell power 2>/dev/null; then
+    exit 0
+fi
+choice="$(hyprland-dialog --title "Power" --text "What would you like to do?" \
+    --buttons "Lock;Log out;Restart;Shut down;Cancel" 2>/dev/null)"
+case "${choice}" in
+    Lock) loginctl lock-session ;;
+    "Log out") forge-logout ;;
+    Restart) systemctl reboot ;;
+    "Shut down") systemctl poweroff ;;
+esac

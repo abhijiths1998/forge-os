@@ -8,6 +8,7 @@ arch=('x86_64')
 url="https://github.com/abhijiths1998/forge-os"
 license=('GPL-3.0-or-later')
 depends=('qt6-base' 'qt6-webengine' 'xdg-utils')
+optdepends=('chromium-widevine: DRM video and music (Netflix, Spotify, Prime Video)')
 makedepends=('cmake' 'ninja')
 options=('!debug')
 

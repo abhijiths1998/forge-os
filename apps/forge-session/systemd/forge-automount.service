@@ -1,0 +1,12 @@
+[Unit]
+Description=Mount USB drives and discs when they're plugged in (udiskie)
+PartOf=graphical-session.target
+After=graphical-session.target
+
+[Service]
+ExecStart=/usr/bin/udiskie --automount --notify --no-tray --no-file-manager
+Restart=on-failure
+Slice=background-graphical.slice
+
+[Install]
+WantedBy=graphical-session.target

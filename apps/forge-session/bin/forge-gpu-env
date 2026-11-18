@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# forge-gpu-env: the environment a Forge Hyprland session needs, as
+# `export KEY='value'` lines. Sourced by uwsm before Hyprland starts and read
+# by /usr/share/forge/hypr/env.lua.
+#
+# The GPU part depends on which GPU drives the screen:
+#   NVIDIA (desktops, laptops with the dGPU switched on in firmware): NVIDIA's
+#     GL, VA-API and direct backend for every app.
+#   An integrated GPU (hybrid laptops): Hyprland renders on it, listed first
+#     in AQ_DRM_DEVICES, and apps stay on it; games use the dGPU through PRIME
+#     offload (prime-run, or Steam's own choice).
+set -u
+
+say() { printf "export %s='%s'\n" "$1" "$2"; }
+
+vendor_of() { cat "/sys/class/drm/$1/device/vendor" 2>/dev/null; }
+
+display=""   # the card with a connected screen (the built-in one first)
+nvidia=""
+for dir in /sys/class/drm/card[0-9]*; do
+    card="${dir##*/}"
+    [[ "${card}" == *-* ]] && continue
+    [[ "$(vendor_of "${card}")" == 0x10de ]] && nvidia="${card}"
+    for status in "${dir}"/"${card}"-*/status; do
+        [[ -r "${status}" && "$(<"${status}")" == connected ]] || continue
+        connector="${status%/status}"
+        if [[ "${connector}" == *-eDP-* || -z "${display}" ]]; then
+            display="${card}"
+        fi
+    done
+done
+
+if [[ -n "${nvidia}" && "${display}" == "${nvidia}" ]]; then
+    say LIBVA_DRIVER_NAME nvidia
+    say __GLX_VENDOR_LIBRARY_NAME nvidia
+    say NVD_BACKEND direct
+elif [[ -n "${nvidia}" && -n "${display}" ]]; then
+    # Hybrid: render on the GPU with the screen, keep the dGPU for offload.
+    say AQ_DRM_DEVICES "/dev/dri/${display}:/dev/dri/${nvidia}"
+fi
+
+# Toolkits on Wayland, with X11 as the fallback.
+say QT_QPA_PLATFORM 'wayland;xcb'
+say QT_QPA_PLATFORMTHEME qt6ct
+say QT_WAYLAND_DISABLE_WINDOWDECORATION 1
+say QT_AUTO_SCREEN_SCALE_FACTOR 1
+say GDK_BACKEND 'wayland,x11,*'
+say ELECTRON_OZONE_PLATFORM_HINT auto
+say XDG_SESSION_TYPE wayland
+say XCURSOR_THEME Adwaita
+say XCURSOR_SIZE 24
+say HYPRCURSOR_SIZE 24

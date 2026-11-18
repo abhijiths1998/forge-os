@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Arcade
+GenericName=Games
+Comment=Pick and play the Forge OS games
+Exec=forge-arcade
+Icon=applications-games
+Categories=Game;
+Keywords=games;arcade;play;
+StartupNotify=true
+StartupWMClass=org.forgeos.arcade

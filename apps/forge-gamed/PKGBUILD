@@ -1,0 +1,36 @@
+# Forge Gaming daemon: game library scanner, launcher and controller reader
+# (C++20, CMake). Built from this directory by apps/build-packages.sh.
+pkgname=forge-gamed
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Forge OS Gaming daemon: library, launcher, runners and controllers"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('sdl3' 'jsoncpp' 'sqlite' 'curl')
+optdepends=('gamemode: GameMode wrapper for launched games'
+            'mangohud: performance overlay'
+            'gamescope: micro-compositor wrapper'
+            'umu-launcher: run Windows games with Proton outside Steam'
+            'steam: import and launch Steam games'
+            'lutris: import and launch Lutris games')
+makedepends=('cmake' 'ninja' 'gcc')
+options=('!debug')
+
+build() {
+    cd "${startdir}"
+    cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+    cmake --build build
+}
+
+check() {
+    cd "${startdir}"
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    cd "${startdir}"
+    install -Dm755 build/forge-gamed "${pkgdir}/usr/bin/forge-gamed"
+    install -Dm644 data/forge-gamed.service \
+        "${pkgdir}/usr/lib/systemd/user/forge-gamed.service"
+}

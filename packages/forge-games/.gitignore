@@ -1,0 +1,7 @@
+# makepkg output
+src/
+pkg/
+games/
+*.pkg.tar.zst
+*.tar.gz
+*.log

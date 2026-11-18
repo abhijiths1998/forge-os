@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Forge Thermal
+GenericName=Temperatures and Cooling
+Comment=Watch CPU and GPU temperatures and choose how hard the machine may run
+Exec=forge-thermal-app
+Icon=indicator-cpufreq
+Categories=Settings;HardwareSettings;
+Keywords=temperature;thermal;cpu;gpu;clock;frequency;fan;heat;power;watts;cooling;
+StartupNotify=true
+StartupWMClass=org.forgeos.thermal

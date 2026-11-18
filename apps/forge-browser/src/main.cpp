@@ -1,7 +1,6 @@
 // Forge Browser: Forge OS's web browser. Qt WebEngine (Chromium) with
-// built-in ad and tracker blocking; Qt Widgets, so Darkly and the ForgeGlass
-// colours make its toolbar and tabs translucent glass like the rest of the
-// desktop.
+// built-in ad and tracker blocking; Qt Widgets, themed by forge-theme-sync's
+// Forge Glass palette (qt6ct) like every Qt app on the desktop.
 //
 // One process per user: `forge-browser URL...` from another app (or the
 // launcher) hands its URLs to the running browser over a local socket and
@@ -9,6 +8,7 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QDir>
+#include <QFile>
 #include <QLocalServer>
 #include <QLocalSocket>
 #include <QRegularExpression>
@@ -51,9 +51,33 @@ BrowserWindow* activeWindow() {
   return nullptr;
 }
 
+// Widevine (Netflix, Spotify, Prime Video): Arch's chromium-widevine puts
+// the CDM in /usr/lib/chromium, which Qt WebEngine doesn't search on its
+// own (only Chrome's paths and ~/.config/{chromium,google-chrome}), so
+// point it at the first CDM found: chromium-widevine's, Google Chrome's,
+// or one a user dropped in ~/.local/lib. Must happen before WebEngine starts.
+void useSystemWidevine() {
+  QByteArray flags = qgetenv("QTWEBENGINE_CHROMIUM_FLAGS");
+  if (flags.contains("--widevine-path")) return;
+  const QString tail = "WidevineCdm/_platform_specific/linux_x64/libwidevinecdm.so";
+  const QStringList candidates = {
+      "/usr/lib/chromium/" + tail,
+      "/opt/google/chrome/" + tail,
+      QDir::homePath() + "/.local/lib/" + tail,
+  };
+  for (const QString& cdm : candidates) {
+    if (!QFile::exists(cdm)) continue;
+    if (!flags.isEmpty()) flags += ' ';
+    flags += "--widevine-path=" + QFile::encodeName(cdm);
+    qputenv("QTWEBENGINE_CHROMIUM_FLAGS", flags);
+    return;
+  }
+}
+
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  useSystemWidevine();
   ForgeScheme::registerScheme();
   QApplication::setOrganizationName("forgeos");
   QApplication::setApplicationName("forge-browser");

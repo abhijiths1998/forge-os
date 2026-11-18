@@ -1,0 +1,20 @@
+#!/bin/sh
+# Forge Code: Neovim with Forge's own config. NVIM_APPNAME keeps its data,
+# state and cache in ~/.local/{share,state}/forge-code and ~/.cache/forge-code;
+# -u loads init.lua from the package, so ~/.config/nvim is never read.
+# `forge-code --gui` runs the same thing in Neovide, if it is installed.
+
+root=${FORGE_CODE_ROOT:-/usr/share/forge/nvim}
+export NVIM_APPNAME=forge-code
+export FORGE_CODE_ROOT="$root"
+
+if [ "$1" = "--gui" ]; then
+    shift
+    if ! command -v neovide >/dev/null 2>&1; then
+        echo "forge-code: --gui needs neovide (pacman -S neovide)" >&2
+        exit 1
+    fi
+    exec neovide -- -u "$root/init.lua" "$@"
+fi
+
+exec nvim -u "$root/init.lua" "$@"

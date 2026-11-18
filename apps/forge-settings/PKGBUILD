@@ -1,0 +1,32 @@
+# Forge Settings: the settings app for newcomers on Hyprland (Flutter,
+# forge_ui). Displays, keyboard, mouse, default apps, startup, sound,
+# network/VPN, Bluetooth, users, about — plus a shortcuts editor that rebinds
+# keys with conflict detection and writes ~/.config/hypr/keybinds.user.lua.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-settings
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS Settings: displays, keyboard, shortcuts and the rest Hyprland doesn't have an app for"
+arch=('x86_64')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('gtk3' 'glib2' 'hyprland' 'pipewire' 'wireplumber' 'bluez-utils'
+         'network-manager-applet' 'blueman' 'nm-connection-editor')
+makedepends=('flutter-bin' 'cmake' 'ninja' 'clang' 'pkgconf')
+options=('!strip' '!debug')
+
+build() {
+    cd "${startdir}"
+    # Keep the whole icon font (Forge Shot found tree-shaking drops glyphs).
+    flutter build linux --release --no-tree-shake-icons
+}
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/lib/${pkgname}" "${pkgdir}/usr/bin"
+    cp -r build/linux/x64/release/bundle/. "${pkgdir}/usr/lib/${pkgname}/"
+    ln -s "/usr/lib/${pkgname}/forge-settings" "${pkgdir}/usr/bin/forge-settings"
+    install -Dm644 data/org.forgeos.settings.desktop \
+        "${pkgdir}/usr/share/applications/org.forgeos.settings.desktop"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

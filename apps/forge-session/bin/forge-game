@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# forge-game: what the desktop does around games.
+#
+#   fullscreen-on|fullscreen-off   from Hyprland (game.lua) when a game goes
+#       full screen or stops being: pause or resume the live wallpaper, and
+#       switch the cooling profile to the game one, then back.
+#   gamemode-start|gamemode-end    from GameMode (/etc/gamemode.ini): keep
+#       the screen awake and unlocked while a game runs.
+set -u
+
+run_dir="${XDG_RUNTIME_DIR:-/tmp}/forge"
+mkdir -p "${run_dir}"
+saved="${run_dir}/thermal-before-game"
+# forge-gamed writes this while a game's own Game Hub profile holds the
+# cooling (docs/FORGE-GAMING.md); the full-screen rule then stays out of it.
+held_by_game="${run_dir}/thermal-held-by-game"
+
+thermal_now() {
+    forged state 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["thermal"]["profile"] or "")' 2>/dev/null
+}
+thermal_has() {
+    forged state 2>/dev/null | python3 -c 'import json,sys; sys.exit(0 if sys.argv[1] in json.load(sys.stdin)["thermal"]["profiles"] else 1)' "$1" 2>/dev/null
+}
+
+case "${1:-}" in
+    fullscreen-on)
+        command -v forge-shell >/dev/null 2>&1 && forge-shell wallpaper-pause 2>/dev/null
+        if [[ ! -s "${held_by_game}" ]] && command -v forged >/dev/null 2>&1 && thermal_has gaming; then
+            now="$(thermal_now)"
+            if [[ -n "${now}" && "${now}" != gaming ]]; then
+                echo "${now}" > "${saved}"
+                forged set thermal gaming >/dev/null 2>&1
+            fi
+        fi ;;
+    fullscreen-off)
+        command -v forge-shell >/dev/null 2>&1 && forge-shell wallpaper-resume 2>/dev/null
+        if [[ -f "${saved}" ]]; then
+            forged set thermal "$(cat "${saved}")" >/dev/null 2>&1
+            rm -f "${saved}"
+        fi ;;
+    gamemode-start)
+        systemctl --user start forge-game-inhibit.service ;;
+    gamemode-end)
+        systemctl --user stop forge-game-inhibit.service ;;
+    *)
+        echo "usage: forge-game fullscreen-on|fullscreen-off|gamemode-start|gamemode-end" >&2
+        exit 2 ;;
+esac
+exit 0

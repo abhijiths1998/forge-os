@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+# forge-crashlog: write temps, clocks and power to disk every 2 s, flushed
+# each time, so the last readings survive a hard power-off.
+#
+#   forge-crashlog          run the logger (the systemd user service does this)
+#   forge-crashlog last     show the final 30 lines of the previous boot's log
+#
+# Logs: ~/.local/state/forge-crashlog/<date>_<boot-id>.csv, kept 14 days.
+# The NVIDIA GPU is only queried while it is already awake, so the logger
+# never keeps the dGPU powered up on the desktop.
+set -uo pipefail
+
+DIR="${XDG_STATE_HOME:-$HOME/.local/state}/forge-crashlog"
+INTERVAL=2
+
+if [[ "${1:-}" == last ]]; then
+    prev="$(ls -t "${DIR}"/*.csv 2>/dev/null | sed -n 2p)"
+    [[ -n "${prev}" ]] || { echo "no log from a previous boot yet"; exit 1; }
+    echo "${prev}"; { head -n1 "${prev}"; tail -n30 "${prev}"; } | column -t -s,
+    exit
+fi
+
+mkdir -p "${DIR}"
+find "${DIR}" -name '*.csv' -mtime +14 -delete
+
+hwmon() { # name -> dir
+    local h
+    for h in /sys/class/hwmon/hwmon*; do
+        [[ "$(<"${h}/name")" == "$1" ]] && { echo "${h}"; return; }
+    done
+}
+milli() { [[ -r "$1" ]] && echo $(( $(<"$1") / 1000 )) || echo ""; }
+
+CPU="$(hwmon k10temp)" ACPI="$(hwmon acpitz)" NVME="$(hwmon nvme)" FAN="$(hwmon acpi_fan)" BAT="$(hwmon BAT1)"
+GPU_PCI=""
+for d in /sys/bus/pci/devices/*; do
+    [[ "$(<"${d}/vendor")" == 0x10de && "$(<"${d}/class")" == 0x03* ]] && { GPU_PCI="${d}"; break; }
+done
+
+LOG="${DIR}/$(date +%F_%H%M)_$(cut -c1-8 /proc/sys/kernel/random/boot_id).csv"
+echo "time,cpu_c,cpu_mhz_max,acpi_c,nvme_c,fan_rpm,ac,bat_w,load1,gpu_c,gpu_w,gpu_mhz,gpu_util" > "${LOG}"
+
+while :; do
+    mhz=0
+    for f in /sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq; do
+        v=$(<"${f}"); (( v > mhz )) && mhz=${v}
+    done
+    gpu=",,,"
+    if [[ -n "${GPU_PCI}" && "$(<"${GPU_PCI}/power/runtime_status")" == active ]]; then
+        gpu="$(nvidia-smi --query-gpu=temperature.gpu,power.draw,clocks.gr,utilization.gpu \
+            --format=csv,noheader,nounits 2>/dev/null | tr -d ' ')"
+        [[ -n "${gpu}" ]] || gpu=",,,"
+    fi
+    bat_w=""
+    [[ -r "${BAT}/power1_input" ]] && bat_w=$(( $(<"${BAT}/power1_input") / 1000000 ))
+    printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' "$(date +%T)" \
+        "$(milli "${CPU}/temp1_input")" $(( mhz / 1000 )) \
+        "$(milli "${ACPI}/temp1_input")" "$(milli "${NVME}/temp1_input")" \
+        "$(cat "${FAN}/fan1_input" 2>/dev/null)" \
+        "$(cat /sys/class/power_supply/ACAD/online 2>/dev/null)" "${bat_w}" \
+        "$(cut -d' ' -f1 /proc/loadavg)" "${gpu}" >> "${LOG}"
+    sync -d "${LOG}"
+    sleep "${INTERVAL}"
+done
