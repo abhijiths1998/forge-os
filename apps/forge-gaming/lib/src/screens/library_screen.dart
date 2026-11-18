@@ -28,6 +28,7 @@ class LibraryScreen extends StatefulWidget {
 }
 
 const _shelves = [
+  (LibraryFilter.playing, Icons.sports_esports_rounded),
   (LibraryFilter.all, Icons.apps_rounded),
   (LibraryFilter.recent, Icons.history_rounded),
   (LibraryFilter.favorites, Icons.star_rounded),
@@ -56,9 +57,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
+  /// "Playing now" and "Hidden" only show (and are only stepped onto) when
+  /// they have games.
+  bool _shelfShown(LibraryFilter f) =>
+      (f != LibraryFilter.hidden && f != LibraryFilter.playing) || selectGames(store.games, f, '').isNotEmpty;
+
   void _cycleShelf(int step) {
-    final i = _shelves.indexWhere((s) => s.$1 == _filter);
-    setState(() => _filter = _shelves[(i + step) % _shelves.length].$1);
+    final shown = _shelves.map((s) => s.$1).where(_shelfShown).toList();
+    final i = shown.indexOf(_filter);
+    setState(() => _filter = shown[(i + step) % shown.length]);
   }
 
   Game? _focusedGame(List<Game> shown) {
@@ -151,7 +158,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               style: TextStyle(fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w800, color: p.dimText)),
         ),
         for (final (f, icon) in _shelves)
-          if (f != LibraryFilter.hidden || count(f) > 0)
+          if (_shelfShown(f))
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
               child: _NavItem(
@@ -290,9 +297,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   GlassButton(
                     palette: p,
                     filled: true,
-                    icon: g.running ? Icons.stop_rounded : Icons.play_arrow_rounded,
-                    label: g.running ? 'Stop' : 'Play',
-                    onPressed: () => g.running ? store.stop(g) : store.launch(g),
+                    icon: g.running ? (g.canStop ? Icons.stop_rounded : Icons.sports_esports_rounded) : Icons.play_arrow_rounded,
+                    label: g.running ? (g.canStop ? 'Stop' : 'Playing now') : 'Play',
+                    onPressed: g.running && !g.canStop ? null : () => g.running ? store.stop(g) : store.launch(g),
                   ),
                   const SizedBox(width: 10),
                   GlassButton(palette: p, icon: Icons.info_outline_rounded, label: 'Details', onPressed: () => _open(g)),

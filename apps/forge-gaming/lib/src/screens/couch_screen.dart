@@ -119,6 +119,7 @@ class _CouchScreenState extends State<CouchScreen> {
         final visible = store.games.where((g) => !g.hidden).toList();
         final shelves = <(String, List<Game>)>[
           if (_query.isNotEmpty) ('Results for “$_query”', selectGames(store.games, LibraryFilter.all, _query)),
+          if (_query.isEmpty) ('Playing now', selectGames(store.games, LibraryFilter.playing, '')),
           if (_query.isEmpty) ('Continue playing', recentGames(store.games)),
           if (_query.isEmpty) ('Favourites', selectGames(store.games, LibraryFilter.favorites, '')),
           if (_query.isEmpty) ('All games', selectGames(store.games, LibraryFilter.all, '')),
@@ -334,6 +335,7 @@ class _CouchScreenState extends State<CouchScreen> {
 
   String get _firstShelfTitle {
     if (_query.isNotEmpty) return 'Results for “$_query”';
+    if (store.anyRunning) return 'Playing now';
     if (recentGames(store.games).isNotEmpty) return 'Continue playing';
     if (selectGames(store.games, LibraryFilter.favorites, '').isNotEmpty) return 'Favourites';
     return 'All games';

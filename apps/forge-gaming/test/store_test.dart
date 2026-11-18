@@ -55,6 +55,17 @@ void main() {
     expect(s.handedOff, contains('steam:5'));
     expect(s.game('steam:5')!.running, isFalse);
 
+    // The watcher then finds it running: playing, but not ours to stop.
+    d.emit('game.started', {'id': 'steam:5', 'tracked': true, 'detected': true});
+    expect(s.handedOff, isNot(contains('steam:5')));
+    expect(s.game('steam:5')!.running, isTrue);
+    expect(s.game('steam:5')!.detected, isTrue);
+    expect(s.game('steam:5')!.canStop, isFalse);
+    expect(s.game('local:1')!.canStop, isTrue);
+    expect(selectGames(s.games, LibraryFilter.playing, '').map((g) => g.id), ['steam:5', 'local:1'], reason: 'A-Z: Five, One');
+    d.emit('game.stopped', {'id': 'steam:5', 'exitCode': 0, 'playedSeconds': 60});
+    expect(s.game('steam:5')!.running, isFalse);
+
     final toasts = <String>[];
     s.toasts.listen(toasts.add);
     d.emit('game.failed', {'id': 'local:1', 'message': 'exit 1'});
@@ -84,6 +95,28 @@ void main() {
     final methods = d.calls.map((c) => c.$1).toList();
     expect(methods.first, 'ui.register');
     expect(methods, containsAll(['library.list', 'runners.list', 'pads.list']));
+  });
+
+  test('setProfile sends the whole profile; null thermal is automatic', () async {
+    final d = FakeDaemon({
+      'library.list': (_) => {
+            'games': [gameJson('steam:1', 'One', source: 'steam')]
+          },
+      'system.info': (_) => {
+            'thermal': {'available': true, 'profiles': ['balanced', 'performance'], 'current': 'balanced'},
+            'quiet': {'available': true},
+          },
+    });
+    final s = GamingStore(d);
+    await s.init();
+    expect(s.system.thermalProfiles, ['balanced', 'performance']);
+    await s.setProfile(s.games.single, thermal: 'performance', quiet: true);
+    expect(d.calls.last.$2, {
+      'id': 'steam:1',
+      'profile': {'thermal': 'performance', 'quiet': true}
+    });
+    await s.setProfile(s.games.single, thermal: null, quiet: false);
+    expect((d.calls.last.$2!['profile'] as Map)['thermal'], isNull);
   });
 
   test('update replaces the game with the daemon\'s answer', () async {

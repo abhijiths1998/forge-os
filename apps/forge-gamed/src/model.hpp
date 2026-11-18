@@ -22,6 +22,12 @@ struct GameSettings {
   Gamescope gamescope;
 };
 
+struct Profile {
+  std::optional<std::string> thermal;  // null = automatic
+  bool quiet = false;
+  bool operator==(const Profile& o) const { return thermal == o.thermal && quiet == o.quiet; }
+};
+
 struct Game {
   std::string id, source, title;
   std::optional<std::string> cover, hero;
@@ -31,6 +37,12 @@ struct Game {
   std::optional<int64_t> lastPlayed;
   bool favorite = false, hidden = false;
   std::optional<GameSettings> settings;
+  Profile profile;
+  bool detected = false;  // running, found by the watcher
+  bool canStop = false;   // forge-gamed launched it
+  // Scanner data, not part of the JSON object.
+  std::string installDir;  // absolute install folder or empty
+  std::string lutrisName;  // Lutris games: the name Lutris uses
 };
 
 struct Runner {
@@ -42,6 +54,8 @@ struct Pad {
   std::string name, type;
 };
 
+Json::Value toJson(const Profile& p);
+Profile profileFromStored(const Json::Value& v);
 Json::Value toJson(const GameSettings& s);
 Json::Value toJson(const Game& g);
 Json::Value toJson(const Runner& r);

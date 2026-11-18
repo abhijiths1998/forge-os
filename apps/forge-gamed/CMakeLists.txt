@@ -26,6 +26,8 @@ add_library(forgegamed_core STATIC
   src/padnav.cpp
   src/pads.cpp
   src/process.cpp
+  src/watch.cpp
+  src/profile.cpp
   src/daemon.cpp
   src/client.cpp)
 target_include_directories(forgegamed_core PUBLIC src)

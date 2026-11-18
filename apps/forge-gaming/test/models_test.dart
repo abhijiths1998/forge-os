@@ -47,6 +47,32 @@ void main() {
     expect(Game.fromJson(null).id, '');
   });
 
+  test('Game Hub fields: profile, detected, canStop', () {
+    final g = Game.fromJson({
+      'id': 'steam:9',
+      'running': true,
+      'detected': true,
+      'canStop': false,
+      'profile': {'thermal': 'performance', 'quiet': true},
+    });
+    expect(g.profile.thermal, 'performance');
+    expect(g.profile.quiet, isTrue);
+    expect(g.profile.isDefault, isFalse);
+    expect(g.detected, isTrue);
+    expect(g.canStop, isFalse);
+    expect(GameProfile.fromJson(g.profile.toJson()).toJson(), g.profile.toJson());
+    final old = Game.fromJson({'id': 'local:1', 'running': true});
+    expect(old.profile.isDefault, isTrue);
+    expect(old.canStop, isTrue, reason: 'an older daemon could stop what it ran');
+    final sys = SystemInfo.fromJson({
+      'thermal': {'available': true, 'profiles': ['balanced', 3, 'cool'], 'current': 'balanced'},
+      'quiet': {'available': true},
+    });
+    expect(sys.thermalProfiles, ['balanced', 'cool']);
+    expect(sys.quietAvailable, isTrue);
+    expect(SystemInfo.fromJson(null).thermalAvailable, isFalse);
+  });
+
   test('Pad types', () {
     expect(Pad.fromJson({'index': 3, 'name': 'X', 'type': 'playstation'}).type, PadType.playstation);
     expect(Pad.fromJson({'index': 3, 'type': 'switch'}).type, PadType.nintendo);

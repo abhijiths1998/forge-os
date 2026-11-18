@@ -13,6 +13,7 @@ struct Meta {
   bool favorite = false, hidden = false;
   int64_t playedSeconds = 0;  // tracked by forge-gamed
   std::optional<int64_t> lastPlayed;
+  Profile profile;
 };
 
 struct LocalGame {

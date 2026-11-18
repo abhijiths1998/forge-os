@@ -11,6 +11,9 @@ set -u
 run_dir="${XDG_RUNTIME_DIR:-/tmp}/forge"
 mkdir -p "${run_dir}"
 saved="${run_dir}/thermal-before-game"
+# forge-gamed writes this while a game's own Game Hub profile holds the
+# cooling (docs/FORGE-GAMING.md); the full-screen rule then stays out of it.
+held_by_game="${run_dir}/thermal-held-by-game"
 
 thermal_now() {
     forged state 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["thermal"]["profile"] or "")' 2>/dev/null
@@ -22,7 +25,7 @@ thermal_has() {
 case "${1:-}" in
     fullscreen-on)
         command -v forge-shell >/dev/null 2>&1 && forge-shell wallpaper-pause 2>/dev/null
-        if command -v forged >/dev/null 2>&1 && thermal_has gaming; then
+        if [[ ! -s "${held_by_game}" ]] && command -v forged >/dev/null 2>&1 && thermal_has gaming; then
             now="$(thermal_now)"
             if [[ -n "${now}" && "${now}" != gaming ]]; then
                 echo "${now}" > "${saved}"

@@ -9,6 +9,8 @@
 #include "daemon.hpp"
 #include "launch.hpp"
 #include "padnav.hpp"
+#include "profile.hpp"
+#include "watch.hpp"
 #include "process.hpp"
 #include <sys/wait.h>
 #include "runners.hpp"
@@ -448,7 +450,190 @@ static void testHardening() {
   std::filesystem::remove_all(dir);
 }
 
+static Game mk(const std::string& id, const std::string& source, const std::string& dir = "", const std::string& lname = "") {
+  Game g;
+  g.id = id;
+  g.source = source;
+  g.title = id;
+  g.installDir = dir;
+  g.lutrisName = lname;
+  return g;
+}
+
+static void testWatchMatcher() {
+  std::vector<Game> games = {mk("steam:4242", "steam"), mk("lutris:1", "lutris", "/home/u/Games/Foo", "Foo Quest"),
+                             mk("heroic:legendary:abc", "heroic", "/home/u/Games/Heroic/Bar"),
+                             mk("local:x", "local", "/home/u/Games/Loc")};
+  auto run = [&](std::vector<ProcInfo> p) { return matchRunning(p, games); };
+  // Steam reaper
+  auto s = run({{10, {"/home/u/.steam/ubuntu12_32/reaper", "SteamLaunch", "AppId=4242", "--", "x"}}});
+  CHECK_EQ(s.size(), 1u);
+  CHECK(s.count("steam:4242"));
+  CHECK(run({{10, {"reaper", "SteamLaunch", "AppId=42420", "--"}}}).empty());   // not a prefix match
+  CHECK(run({{10, {"reaper", "AppId=4242"}}}).empty());                       // needs SteamLaunch too
+  CHECK(run({{10, {"reaper SteamLaunch AppId=4242 -- x"}}}).empty());  // one argument: a shell line, not reaper
+  CHECK(run({{10, {"/bin/bash", "-c", "reaper SteamLaunch AppId=4242"}}}).empty());
+  CHECK(run({{10, {"grep", "SteamLaunch", "AppId=4242"}}}).empty());   // only reaper itself counts
+  // Lutris wrapper: title form and script form
+  CHECK(run({{11, {"lutris-wrapper: Foo Quest"}}}).count("lutris:1") == 1);
+  CHECK(run({{11, {"lutris-wrapper: Other Game"}}}).empty());
+  CHECK(run({{11, {"/usr/bin/python3", "/usr/lib/lutris/lutris-wrapper", "Foo Quest", "0", "1"}}}).count("lutris:1") == 1);
+  CHECK(run({{11, {"/usr/bin/python3", "/usr/lib/lutris/lutris-wrapper", "Other", "0"}}}).empty());
+  // Install folder: native, Windows path, case
+  CHECK(run({{12, {"/home/u/Games/Heroic/Bar/bin/bar"}}}).count("heroic:legendary:abc") == 1);
+  CHECK(run({{12, {"C:\\windows\\system32\\start.exe", "Z:\\HOME\\U\\Games\\Heroic\\BAR\\Bar.exe"}}}).count("heroic:legendary:abc") == 1);
+  CHECK(run({{12, {"wine", "z:/home/u/games/heroic/bar/"}}}).count("heroic:legendary:abc") == 1);
+  CHECK(run({{12, {"/home/u/Games/Heroic/Bar"}}}).count("heroic:legendary:abc") == 1);
+  CHECK(run({{12, {"/home/u/Games/Heroic/Barista/x"}}}).empty());         // sibling with the same prefix
+  CHECK(run({{12, {"/home/u/Games/Heroic"}}}).empty());
+  CHECK(run({{13, {"/home/u/Games/Foo/foo.sh"}}}).count("lutris:1") == 1);
+  // Launchers are not games
+  CHECK(run({{14, {"/usr/bin/heroic", "/home/u/Games/Heroic/Bar/x"}}}).empty());
+  CHECK(run({{14, {"/usr/lib/steam/steamwebhelper", "--dir=x", "/home/u/Games/Heroic/Bar"}}}).empty());
+  CHECK(run({{14, {"/usr/bin/gogdl", "/home/u/Games/Heroic/Bar"}}}).empty());
+  CHECK(run({{14, {"/usr/bin/python3", "/usr/bin/lutris", "/home/u/Games/Foo"}}}).empty());
+  CHECK(isLauncherProcess({14, {"/usr/bin/legendary", "launch"}}));
+  CHECK(isLauncherProcess({1, {"/usr/bin/nile"}}));
+  CHECK(!isLauncherProcess({1, {"lutris-wrapper: Foo"}}));
+  // Local games are never detected; unrelated processes match nothing
+  CHECK(run({{15, {"/home/u/Games/Loc/run"}}}).empty());
+  CHECK(run({{16, {"bash", "-lc", "ls"}}, {17, {"firefox"}}}).empty());
+  CHECK(run({}).empty());
+  // A shallow install folder is never used (would match anything)
+  std::vector<Game> shallow = {mk("heroic:gog:z", "heroic", "/home/u")};
+  CHECK(matchRunning({{18, {"/home/u/anything"}}}, shallow).empty());
+  CHECK_EQ(normalizeGamePath("Z:\\Games\\Foo\\"), "/games/foo");
+  CHECK_EQ(normalizeGamePath("/A//B/"), "/a/b");
+}
+
+static void testWatchState() {
+  WatchState w;
+  auto c = w.update({"a"});
+  CHECK(c.started == V{"a"} && c.stopped.empty());
+  c = w.update({"a"});
+  CHECK(c.started.empty() && c.stopped.empty());
+  c = w.update({});  // missing once: still running
+  CHECK(c.started.empty() && c.stopped.empty() && w.isRunning("a"));
+  c = w.update({"a"});  // back: counter resets
+  CHECK(c.started.empty() && c.stopped.empty());
+  c = w.update({});
+  CHECK(c.stopped.empty());
+  c = w.update({});  // second miss in a row
+  CHECK(c.stopped == V{"a"} && !w.isRunning("a"));
+  c = w.update({"a", "b"});
+  CHECK_EQ(c.started.size(), 2u);
+}
+
+static void testProfileHolds() {
+  ForgedState st;
+  st.thermalAvailable = true;
+  st.profiles = {"balanced", "performance"};
+  st.thermalCurrent = "balanced";
+  st.dndAvailable = true;
+  st.dndEnabled = false;
+  Profile perf;
+  perf.thermal = "performance";
+  perf.quiet = true;
+  ProfileHolds h;
+  auto p1 = h.start("g1", perf, st);
+  CHECK(p1.writeMarker && *p1.writeMarker == "g1");
+  CHECK_EQ(p1.cmds.size(), 2u);
+  CHECK((p1.cmds[0] == ForgedCmd{"set", "thermal", "performance"}));
+  CHECK((p1.cmds[1] == ForgedCmd{"set", "dnd", "on"}));
+  // Second game while the first holds: state now shows the changed values, nothing is taken over.
+  ForgedState st2 = st;
+  st2.thermalCurrent = "performance";
+  st2.dndEnabled = true;
+  Profile cool;
+  cool.thermal = "cool";
+  cool.quiet = true;
+  CHECK(h.start("g2", cool, st2).empty());
+  CHECK_EQ(h.thermalHolder(), "g1");
+  CHECK(h.stop("g2").empty());                  // the non-holder stopping changes nothing
+  auto p2 = h.stop("g1");
+  CHECK_EQ(p2.cmds.size(), 2u);
+  CHECK((p2.cmds[0] == ForgedCmd{"set", "thermal", "balanced"}));
+  CHECK((p2.cmds[1] == ForgedCmd{"set", "dnd", "off"}));
+  CHECK(p2.removeMarker);
+  CHECK(h.thermalHolder().empty() && h.dndHolder().empty());
+  // Once free, a later game can hold
+  CHECK(!h.start("g2", cool, st).empty());
+  // already quiet: held, but nothing to undo
+  ProfileHolds h2;
+  ForgedState quiet = st;
+  quiet.dndEnabled = true;
+  Profile q;
+  q.quiet = true;
+  CHECK(h2.start("a", q, quiet).empty());
+  CHECK(h2.dndHolder() == "a" && h2.stop("a").empty());
+  // no thermal in profile: no marker; forged unavailable: nothing
+  ProfileHolds h3;
+  CHECK(h3.start("a", Profile(), st).empty());
+  CHECK(h3.start("a", perf, ForgedState()).empty());
+  // stopAll gives back everything
+  ProfileHolds h4;
+  h4.start("a", perf, st);
+  auto all = h4.stopAll();
+  CHECK_EQ(all.cmds.size(), 2u);
+  CHECK(all.removeMarker);
+  CHECK(h4.stopAll().empty());
+}
+
+static void testForgedStateAndProfileJson() {
+  const char* real = R"({"dnd":{"available":true,"enabled":false,"ours":false},"thermal":{"available":true,"profile":"balanced","profiles":["balanced","cool","custom","performance","silent"],"x":1}})";
+  ForgedState st;
+  CHECK(parseForgedState(real, st));
+  CHECK(st.thermalAvailable && st.dndAvailable && !st.dndEnabled);
+  CHECK_EQ(st.profiles.size(), 5u);
+  CHECK(st.thermalCurrent && *st.thermalCurrent == "balanced");
+  Json::Value info = systemInfoJson(st);
+  CHECK(info["thermal"]["available"].asBool());
+  CHECK_EQ(info["thermal"]["current"].asString(), "balanced");
+  CHECK(info["quiet"]["available"].asBool());
+  CHECK(parseForgedState("{}", st));
+  CHECK(!st.thermalAvailable && !st.dndAvailable);
+  CHECK(systemInfoJson(st)["thermal"]["current"].isNull());
+  CHECK(!parseForgedState("not json", st));
+  CHECK(!st.thermalAvailable);
+
+  // Profile round trip through library.json; an old file without it
+  std::string dir = std::filesystem::temp_directory_path().string() + "/fg-profile-test";
+  std::filesystem::remove_all(dir);
+  Store s(dir);
+  s.meta["steam:1"].profile.thermal = "silent";
+  s.meta["steam:1"].profile.quiet = true;
+  s.meta["steam:2"].favorite = true;
+  CHECK(s.saveLibrary());
+  Store t(dir);
+  t.load();
+  CHECK(t.meta["steam:1"].profile.thermal && *t.meta["steam:1"].profile.thermal == "silent");
+  CHECK(t.meta["steam:1"].profile.quiet);
+  CHECK(!t.meta["steam:2"].profile.thermal && !t.meta["steam:2"].profile.quiet);
+  CHECK(writeFileAtomic(dir + "/library.json", "{\"version\":1,\"local\":[],\"meta\":{\"steam:9\":{\"favorite\":true,\"hidden\":false,\"playedSeconds\":60,\"lastPlayed\":null}}}"));
+  Store u(dir);
+  u.load();
+  CHECK(u.meta["steam:9"].favorite && u.meta["steam:9"].playedSeconds == 60);
+  CHECK(!u.meta["steam:9"].profile.thermal && !u.meta["steam:9"].profile.quiet);
+  Game g = mk("steam:9", "steam");
+  Json::Value j = toJson(g);
+  CHECK(j["profile"]["thermal"].isNull() && j["profile"]["quiet"] == false);
+  CHECK(j["detected"] == false && j["canStop"] == false);
+  CHECK(!j.isMember("installDir"));
+  std::filesystem::remove_all(dir);
+
+  // Scanner folders
+  auto acf = parseSteamManifest("\"AppState\" { \"appid\" \"7\" \"name\" \"G\" \"StateFlags\" \"4\" \"installdir\" \"GDir\" }");
+  CHECK(acf && acf->installDir == "GDir");
+  Json::Value hv;
+  CHECK(parseJson("{\"abc\":{\"install_path\":\"/g/abc\"}}", hv));
+  CHECK_EQ(parseHeroicInstallPaths(hv)["abc"], "/g/abc");
+}
+
 int main() {
+  testWatchMatcher();
+  testWatchState();
+  testProfileHolds();
+  testForgedStateAndProfileJson();
   testHardening();
   testSpawn();
   testVdf();

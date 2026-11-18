@@ -1,5 +1,7 @@
 #pragma once
 #include <atomic>
+#include <condition_variable>
+#include <deque>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -13,8 +15,10 @@
 #include "launch.hpp"
 #include "model.hpp"
 #include "pads.hpp"
+#include "profile.hpp"
 #include "runners.hpp"
 #include "store.hpp"
+#include "watch.hpp"
 
 namespace fg {
 
@@ -83,6 +87,16 @@ class Daemon {
   void methodRunnersRemove(const Json::Value& p);
   void methodRumble(const Json::Value& p);
   void methodAvailable(Client& c, const Json::Value& id);
+  void methodSystemInfo(Client& c, const Json::Value& id);
+
+  // profiles (forged) and the watcher
+  void enqueueForged(std::function<void()> fn);
+  void stopForgedWorker();
+  void applyProfile(const std::string& gameId);
+  void releaseProfile(const std::string& gameId);
+  void watchTick();
+  void onDetectedStart(const std::string& id);
+  void onDetectedStop(const std::string& id);
 
   // processes
   void reapChildren();
@@ -113,6 +127,24 @@ class Daemon {
   std::atomic<bool> cancel_{false};
   std::set<std::string> installing_;
   std::vector<Release> releases_;  // last fetched (main thread only)
+
+  // watcher (main thread only)
+  WatchState watch_;
+  std::map<std::string, int64_t> detectedStart_;
+  int64_t nextWatch_ = 0;
+
+  // forged: one FIFO worker so starts, stops and state reads never race
+  std::thread forgedThread_;
+  std::mutex fmu_;
+  std::condition_variable fcv_;
+  std::deque<std::function<void()>> fq_;
+  bool fstop_ = false;
+  ProfileHolds holds_;  // forged worker only
+  ForgedState sysState_;  // main thread only
+  bool haveSysState_ = false;
+  int64_t sysInfoAt_ = 0;
+  bool sysInfoPending_ = false;
+  std::vector<std::pair<uint64_t, Json::Value>> sysInfoWaiters_;
 };
 
 std::string sanitizeUtf8(const std::string& s);

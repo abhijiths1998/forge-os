@@ -53,6 +53,7 @@ std::string sanitizeUtf8(const std::string& s) {
 Daemon::Daemon() : store_(dataDir()) {}
 Daemon::~Daemon() {
   cancel_ = true;
+  stopForgedWorker();
   for (auto& t : threads_)
     if (t.joinable()) t.join();
 }
@@ -117,6 +118,7 @@ int Daemon::run() {
 
   store_.load();
   rescan();
+  nextWatch_ = monoMs() + 2000;
   std::string perr;
   padsOk_ = pads_.init(perr);
   if (!padsOk_) std::cerr << "forge-gamed: controllers disabled: " << perr << "\n";
@@ -133,6 +135,7 @@ int Daemon::run() {
     int64_t now = monoMs();
     for (auto& [pid, r] : running_)
       if (r.killAt > 0) timeout = static_cast<int>(std::clamp<int64_t>(r.killAt - now, 0, timeout));
+    timeout = static_cast<int>(std::clamp<int64_t>(nextWatch_ - now, 0, timeout));
     int n = ::poll(fds.data(), fds.size(), timeout);
     if (n < 0 && errno != EINTR) break;
 
@@ -151,11 +154,14 @@ int Daemon::run() {
       dropDead();
     }
     checkKillTimers();
+    if (monoMs() >= nextWatch_) watchTick();
     pumpPads();
   }
 
   // shutdown
   cancel_ = true;
+  // Give back whatever a game still holds (cooling, do not disturb).
+  stopForgedWorker();
   for (auto& t : threads_)
     if (t.joinable()) t.join();
   threads_.clear();
@@ -326,8 +332,16 @@ std::vector<Game> Daemon::allGames() const {
       if (it->second.lastPlayed && (!g.lastPlayed || *it->second.lastPlayed > *g.lastPlayed))
         g.lastPlayed = it->second.lastPlayed;
     }
+    g.profile = it != store_.meta.end() ? it->second.profile : Profile();
+    if (watch_.isRunning(g.id)) {
+      g.running = true;
+      g.detected = true;
+    }
     for (auto& [pid, r] : running_)
-      if (r.gameId == g.id) g.running = true;
+      if (r.gameId == g.id) {
+        g.running = true;
+        g.canStop = true;
+      }
   }
   std::stable_sort(out.begin(), out.end(), [](const Game& a, const Game& b) { return lower(a.title) < lower(b.title); });
   return out;
@@ -394,6 +408,10 @@ void Daemon::handleLine(Client& c, const std::string& line) {
     const std::string method = req["method"].asString();
     if (method == "runners.available") {
       methodAvailable(c, id);
+      return;
+    }
+    if (method == "system.info") {
+      methodSystemInfo(c, id);
       return;
     }
     if (!dispatch(c, method, params, result)) {
@@ -518,6 +536,30 @@ void Daemon::methodGameUpdate(const Json::Value& p, Json::Value& r) {
     if (!p["hidden"].isBool()) throw RpcError{"bad_request", "hidden must be a boolean"};
     store_.meta[id].hidden = p["hidden"].asBool();
   }
+  if (p.isMember("profile")) {
+    const Json::Value& pr = p["profile"];
+    if (!pr.isObject()) throw RpcError{"bad_request", "profile must be an object"};
+    Profile cur = store_.meta[id].profile;
+    if (pr.isMember("thermal")) {
+      const Json::Value& t = pr["thermal"];
+      if (t.isNull() || (t.isString() && t.asString().empty())) {
+        cur.thermal.reset();
+      } else if (t.isString()) {
+        // Checked against forged's list when we know it; otherwise any name passes.
+        if (haveSysState_ && sysState_.thermalAvailable && !sysState_.profiles.empty() &&
+            std::find(sysState_.profiles.begin(), sysState_.profiles.end(), t.asString()) == sysState_.profiles.end())
+          throw RpcError{"bad_request", "unknown thermal profile " + t.asString()};
+        cur.thermal = t.asString();
+      } else {
+        throw RpcError{"bad_request", "profile.thermal must be a string or null"};
+      }
+    }
+    if (pr.isMember("quiet")) {
+      if (!pr["quiet"].isBool()) throw RpcError{"bad_request", "profile.quiet must be a boolean"};
+      cur.quiet = pr["quiet"].asBool();
+    }
+    store_.meta[id].profile = cur;
+  }
   if (!store_.saveLibrary()) {
     store_ = backup;
     throw RpcError{"io", "cannot write library.json"};
@@ -567,7 +609,9 @@ void Daemon::methodGameLaunch(const Json::Value& p) {
   Json::Value d = emptyObj();
   d["id"] = id;
   d["tracked"] = spec.tracked;
+  d["detected"] = false;
   broadcast("game.started", d);
+  if (spec.tracked) applyProfile(id);
 }
 
 void Daemon::methodGameStop(const Json::Value& p) {
@@ -633,6 +677,7 @@ void Daemon::onGameExit(pid_t pid, int status) {
     broadcast("game.failed", f);
   }
   broadcast("library.changed", emptyObj());
+  releaseProfile(r.gameId);
 }
 
 void Daemon::checkKillTimers() {
@@ -833,6 +878,152 @@ void Daemon::methodRunnersRemove(const Json::Value& p) {
     return;
   }
   throw RpcError{"not_found", "no runner " + id};
+}
+
+}  // namespace fg
+
+namespace fg {
+
+// ------------------------------------------------- forged: profiles, info ----
+
+void Daemon::enqueueForged(std::function<void()> fn) {
+  {
+    std::lock_guard<std::mutex> lk(fmu_);
+    if (fstop_) return;
+    fq_.push_back(std::move(fn));
+    if (!forgedThread_.joinable()) {
+      forgedThread_ = std::thread([this]() {
+        for (;;) {
+          std::function<void()> job;
+          {
+            std::unique_lock<std::mutex> lk(fmu_);
+            fcv_.wait(lk, [&] { return !fq_.empty() || fstop_; });
+            if (fq_.empty()) return;  // stopped and drained
+            job = std::move(fq_.front());
+            fq_.pop_front();
+          }
+          job();
+        }
+      });
+    }
+  }
+  fcv_.notify_one();
+}
+
+// Restores anything still held, then ends the worker (queued jobs run first).
+void Daemon::stopForgedWorker() {
+  {
+    std::lock_guard<std::mutex> lk(fmu_);
+    if (fstop_) return;
+    // Runs on the worker, after every queued start/stop.
+    fq_.push_back([this]() { execPlan(holds_.stopAll()); });
+    fstop_ = true;
+    if (!forgedThread_.joinable()) {
+      // Nothing was ever queued: nothing can be held.
+      fq_.clear();
+      return;
+    }
+  }
+  fcv_.notify_all();
+  forgedThread_.join();
+}
+
+void Daemon::applyProfile(const std::string& id) {
+  auto it = store_.meta.find(id);
+  if (it == store_.meta.end()) return;
+  Profile p = it->second.profile;
+  if (!p.thermal && !p.quiet) return;
+  enqueueForged([this, id, p]() {
+    ForgedState st = readForgedState();
+    execPlan(holds_.start(id, p, st));
+    postMain([this]() { sysInfoAt_ = 0; });
+  });
+}
+
+void Daemon::releaseProfile(const std::string& id) {
+  enqueueForged([this, id]() {
+    HoldPlan plan = holds_.stop(id);
+    if (plan.empty()) return;
+    execPlan(plan);
+    postMain([this]() { sysInfoAt_ = 0; });
+  });
+}
+
+void Daemon::methodSystemInfo(Client& c, const Json::Value& id) {
+  if (sysInfoAt_ != 0 && monoMs() - sysInfoAt_ < 10000) {
+    reply(c, id, systemInfoJson(sysState_));
+    return;
+  }
+  sysInfoWaiters_.emplace_back(c.serial, id);
+  if (sysInfoPending_) return;
+  sysInfoPending_ = true;
+  enqueueForged([this]() {
+    ForgedState st = readForgedState();
+    postMain([this, st]() {
+      sysState_ = st;
+      haveSysState_ = true;
+      sysInfoAt_ = monoMs();
+      sysInfoPending_ = false;
+      auto waiters = std::move(sysInfoWaiters_);
+      sysInfoWaiters_.clear();
+      for (auto& [serial, rid] : waiters)
+        if (Client* cl = clientBySerial(serial)) reply(*cl, rid, systemInfoJson(st));
+    });
+  });
+}
+
+// ------------------------------------------------------------- watcher ----
+
+void Daemon::watchTick() {
+  nextWatch_ = monoMs() + 2000;
+  std::vector<Game> cand;
+  for (auto& g : scanned_) cand.push_back(g);
+  if (cand.empty() && watch_.running().empty()) return;
+  std::set<std::string> found = matchRunning(readProcessList(), cand);
+  // Games launched here are tracked by pid already.
+  for (auto& [pid, r] : running_) found.erase(r.gameId);
+  auto ch = watch_.update(found);
+  for (auto& id : ch.started) onDetectedStart(id);
+  for (auto& id : ch.stopped) onDetectedStop(id);
+}
+
+void Daemon::onDetectedStart(const std::string& id) {
+  detectedStart_[id] = monoMs();
+  if (!startsWith(id, "lutris:")) {
+    store_.meta[id].lastPlayed = unixNow();
+    store_.saveLibrary();
+  }
+  Json::Value d = emptyObj();
+  d["id"] = id;
+  d["tracked"] = true;
+  d["detected"] = true;
+  broadcast("game.started", d);
+  broadcast("library.changed", emptyObj());
+  applyProfile(id);
+}
+
+void Daemon::onDetectedStop(const std::string& id) {
+  int64_t played = 0;
+  auto it = detectedStart_.find(id);
+  if (it != detectedStart_.end()) {
+    played = std::max<int64_t>(0, (monoMs() - it->second + 500) / 1000);
+    detectedStart_.erase(it);
+  }
+  if (startsWith(id, "lutris:")) {
+    rescan();  // Lutris counts its own play time; read it back from pga.db
+  } else {
+    Meta& m = store_.meta[id];
+    m.playedSeconds += played;
+    m.lastPlayed = unixNow();
+    store_.saveLibrary();
+  }
+  Json::Value d = emptyObj();
+  d["id"] = id;
+  d["exitCode"] = 0;
+  d["playedSeconds"] = Json::Int64(played);
+  broadcast("game.stopped", d);
+  broadcast("library.changed", emptyObj());
+  releaseProfile(id);
 }
 
 }  // namespace fg

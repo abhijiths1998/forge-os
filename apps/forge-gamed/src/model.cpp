@@ -33,6 +33,22 @@ Json::Value toJson(const GameSettings& s) {
   return v;
 }
 
+Json::Value toJson(const Profile& p) {
+  Json::Value v(Json::objectValue);
+  v["thermal"] = optStr(p.thermal);
+  v["quiet"] = p.quiet;
+  return v;
+}
+
+Profile profileFromStored(const Json::Value& v) {
+  Profile p;
+  if (v.isObject()) {
+    if (v["thermal"].isString() && !v["thermal"].asString().empty()) p.thermal = v["thermal"].asString();
+    p.quiet = jbool(v, "quiet");
+  }
+  return p;
+}
+
 Json::Value toJson(const Game& g) {
   Json::Value v(Json::objectValue);
   v["id"] = g.id;
@@ -47,6 +63,9 @@ Json::Value toJson(const Game& g) {
   v["favorite"] = g.favorite;
   v["hidden"] = g.hidden;
   v["settings"] = g.settings ? toJson(*g.settings) : Json::Value(Json::nullValue);
+  v["profile"] = toJson(g.profile);
+  v["detected"] = g.detected;
+  v["canStop"] = g.canStop;
   return v;
 }
 

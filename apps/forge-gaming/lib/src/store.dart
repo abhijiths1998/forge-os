@@ -6,10 +6,11 @@ import 'package:flutter/foundation.dart';
 import 'daemon.dart';
 import 'models.dart';
 
-enum LibraryFilter { all, favorites, recent, steam, heroic, lutris, local, hidden }
+enum LibraryFilter { playing, all, favorites, recent, steam, heroic, lutris, local, hidden }
 
 extension LibraryFilterLabel on LibraryFilter {
   String get label => switch (this) {
+        LibraryFilter.playing => 'Playing now',
         LibraryFilter.all => 'All games',
         LibraryFilter.favorites => 'Favourites',
         LibraryFilter.recent => 'Recently played',
@@ -33,6 +34,7 @@ List<Game> selectGames(List<Game> games, LibraryFilter filter, String query) {
     }
     final keep = switch (filter) {
       LibraryFilter.all || LibraryFilter.hidden => true,
+      LibraryFilter.playing => g.running,
       LibraryFilter.favorites => g.favorite,
       LibraryFilter.recent => g.lastPlayed != null,
       LibraryFilter.steam => g.source == GameSource.steam,
@@ -77,6 +79,9 @@ class GamingStore extends ChangeNotifier {
   List<Game> games = const [];
   List<Runner> runners = const [];
   String? defaultRunner;
+
+  /// What profiles can do on this desktop (forged).
+  SystemInfo system = const SystemInfo();
   List<RunnerRelease>? releases;
   final Map<String, Download> downloads = {};
   final Map<int, Pad> pads = {};
@@ -115,7 +120,7 @@ class GamingStore extends ChangeNotifier {
     } on Object catch (e) {
       error = '$e';
     }
-    await Future.wait([refresh(rescan: false), loadRunners(), _loadPads()]);
+    await Future.wait([refresh(rescan: false), loadRunners(), _loadPads(), loadSystemInfo()]);
   }
 
   Future<void> refresh({bool rescan = true}) async {
@@ -193,6 +198,22 @@ class GamingStore extends ChangeNotifier {
       _update({'id': g.id, 'favorite': on});
 
   Future<void> setHidden(Game g, bool on) => _update({'id': g.id, 'hidden': on});
+
+  /// Changes the Game Hub profile; [thermal] null means automatic.
+  Future<void> setProfile(Game g, {required String? thermal, required bool quiet}) =>
+      _update({
+        'id': g.id,
+        'profile': GameProfile(thermal: thermal, quiet: quiet).toJson(),
+      });
+
+  Future<void> loadSystemInfo() async {
+    try {
+      system = SystemInfo.fromJson(await daemon.call('system.info'));
+    } on Object {
+      system = const SystemInfo();
+    }
+    notifyListeners();
+  }
 
   Future<Game?> addGame(String title, GameSettings s, {String? cover}) async {
     try {
@@ -281,8 +302,13 @@ class GamingStore extends ChangeNotifier {
 
   // ---- events --------------------------------------------------------------
 
-  void _setRunning(String id, bool running) {
-    games = [for (final g in games) g.id == id ? g.copyWith(running: running) : g];
+  void _setRunning(String id, bool running, {bool detected = false}) {
+    games = [
+      for (final g in games)
+        g.id == id
+            ? g.copyWith(running: running, detected: running && detected, canStop: running && !detected)
+            : g
+    ];
   }
 
   void _onEvent(DaemonEvent e) {
@@ -300,7 +326,10 @@ class GamingStore extends ChangeNotifier {
             notifyListeners();
           });
         } else {
-          _setRunning(id, true);
+          // Launched here (we can stop it) or found running by the watcher.
+          final detected = d['detected'] == true;
+          if (detected) handedOff.remove(id);
+          _setRunning(id, true, detected: detected);
         }
       case 'game.stopped':
         // Play time and last played changed: fetch the game again.

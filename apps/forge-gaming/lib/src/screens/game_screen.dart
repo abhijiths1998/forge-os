@@ -132,10 +132,11 @@ class GameScreen extends StatelessWidget {
             large: true,
             filled: true,
             autofocus: true,
-            danger: g.running,
-            icon: g.running ? Icons.stop_rounded : Icons.play_arrow_rounded,
-            label: g.running ? 'Stop' : (busy ? 'Starting…' : 'Play'),
-            onPressed: busy
+            danger: g.running && g.canStop,
+            icon: g.running ? (g.canStop ? Icons.stop_rounded : Icons.sports_esports_rounded) : Icons.play_arrow_rounded,
+            // A game Steam, Heroic or Lutris runs is stopped from the game.
+            label: g.running ? (g.canStop ? 'Stop' : 'Playing now') : (busy ? 'Starting…' : 'Play'),
+            onPressed: busy || (g.running && !g.canStop)
                 ? null
                 : () {
                     if (g.running) {
@@ -190,7 +191,92 @@ class GameScreen extends StatelessWidget {
               style: TextStyle(color: p.dimText, fontSize: 13 * big),
             ),
           ),
+        const SizedBox(height: 26),
+        _profile(g),
       ]),
+    );
+  }
+
+  /// The Game Hub profile: cooling and quiet while this game runs.
+  Widget _profile(Game g) {
+    final p = palette;
+    final sys = store.system;
+    final prof = g.profile;
+    void set({String? thermal, bool? quiet, bool automatic = false}) => store.setProfile(g,
+        thermal: automatic ? null : (thermal ?? prof.thermal), quiet: quiet ?? prof.quiet);
+    String label(String name) => name.isEmpty ? name : name[0].toUpperCase() + name.substring(1);
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: 760),
+      child: FocusTraversalGroup(
+        child: Glass(
+          palette: p,
+          padding: EdgeInsets.all(couch ? 24 : 20),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Icon(Icons.auto_awesome_rounded, size: 18, color: p.accent),
+              const SizedBox(width: 8),
+              Text('GAME PROFILE',
+                  style: TextStyle(fontSize: 11, letterSpacing: 1, fontWeight: FontWeight.w800, color: p.dimText)),
+              const Spacer(),
+              if (g.running && !prof.isDefault)
+                Text('● in use', style: TextStyle(fontSize: 12, color: p.positive, fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 6),
+            Text(
+              g.isLocal
+                  ? 'Applied whenever this game runs, and undone when it stops.'
+                  : 'Applied whenever this game runs, even when ${g.source.label} starts it.',
+              style: TextStyle(color: p.dimText, fontSize: 12.5),
+            ),
+            const SizedBox(height: 16),
+            Text('Cooling', style: TextStyle(color: p.text, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            if (!sys.thermalAvailable)
+              Text('Forge Thermal is not available on this system.', style: TextStyle(color: p.dimText, fontSize: 12.5))
+            else
+              Wrap(spacing: 10, runSpacing: 10, children: [
+                GlassChip(
+                  palette: p,
+                  icon: Icons.auto_mode_rounded,
+                  label: 'Automatic',
+                  selected: prof.thermal == null,
+                  onSelected: () => set(automatic: true),
+                ),
+                for (final t in sys.thermalProfiles.where((t) => t != 'custom' || prof.thermal == 'custom'))
+                  GlassChip(
+                    palette: p,
+                    icon: switch (t) {
+                      'silent' => Icons.volume_off_rounded,
+                      'cool' => Icons.ac_unit_rounded,
+                      'performance' => Icons.local_fire_department_rounded,
+                      'balanced' => Icons.balance_rounded,
+                      _ => Icons.thermostat_rounded,
+                    },
+                    label: label(t),
+                    selected: prof.thermal == t,
+                    onSelected: () => set(thermal: t),
+                  ),
+              ]),
+            if (sys.thermalAvailable && prof.thermal == null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text('Automatic: the desktop picks the gaming profile while a game is full screen.',
+                    style: TextStyle(color: p.dimText, fontSize: 12)),
+              ),
+            if (sys.quietAvailable) ...[
+              const SizedBox(height: 14),
+              GlassToggle(
+                palette: p,
+                label: 'Do not disturb',
+                subtitle: 'Hold notifications while playing',
+                value: prof.quiet,
+                onChanged: (v) => set(quiet: v),
+              ),
+            ],
+          ]),
+        ),
+      ),
     );
   }
 

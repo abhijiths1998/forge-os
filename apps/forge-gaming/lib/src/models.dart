@@ -128,6 +128,54 @@ class GameSettings {
       };
 }
 
+/// The Game Hub profile: applied when the game starts, undone when it stops,
+/// whichever launcher started it (docs/FORGE-GAMING.md, "Profiles").
+class GameProfile {
+  const GameProfile({this.thermal, this.quiet = false});
+
+  factory GameProfile.fromJson(Object? json) {
+    final j = _m(json);
+    return GameProfile(thermal: _sn(j['thermal']), quiet: _b(j['quiet']));
+  }
+
+  /// A Forge Thermal profile, or null for the desktop's automatic rule.
+  final String? thermal;
+
+  /// Do not disturb while playing.
+  final bool quiet;
+
+  bool get isDefault => thermal == null && !quiet;
+
+  Map<String, Object?> toJson() => {'thermal': thermal, 'quiet': quiet};
+}
+
+/// What the desktop offers profiles (from forged, through system.info).
+class SystemInfo {
+  const SystemInfo({
+    this.thermalAvailable = false,
+    this.thermalProfiles = const [],
+    this.thermalCurrent,
+    this.quietAvailable = false,
+  });
+
+  factory SystemInfo.fromJson(Object? json) {
+    final j = _m(json);
+    final t = _m(j['thermal']);
+    final profiles = t['profiles'];
+    return SystemInfo(
+      thermalAvailable: _b(t['available']),
+      thermalProfiles: profiles is List ? profiles.whereType<String>().toList() : const [],
+      thermalCurrent: _sn(t['current']),
+      quietAvailable: _b(_m(j['quiet'])['available']),
+    );
+  }
+
+  final bool thermalAvailable;
+  final List<String> thermalProfiles;
+  final String? thermalCurrent;
+  final bool quietAvailable;
+}
+
 class Game {
   const Game({
     required this.id,
@@ -142,6 +190,9 @@ class Game {
     this.favorite = false,
     this.hidden = false,
     this.settings,
+    this.profile = const GameProfile(),
+    this.detected = false,
+    this.canStop = false,
   });
 
   factory Game.fromJson(Object? json) {
@@ -162,6 +213,10 @@ class Game {
       favorite: _b(j['favorite']),
       hidden: _b(j['hidden']),
       settings: j['settings'] is Map ? GameSettings.fromJson(j['settings']) : null,
+      profile: GameProfile.fromJson(j['profile']),
+      detected: _b(j['detected']),
+      // An older daemon has no canStop: then it could stop what it ran.
+      canStop: j.containsKey('canStop') ? _b(j['canStop']) : _b(j['running']),
     );
   }
 
@@ -177,13 +232,20 @@ class Game {
   final bool favorite;
   final bool hidden;
   final GameSettings? settings;
+  final GameProfile profile;
+
+  /// Running, found by forge-gamed's watcher rather than launched by it.
+  final bool detected;
+
+  /// forge-gamed started it and can stop it.
+  final bool canStop;
 
   bool get isLocal => source == GameSource.local;
 
   /// The wide picture if there is one, else the cover.
   String? get backdrop => hero ?? cover;
 
-  Game copyWith({bool? running}) => Game(
+  Game copyWith({bool? running, bool? detected, bool? canStop}) => Game(
         id: id,
         source: source,
         title: title,
@@ -196,6 +258,9 @@ class Game {
         favorite: favorite,
         hidden: hidden,
         settings: settings,
+        profile: profile,
+        detected: detected ?? this.detected,
+        canStop: canStop ?? this.canStop,
       );
 }
 

@@ -28,6 +28,7 @@ void Store::load() {
         mm.hidden = jbool(m[id], "hidden");
         mm.playedSeconds = jint(m[id], "playedSeconds");
         if (m[id]["lastPlayed"].isIntegral()) mm.lastPlayed = m[id]["lastPlayed"].asInt64();
+        mm.profile = profileFromStored(m[id]["profile"]);
         meta[id] = mm;
       }
     }
@@ -58,6 +59,7 @@ bool Store::saveLibrary() const {
     o["hidden"] = mm.hidden;
     o["playedSeconds"] = Json::Int64(mm.playedSeconds);
     o["lastPlayed"] = mm.lastPlayed ? Json::Value(Json::Int64(*mm.lastPlayed)) : Json::Value(Json::nullValue);
+    o["profile"] = toJson(mm.profile);
     m[id] = o;
   }
   root["meta"] = m;

@@ -26,6 +26,8 @@ struct HeroicArt {
 std::vector<std::string> heroicConfigDirs(const std::string& home);
 // App names (plus any inline title) of installed games, tolerant of shapes.
 std::vector<std::pair<std::string, std::string>> parseHeroicInstalled(const Json::Value& v);
+// app name -> install folder (install_path, or path), where present.
+std::map<std::string, std::string> parseHeroicInstallPaths(const Json::Value& v);
 std::map<std::string, HeroicArt> parseHeroicLibrary(const Json::Value& v);
 std::vector<Game> scanHeroic(const std::string& home);
 

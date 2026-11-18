@@ -61,6 +61,7 @@ std::optional<Game> parseSteamManifest(const std::string& text) {
   g.hero = "https://shared.steamstatic.com/store_item_assets/steam/apps/" + appid + "/library_hero.jpg";
   long long lp = std::strtoll(st->str("LastPlayed", "0").c_str(), nullptr, 10);
   if (lp > 0) g.lastPlayed = lp;
+  g.installDir = st->str("installdir");  // relative; scanSteam makes it absolute
   return g;
 }
 
@@ -119,6 +120,10 @@ std::vector<Game> scanSteam(const std::string& home) {
       std::string cache = root + "/appcache/librarycache/" + appid;
       if (auto c = findCachedArt(cache, "library_600x900")) g->cover = *c;
       if (auto h = findCachedArt(cache, "library_hero")) g->hero = *h;
+      if (!g->installDir.empty() && g->installDir.find("..") == std::string::npos && g->installDir[0] != '/')
+        g->installDir = lib + "/steamapps/common/" + g->installDir;
+      else
+        g->installDir.clear();
       out.push_back(std::move(*g));
     }
   }
@@ -150,6 +155,28 @@ std::vector<std::pair<std::string, std::string>> parseHeroicInstalled(const Json
     if (app.empty()) return;
     std::string title = jstr(o, "title");
     out.emplace_back(app, title);
+  };
+  if (v.isArray()) {
+    for (auto& e : v) take(e, "");
+  } else if (v.isObject()) {
+    if (v["installed"].isArray()) {
+      for (auto& e : v["installed"]) take(e, "");
+    } else {
+      for (auto& k : v.getMemberNames()) take(v[k], k);
+    }
+  }
+  return out;
+}
+
+std::map<std::string, std::string> parseHeroicInstallPaths(const Json::Value& v) {
+  std::map<std::string, std::string> out;
+  auto take = [&](const Json::Value& o, const std::string& key) {
+    if (!o.isObject()) return;
+    std::string app = appNameOf(o);
+    if (app.empty()) app = key;
+    std::string p = jstr(o, "install_path");
+    if (p.empty()) p = jstr(o, "path");
+    if (!app.empty() && !p.empty()) out[app] = p;
   };
   if (v.isArray()) {
     for (auto& e : v) take(e, "");
@@ -210,6 +237,7 @@ std::vector<Game> scanHeroic(const std::string& home) {
       std::map<std::string, HeroicArt> art;
       Json::Value lib;
       if (loadJsonFile(dir + "/" + s.library, lib)) art = parseHeroicLibrary(lib);
+      auto paths = parseHeroicInstallPaths(inst);
       for (auto& [app, inlineTitle] : parseHeroicInstalled(inst)) {
         std::string id = std::string("heroic:") + s.runner + ":" + app;
         if (!seen.insert(id).second) continue;
@@ -217,6 +245,7 @@ std::vector<Game> scanHeroic(const std::string& home) {
         g.id = id;
         g.source = "heroic";
         g.title = app;
+        if (auto pit = paths.find(app); pit != paths.end()) g.installDir = pit->second;
         if (!inlineTitle.empty()) g.title = inlineTitle;
         auto it = art.find(app);
         if (it != art.end()) {
@@ -245,8 +274,17 @@ std::vector<Game> scanLutris(const std::string& home) {
   }
   sqlite3_busy_timeout(h, 500);
   sqlite3_stmt* st = nullptr;
-  const char* sql = "SELECT id, name, slug, runner, installed, playtime, lastplayed FROM games WHERE installed = 1";
-  if (sqlite3_prepare_v2(h, sql, -1, &st, nullptr) == SQLITE_OK) {
+  const char* sql = "SELECT id, name, slug, runner, installed, playtime, lastplayed, directory FROM games WHERE installed = 1";
+  // Very old databases have no `directory` column.
+  bool prepared = sqlite3_prepare_v2(h, sql, -1, &st, nullptr) == SQLITE_OK;
+  if (!prepared) {
+    sqlite3_finalize(st);
+    st = nullptr;
+    prepared = sqlite3_prepare_v2(h,
+        "SELECT id, name, slug, runner, installed, playtime, lastplayed, NULL FROM games WHERE installed = 1",
+        -1, &st, nullptr) == SQLITE_OK;
+  }
+  if (prepared) {
     while (sqlite3_step(st) == SQLITE_ROW) {
       Game g;
       long long id = sqlite3_column_int64(st, 0);
@@ -259,6 +297,8 @@ std::vector<Game> scanLutris(const std::string& home) {
       g.title = col(1);
       if (g.title.empty()) g.title = g.id;
       std::string slug = col(2);
+      g.lutrisName = col(1);
+      g.installDir = col(7);
       g.playtimeMinutes = static_cast<int64_t>(sqlite3_column_double(st, 5) * 60.0 + 0.5);
       if (sqlite3_column_type(st, 6) != SQLITE_NULL) {
         long long lp = sqlite3_column_int64(st, 6);

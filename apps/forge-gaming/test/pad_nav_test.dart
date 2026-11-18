@@ -32,6 +32,10 @@ void main() {
             ]
           },
       'game.update': (p) => {'game': gameJson(p!['id'] as String, 'Alpha', favorite: p['favorite'] == true)},
+      'system.info': (_) => {
+            'thermal': {'available': true, 'profiles': ['balanced', 'custom', 'performance'], 'current': 'balanced'},
+            'quiet': {'available': true},
+          },
     });
     store = GamingStore(daemon);
     await store.init();
@@ -94,14 +98,15 @@ void main() {
     expect(find.byType(CouchScreen), findsOneWidget, reason: 'Guide brings Forge Gaming up in couch mode');
 
     // Summoned over the game, the pad drives the UI (to reach Stop)...
-    final before = focusedTitle();
-    await press(tester, PadButton.right);
-    expect(focusedTitle(), isNot(before));
+    // Couch mode opens on the "Playing now" shelf (just Bravo); down is All games.
+    expect(focusedTitle(), 'Bravo');
+    await press(tester, PadButton.down);
+    expect(focusedTitle(), isNot('Bravo'));
 
     // ...until Guide again hands the screen back to the game.
     await press(tester, PadButton.guide);
     final after = focusedTitle();
-    await press(tester, PadButton.right);
+    await press(tester, PadButton.up);
     expect(focusedTitle(), after, reason: 'ignored again once back in the game');
     await finish(tester);
   });
@@ -123,6 +128,23 @@ void main() {
 
     await press(tester, PadButton.b);
     expect(find.byType(LibraryScreen), findsOneWidget, reason: 'B at the couch root returns to desktop');
+    await finish(tester);
+  });
+
+  testWidgets('game profile: pick a cooling profile with the pad', (tester) async {
+    await start(tester);
+    await press(tester, PadButton.a);
+    expect(find.text('GAME PROFILE'), findsOneWidget);
+    expect(find.text('Performance'), findsOneWidget);
+    expect(find.text('Custom'), findsNothing, reason: 'custom only shows when already chosen');
+    expect(find.text('Do not disturb'), findsOneWidget);
+    await tester.tap(find.text('Performance'));
+    await tester.pumpAndSettle();
+    final call = daemon.calls.lastWhere((c) => c.$1 == 'game.update');
+    expect(call.$2, {
+      'id': 'local:a',
+      'profile': {'thermal': 'performance', 'quiet': false}
+    });
     await finish(tester);
   });
 }

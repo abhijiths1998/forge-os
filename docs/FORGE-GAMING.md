@@ -12,7 +12,7 @@ The UI never touches game files or devices itself; everything goes through the
 daemon's socket. The daemon keeps running when the UI is closed, so the
 controller's Guide button can open the UI at any time, including mid-game.
 
-## Milestone 1 scope
+## Milestone 1 scope (library and launcher)
 
 - Library: Steam, Heroic (Epic/GOG/Amazon) and Lutris games are imported;
   your own games are added by hand (native Linux executables, or Windows
@@ -185,3 +185,63 @@ a second one that finds a live socket exits with code 0.
 
 `forge-gamed --call <method> [json-params]` sends one request to the running
 daemon and prints the response; `forge-gamed --watch` prints events.
+
+## Milestone 2: the Game Hub
+
+The roadmap's Game Hub: one library for every source, and a profile per game
+that is applied when the game starts and undone when it stops, whichever
+launcher started it.
+
+### Seeing games run
+
+Steam, Heroic and Lutris launches are hand-offs, so forge-gamed watches for
+the games themselves: every 2 s it reads `/proc/*/cmdline` and marks a game
+running when it finds
+
+| Source | Sign |
+|---|---|
+| steam | a process whose arguments contain `SteamLaunch` and `AppId=<appid>` (Steam's reaper) |
+| lutris | a process titled `lutris-wrapper: <name>` (or the `lutris-wrapper` script with `<name>` as its first argument), `<name>` being the game's Lutris name |
+| heroic, lutris | otherwise, a process with an argument inside the game's install folder (Windows paths normalised: `\`→`/`, a leading `Z:` dropped, case-insensitive), not counting Steam, Heroic or Lutris themselves |
+
+A game counts as stopped once it has been missing from two scans in a row.
+Found games send the same `game.started` / `game.stopped` events as launched
+ones, with `"detected": true`. Play time is added for Steam and Heroic games;
+Lutris counts its own (forge-gamed reads it from `pga.db`).
+
+### Profiles
+
+Every game has a profile, applied when it starts (launched or found) and
+undone when it stops:
+
+| Field | Effect |
+|---|---|
+| `thermal` | a Forge Thermal profile (`forged set thermal <name>`), or null to leave cooling to the desktop's own rule (the `gaming` profile while a game is full screen) |
+| `quiet` | do not disturb while playing (`forged set dnd on`) |
+
+The setting in force before the game is remembered and put back. While a
+game's thermal profile is held, `$XDG_RUNTIME_DIR/forge/thermal-held-by-game`
+holds its id and the desktop's full-screen rule (`forge-game
+fullscreen-on`) leaves cooling alone. Only the first game to start holds a
+setting; `forged` missing means profiles do nothing (no error). Mangohud,
+GameMode, gamescope and the runner stay per-game settings of your own games:
+Steam, Heroic and Lutris keep those in their own launch options.
+
+### Protocol additions
+
+Game gains:
+
+```jsonc
+{
+  "profile": {"thermal": "performance", "quiet": true}, // thermal null = automatic
+  "detected": false,  // running, found by the watcher rather than launched here
+  "canStop": false    // forge-gamed launched it and can stop it
+}
+```
+
+| Method | Params | Result |
+|---|---|---|
+| `game.update` | also `"profile": {"thermal"?, "quiet"?}` (merged; `"thermal": null` = automatic) | `{"game": Game}` |
+| `system.info` | — | `{"thermal": {"available": bool, "profiles": [name], "current": name or null}, "quiet": {"available": bool}}` from `forged state` |
+
+`game.started` data gains `"detected"` (bool).
