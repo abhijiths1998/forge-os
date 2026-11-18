@@ -385,7 +385,7 @@ ollama
 ollama-vulkan
 
 # Forge Arcade (forge-arcade): the launcher for the games in forge-games
-# (built from github.com/abhijiths1998/games by packages/forge-games)
+# (built from games/ in this repo by packages/forge-games)
 forge-games
 forge-arcade
 

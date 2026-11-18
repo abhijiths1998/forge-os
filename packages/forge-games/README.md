@@ -1,7 +1,7 @@
 # forge-games
 
-The ten games from github.com/abhijiths1998/games (commit `2a19cdc`), built
-from source for Forge Arcade (`apps/forge-arcade`): Port Calder, Hardlight,
+The ten games in this repo's `games/` (merged in, with their history, from
+github.com/abhijiths1998/games at `2a19cdc`), built from source for Forge Arcade (`apps/forge-arcade`): Port Calder, Hardlight,
 Bramble Bound, Orbit Golf, Prism Smash, Lumen Drift, Relic Runner, Ember
 Isle, Nova Lancer and Deep Delve. Depends on `sdl2`, and `mesa` for the two
 OpenGL games.
@@ -77,7 +77,7 @@ Orbit Golf's best round is strokes, so the lowest wins.
 
     makepkg --nodeps
 
-needs `sdl2`, `mesa`, `git`, `gcc`, `make`, `pkgconf`, `imagemagick` and `jq`
+needs `sdl2`, `mesa`, `gcc`, `make`, `pkgconf`, `imagemagick` and `jq`
 installed (the ISO's `apps/build-packages.sh` uses `--nodeps`, so the build
-container must have them). The sources are `git+https://github.com/abhijiths1998/games.git`
-pinned to the commit, so the clone needs the network.
+container must have them). The source is `../../games` (or `../games` beside
+the copy `apps/build-packages.sh` makes), so the build needs no network.

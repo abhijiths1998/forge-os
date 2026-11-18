@@ -464,7 +464,7 @@ apps/forge-session/      Hyprland defaults (/usr/share/forge/hypr), skel
                          lint (M1)
 apps/forge-shell/        Quickshell QML (/usr/share/forge/shell), user unit (M2)
 apps/forge-arcade/       Flutter on forge_ui (M4)
-packages/forge-games/    PKGBUILD building github.com/abhijiths1998/games (M4)
+packages/forge-games/    PKGBUILD building games/ (in this repo since 2026-11-19; was github.com/abhijiths1998/games) (M4)
 apps/forge-terminal/     GTK4 + VTE rewrite (M5), if you choose it
 apps/forge-wallpapers/   Flutter on forge_ui (M6)
 branding-source/cast/    Forge cast SVG sources + export script (M6)

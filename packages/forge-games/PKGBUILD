@@ -1,23 +1,43 @@
-# forge-games: the user's own C11/SDL2 games, packaged for Forge OS
-# (github.com/abhijiths1998/games). Forge Arcade (apps/forge-arcade) lists them.
+# forge-games: the user's own C11/SDL2 games, packaged for Forge OS. Their
+# source lives in this repo at games/ (merged in with its history from
+# github.com/abhijiths1998/games). Forge Arcade (apps/forge-arcade) lists them.
 pkgname=forge-games
 pkgver=0.1.0
-pkgrel=1
+pkgrel=2
 pkgdesc="Ten small SDL2 games (Port Calder, Hardlight, Bramble Bound and more) for Forge Arcade"
 arch=('x86_64')
-url="https://github.com/abhijiths1998/games"
+url="https://github.com/abhijiths1998/forge-os/tree/master/games"
 license=('custom')
 # mesa: Port Calder and Hardlight link libGL (OpenGL 3.3). The rest are
 # software-rendered SDL2.
 depends=('sdl2' 'mesa')
 # imagemagick turns the games' own BMP screenshots into covers; jq checks
 # games.json. Nothing here needs the network or a GPU after the clone.
-makedepends=('git' 'gcc' 'make' 'pkgconf' 'imagemagick' 'jq')
+makedepends=('gcc' 'make' 'pkgconf' 'imagemagick' 'jq')
 options=('!debug')
-source=("games::git+https://github.com/abhijiths1998/games.git#commit=2a19cdc3235380d5453fd41eede6b940ee4a054c"
-        'games.json')
-sha256sums=('SKIP'
-            'SKIP')
+source=('games.json')
+sha256sums=('SKIP')
+
+# The games' source: ../../games next to this PKGBUILD in the repo, or
+# ../games where apps/build-packages.sh puts a copy beside its copy of this
+# directory.
+_games_dir() {
+    local d
+    for d in "${startdir}/../../games" "${startdir}/../games"; do
+        [[ -f ${d}/Makefile && -d ${d}/vintage ]] && { realpath "${d}"; return; }
+    done
+    echo "forge-games: can't find the games/ source (see _games_dir)" >&2
+    return 1
+}
+
+prepare() {
+    local src
+    src="$(_games_dir)" || return 1
+    rm -rf "${srcdir}/games"
+    cp -r "${src}" "${srcdir}/games"
+    # Never package objects or binaries from a local build.
+    make -C "${srcdir}/games" clean >/dev/null 2>&1 || true
+}
 
 # name:directory:cover screenshot:needs a GPU (the cover screenshot comes from
 # the game's own --selftest, which renders real frames headless)
