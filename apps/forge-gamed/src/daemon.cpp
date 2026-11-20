@@ -54,7 +54,7 @@ Daemon::Daemon() : store_(dataDir()) {}
 Daemon::~Daemon() {
   cancel_ = true;
   stopForgedWorker();
-  for (auto& t : threads_)
+  for (auto& [n, t] : threads_)
     if (t.joinable()) t.join();
 }
 
@@ -117,6 +117,7 @@ int Daemon::run() {
   }
 
   store_.load();
+  recoverHolds();
   rescan();
   nextWatch_ = monoMs() + 2000;
   std::string perr;
@@ -162,7 +163,7 @@ int Daemon::run() {
   cancel_ = true;
   // Give back whatever a game still holds (cooling, do not disturb).
   stopForgedWorker();
-  for (auto& t : threads_)
+  for (auto& [n, t] : threads_)
     if (t.joinable()) t.join();
   threads_.clear();
   store_.saveLibrary();
@@ -202,7 +203,19 @@ void Daemon::postMain(std::function<void()> fn) {
   if (::write(evFd_, &one, sizeof one) < 0) { /* eventfd full: main will wake anyway */ }
 }
 
-void Daemon::startWorker(std::function<void()> fn) { threads_.emplace_back(std::move(fn)); }
+void Daemon::startWorker(std::function<void()> fn) {
+  uint64_t n = nextWorker_++;
+  // Runs on the main thread (as is this), so the insert below comes first.
+  threads_[n] = std::thread([this, n, fn = std::move(fn)]() {
+    fn();
+    postMain([this, n]() {
+      auto it = threads_.find(n);
+      if (it == threads_.end()) return;
+      if (it->second.joinable()) it->second.join();
+      threads_.erase(it);
+    });
+  });
+}
 
 // ------------------------------------------------------------- clients ----
 
@@ -373,6 +386,9 @@ LaunchContext Daemon::launchContext() const {
   c.dataDir = dataDir();
   c.steamRoot = findSteamRoot(home());
   c.umuRun = !findInPath("umu-run").empty();
+  c.haveGamescope = !findInPath("gamescope").empty();
+  c.haveGamemode = !findInPath("gamemoderun").empty();
+  c.haveMangohud = !findInPath("mangohud").empty();
   c.runners = runners_;
   c.defaultRunner = effectiveDefaultRunner();
   return c;
@@ -510,55 +526,62 @@ void Daemon::methodGameUpdate(const Json::Value& p, Json::Value& r) {
   bool localOnly = p.isMember("title") || p.isMember("cover") || p.isMember("settings");
   if (localOnly && !local) throw RpcError{"not_local", "title, cover and settings can only be changed on local games"};
   Store backup = store_;
-  if (local) {
-    LocalGame* lg = store_.findLocal(id);
-    if (p.isMember("title")) {
-      if (!p["title"].isString() || p["title"].asString().empty()) throw RpcError{"bad_request", "title must be a non-empty string"};
-      lg->title = p["title"].asString();
-    }
-    if (p.isMember("cover")) {
-      if (p["cover"].isNull() || (p["cover"].isString() && p["cover"].asString().empty())) lg->cover.reset();
-      else if (p["cover"].isString()) lg->cover = p["cover"].asString();
-      else throw RpcError{"bad_request", "cover must be a string or null"};
-    }
-    if (p.isMember("settings")) {
-      std::string err;
-      GameSettings s;
-      if (!settingsFromJson(p["settings"], s, err)) throw RpcError{"bad_request", err};
-      lg->settings = s;
-    }
-  }
-  if (p.isMember("favorite")) {
-    if (!p["favorite"].isBool()) throw RpcError{"bad_request", "favorite must be a boolean"};
-    store_.meta[id].favorite = p["favorite"].asBool();
-  }
-  if (p.isMember("hidden")) {
-    if (!p["hidden"].isBool()) throw RpcError{"bad_request", "hidden must be a boolean"};
-    store_.meta[id].hidden = p["hidden"].asBool();
-  }
-  if (p.isMember("profile")) {
-    const Json::Value& pr = p["profile"];
-    if (!pr.isObject()) throw RpcError{"bad_request", "profile must be an object"};
-    Profile cur = store_.meta[id].profile;
-    if (pr.isMember("thermal")) {
-      const Json::Value& t = pr["thermal"];
-      if (t.isNull() || (t.isString() && t.asString().empty())) {
-        cur.thermal.reset();
-      } else if (t.isString()) {
-        // Checked against forged's list when we know it; otherwise any name passes.
-        if (haveSysState_ && sysState_.thermalAvailable && !sysState_.profiles.empty() &&
-            std::find(sysState_.profiles.begin(), sysState_.profiles.end(), t.asString()) == sysState_.profiles.end())
-          throw RpcError{"bad_request", "unknown thermal profile " + t.asString()};
-        cur.thermal = t.asString();
-      } else {
-        throw RpcError{"bad_request", "profile.thermal must be a string or null"};
+  // All or nothing: a bad field after a good one must not leave the good one
+  // applied (it would be saved with the next change).
+  try {
+    if (local) {
+      LocalGame* lg = store_.findLocal(id);
+      if (p.isMember("title")) {
+        if (!p["title"].isString() || p["title"].asString().empty()) throw RpcError{"bad_request", "title must be a non-empty string"};
+        lg->title = p["title"].asString();
+      }
+      if (p.isMember("cover")) {
+        if (p["cover"].isNull() || (p["cover"].isString() && p["cover"].asString().empty())) lg->cover.reset();
+        else if (p["cover"].isString()) lg->cover = p["cover"].asString();
+        else throw RpcError{"bad_request", "cover must be a string or null"};
+      }
+      if (p.isMember("settings")) {
+        std::string err;
+        GameSettings s;
+        if (!settingsFromJson(p["settings"], s, err)) throw RpcError{"bad_request", err};
+        lg->settings = s;
       }
     }
-    if (pr.isMember("quiet")) {
-      if (!pr["quiet"].isBool()) throw RpcError{"bad_request", "profile.quiet must be a boolean"};
-      cur.quiet = pr["quiet"].asBool();
+    if (p.isMember("favorite")) {
+      if (!p["favorite"].isBool()) throw RpcError{"bad_request", "favorite must be a boolean"};
+      store_.meta[id].favorite = p["favorite"].asBool();
     }
-    store_.meta[id].profile = cur;
+    if (p.isMember("hidden")) {
+      if (!p["hidden"].isBool()) throw RpcError{"bad_request", "hidden must be a boolean"};
+      store_.meta[id].hidden = p["hidden"].asBool();
+    }
+    if (p.isMember("profile")) {
+      const Json::Value& pr = p["profile"];
+      if (!pr.isObject()) throw RpcError{"bad_request", "profile must be an object"};
+      Profile cur = store_.meta[id].profile;
+      if (pr.isMember("thermal")) {
+        const Json::Value& t = pr["thermal"];
+        if (t.isNull() || (t.isString() && t.asString().empty())) {
+          cur.thermal.reset();
+        } else if (t.isString()) {
+          // Checked against forged's list when we know it; otherwise any name passes.
+          if (haveSysState_ && sysState_.thermalAvailable && !sysState_.profiles.empty() &&
+              std::find(sysState_.profiles.begin(), sysState_.profiles.end(), t.asString()) == sysState_.profiles.end())
+            throw RpcError{"bad_request", "unknown thermal profile " + t.asString()};
+          cur.thermal = t.asString();
+        } else {
+          throw RpcError{"bad_request", "profile.thermal must be a string or null"};
+        }
+      }
+      if (pr.isMember("quiet")) {
+        if (!pr["quiet"].isBool()) throw RpcError{"bad_request", "profile.quiet must be a boolean"};
+        cur.quiet = pr["quiet"].asBool();
+      }
+      store_.meta[id].profile = cur;
+    }
+  } catch (...) {
+    store_ = backup;
+    throw;
   }
   if (!store_.saveLibrary()) {
     store_ = backup;
@@ -574,10 +597,14 @@ void Daemon::methodGameRemove(const Json::Value& p) {
   if (!game) throw RpcError{"not_found", "no game " + id};
   if (game->source != "local") throw RpcError{"not_local", "only local games can be removed"};
   if (game->running) throw RpcError{"already_running", "stop the game first"};
+  Store backup = store_;
   auto& v = store_.locals;
   v.erase(std::remove_if(v.begin(), v.end(), [&](const LocalGame& g) { return g.id == id; }), v.end());
   store_.meta.erase(id);
-  if (!store_.saveLibrary()) throw RpcError{"io", "cannot write library.json"};
+  if (!store_.saveLibrary()) {
+    store_ = backup;
+    throw RpcError{"io", "cannot write library.json"};
+  }
   broadcast("library.changed", emptyObj());
 }
 
@@ -916,7 +943,10 @@ void Daemon::stopForgedWorker() {
     std::lock_guard<std::mutex> lk(fmu_);
     if (fstop_) return;
     // Runs on the worker, after every queued start/stop.
-    fq_.push_back([this]() { execPlan(holds_.stopAll()); });
+    fq_.push_back([this]() {
+      execPlan(holds_.stopAll());
+      saveHoldRecord(holds_);
+    });
     fstop_ = true;
     if (!forgedThread_.joinable()) {
       // Nothing was ever queued: nothing can be held.
@@ -935,8 +965,29 @@ void Daemon::applyProfile(const std::string& id) {
   if (!p.thermal && !p.quiet) return;
   enqueueForged([this, id, p]() {
     ForgedState st = readForgedState();
-    execPlan(holds_.start(id, p, st));
+    std::optional<std::string> saved;
+    std::string text;
+    if (readFile(fullscreenSavedPath(), text)) {
+      while (!text.empty() && (text.back() == '\n' || text.back() == ' ')) text.pop_back();
+      if (!text.empty()) saved = text;
+    }
+    execPlan(holds_.start(id, p, st, saved));
+    saveHoldRecord(holds_);
     postMain([this]() { sysInfoAt_ = 0; });
+  });
+}
+
+// A daemon that crashed while a game held a profile left its marker (which
+// keeps forge-game's full-screen rule out) and maybe a hold record. Undo
+// them first, before any game here can take a new hold.
+void Daemon::recoverHolds() {
+  std::string text;
+  bool haveRecord = readFile(holdRecordPath(), text);
+  if (!haveRecord && !isFile(thermalMarkerPath())) return;
+  std::cerr << "forge-gamed: undoing profile holds left by a previous run\n";
+  enqueueForged([text]() {
+    execPlan(recoveryPlan(text));
+    ::unlink(holdRecordPath().c_str());
   });
 }
 
@@ -945,6 +996,7 @@ void Daemon::releaseProfile(const std::string& id) {
     HoldPlan plan = holds_.stop(id);
     if (plan.empty()) return;
     execPlan(plan);
+    saveHoldRecord(holds_);
     postMain([this]() { sysInfoAt_ = 0; });
   });
 }

@@ -89,6 +89,7 @@ Json::Value toJson(const Pad& p) {
 
 static GameSettings parseLenient(const Json::Value& v) {
   GameSettings s;
+  if (!v.isObject()) return s;  // v["key"] on a string/array would throw
   s.kind = jstr(v, "kind", "native");
   if (s.kind != "native" && s.kind != "windows") s.kind = "native";
   s.exe = jstr(v, "exe");
@@ -102,7 +103,7 @@ static GameSettings parseLenient(const Json::Value& v) {
       if (e.isString() || e.isIntegral() || e.isDouble()) s.env[k] = e.asString();
     }
   }
-  s.gamemode = jbool(v, "gamemode");
+  s.gamemode = jbool(v, "gamemode", true);
   s.mangohud = jbool(v, "mangohud");
   const Json::Value& gs = v["gamescope"];
   if (gs.isObject()) {

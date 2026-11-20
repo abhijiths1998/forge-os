@@ -10,6 +10,9 @@ Type=simple
 ExecStart=/usr/bin/forge-gamed
 Restart=on-failure
 RestartSec=2
+# Games, Steam/Lutris/Heroic and the UI that the daemon starts are its
+# children; stopping or restarting the daemon must not take them down too.
+KillMode=process
 
 [Install]
 WantedBy=graphical-session.target

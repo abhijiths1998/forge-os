@@ -6,8 +6,8 @@
 
 namespace fg {
 
-static void addWrappers(std::vector<std::string>& argv, const GameSettings& s) {
-  if (s.gamescope.enabled) {
+static void addWrappers(std::vector<std::string>& argv, const GameSettings& s, const LaunchContext& ctx) {
+  if (s.gamescope.enabled && ctx.haveGamescope) {
     argv.push_back("gamescope");
     argv.push_back("-W");
     argv.push_back(std::to_string(s.gamescope.width));
@@ -20,8 +20,8 @@ static void addWrappers(std::vector<std::string>& argv, const GameSettings& s) {
     if (s.gamescope.fullscreen) argv.push_back("-f");
     argv.push_back("--");
   }
-  if (s.gamemode) argv.push_back("gamemoderun");
-  if (s.mangohud) argv.push_back("mangohud");
+  if (s.gamemode && ctx.haveGamemode) argv.push_back("gamemoderun");
+  if (s.mangohud && ctx.haveMangohud) argv.push_back("mangohud");
 }
 
 static std::string dirName(const std::string& path) {
@@ -75,7 +75,7 @@ bool buildLaunch(const Game& g, const LaunchContext& ctx, LaunchSpec& out, std::
   std::vector<std::string> args = splitArgs(s.args);
 
   if (s.kind == "native") {
-    addWrappers(out.argv, s);
+    addWrappers(out.argv, s, ctx);
     out.argv.push_back(s.exe);
     out.argv.insert(out.argv.end(), args.begin(), args.end());
     return true;
@@ -89,7 +89,7 @@ bool buildLaunch(const Game& g, const LaunchContext& ctx, LaunchSpec& out, std::
   const Runner& r = *it;
   std::string prefix = s.prefix ? *s.prefix : ctx.dataDir + "/prefixes/" + sanitizeId(g.id);
   out.mkdirs.push_back(prefix);
-  addWrappers(out.argv, s);
+  addWrappers(out.argv, s, ctx);
   if (r.kind == "proton") {
     if (ctx.umuRun) {
       out.env["PROTONPATH"] = r.path;

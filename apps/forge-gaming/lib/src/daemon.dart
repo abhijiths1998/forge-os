@@ -87,6 +87,8 @@ class DaemonClient implements DaemonApi {
   bool _closed = false;
   bool _spawned = false;
   Future<void>? _connecting;
+  Timer? _reconnect;
+  var _backoff = 0;
 
   @override
   Stream<DaemonEvent> get events => _events.stream;
@@ -96,9 +98,11 @@ class DaemonClient implements DaemonApi {
   bool get connected => _socket != null;
 
   /// Connects, starting the daemon if nobody is listening. Retries for ~5 s.
+  /// Every attempt (a "Try again", a reconnect) may start the daemon once.
   Future<void> connect() => _connecting ??= _connect().whenComplete(() => _connecting = null);
 
   Future<void> _connect() async {
+    _spawned = false;
     for (var attempt = 0; attempt < 25 && !_closed; attempt++) {
       try {
         final s = await Socket.connect(
@@ -118,7 +122,20 @@ class DaemonClient implements DaemonApi {
   }
 
   Future<void> _spawnDaemon() async {
-    final cmd = daemonCommand ?? Platform.environment['FORGE_GAMED_BIN'] ?? 'forge-gamed';
+    final override = daemonCommand ?? Platform.environment['FORGE_GAMED_BIN'];
+    if (override == null) {
+      // Prefer the user service, so systemd owns (and restarts) the daemon
+      // rather than this window. A daemon we start ourselves would make the
+      // service's own restart find the socket taken and give up.
+      try {
+        final r = await Process.run('systemctl', ['--user', 'start', 'forge-gamed.service'])
+            .timeout(const Duration(seconds: 5));
+        if (r.exitCode == 0) return;
+      } on Object {
+        // No systemd, or no unit: start it directly.
+      }
+    }
+    final cmd = override ?? 'forge-gamed';
     try {
       await Process.start(cmd, const [], mode: ProcessStartMode.detached);
     } on ProcessException {
@@ -128,7 +145,11 @@ class DaemonClient implements DaemonApi {
 
   void _attach(Socket s) {
     _socket = s;
+    _backoff = 0;
+    _reconnect?.cancel();
     _connection.add(true);
+    // A write after the daemon died fails here (EPIPE), not in add().
+    s.done.then((_) => _dropped(s), onError: (Object _) => _dropped(s));
     final decoder = NdjsonDecoder();
     s.listen(
       (chunk) {
@@ -170,18 +191,32 @@ class DaemonClient implements DaemonApi {
     }
     _pending.clear();
     _connection.add(false);
-    if (!_closed) {
-      // The service restarts it (or we start it); come back when it's up.
-      _spawned = false;
-      Future<void>.delayed(const Duration(seconds: 1), () {
-        if (!_closed) connect().catchError((Object _) {});
-      });
-    }
+    _scheduleReconnect();
+  }
+
+  /// Keeps trying to come back while disconnected: first after 3 s (longer
+  /// than the unit's RestartSec, so systemd gets to restart it), then backing
+  /// off to every 30 s.
+  void _scheduleReconnect() {
+    if (_closed || _socket != null || (_reconnect?.isActive ?? false)) return;
+    final delay = Duration(seconds: _backoff == 0 ? 3 : (5 * _backoff).clamp(5, 30));
+    _backoff++;
+    _reconnect = Timer(delay, () {
+      if (_closed || _socket != null) return;
+      connect().catchError((Object _) => _scheduleReconnect());
+    });
   }
 
   @override
   Future<Object?> call(String method, [Map<String, Object?>? params]) async {
-    if (_socket == null) await connect();
+    if (_socket == null) {
+      try {
+        await connect();
+      } on Object {
+        _scheduleReconnect();
+        rethrow;
+      }
+    }
     final s = _socket;
     if (s == null) throw DaemonError('io', 'Not connected to forge-gamed');
     final id = _nextId++;
@@ -196,6 +231,7 @@ class DaemonClient implements DaemonApi {
 
   Future<void> close() async {
     _closed = true;
+    _reconnect?.cancel();
     await _socket?.close();
     _socket = null;
   }

@@ -1,5 +1,8 @@
 #include "store.hpp"
 
+#include <cstdio>
+#include <iostream>
+
 #include "util.hpp"
 
 namespace fg {
@@ -10,7 +13,17 @@ void Store::load() {
   defaultRunner.clear();
   std::string text;
   Json::Value root;
-  if (readFile(dir_ + "/library.json", text) && parseJson(text, root) && root.isObject()) {
+  const std::string path = dir_ + "/library.json";
+  bool have = readFile(path, text);
+  if (have && !(parseJson(text, root) && root.isObject())) {
+    // Keep it: the next save would otherwise replace the user's own games
+    // with an empty list.
+    std::string bad = path + ".bad";
+    if (::rename(path.c_str(), bad.c_str()) == 0)
+      std::cerr << "forge-gamed: " << path << " is not valid JSON; moved it to " << bad << "\n";
+    root = Json::Value();
+  }
+  if (root.isObject()) {
     for (const auto& g : root["local"]) {
       if (!g.isObject() || jstr(g, "id").empty()) continue;
       LocalGame lg;
@@ -23,6 +36,7 @@ void Store::load() {
     const Json::Value& m = root["meta"];
     if (m.isObject()) {
       for (auto& id : m.getMemberNames()) {
+        if (!m[id].isObject()) continue;
         Meta mm;
         mm.favorite = jbool(m[id], "favorite");
         mm.hidden = jbool(m[id], "hidden");

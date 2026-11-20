@@ -83,7 +83,7 @@ SpawnResult spawnProcess(const LaunchSpec& spec, const std::string& logPath, boo
     if (nullfd >= 0) ::dup2(nullfd, 0);
     if (out >= 0) { ::dup2(out, 1); ::dup2(out, 2); }
     if (!spec.workdir.empty() && ::chdir(spec.workdir.c_str()) != 0) {
-      int e = errno;
+      int e = -errno;  // negative: the folder failed, not the program
       if (::write(pfd[1], &e, sizeof e) < 0) {}
       ::_exit(127);
     }
@@ -110,7 +110,8 @@ SpawnResult spawnProcess(const LaunchSpec& spec, const std::string& logPath, boo
       int st = 0;
       while (::waitpid(pid, &st, 0) < 0 && errno == EINTR) {}
     }
-    res.error = spec.argv[0] + ": " + std::strerror(childErr);
+    res.error = childErr < 0 ? "can't open the game folder " + spec.workdir + ": " + std::strerror(-childErr)
+                             : spec.argv[0] + ": " + std::strerror(childErr);
     return res;
   }
   res.ok = true;

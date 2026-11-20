@@ -96,5 +96,34 @@ void main() {
       expect(states, contains(false));
       await c.close();
     });
+
+    test('comes back by itself after the daemon drops', () async {
+      final c = DaemonClient(socketPath: path, daemonCommand: '/nonexistent');
+      await c.connect();
+      final states = <bool>[];
+      c.connection.listen(states.add);
+      serverSide.destroy();
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(c.connected, isFalse);
+      // First retry after 3 s (longer than the unit's RestartSec).
+      await Future<void>.delayed(const Duration(milliseconds: 3600));
+      expect(c.connected, isTrue);
+      expect(states, [false, true]);
+      await c.close();
+    });
+
+    test('every "Try again" may start the daemon again', () async {
+      // Nobody listens here; the "daemon" just counts its starts.
+      final counter = File('${dir.path}/starts');
+      final fake = File('${dir.path}/fake-gamed')
+        ..writeAsStringSync('#!/bin/sh\necho x >> "${counter.path}"\n');
+      await Process.run('chmod', ['+x', fake.path]);
+      final c = DaemonClient(socketPath: '${dir.path}/none.sock', daemonCommand: fake.path);
+      await expectLater(c.connect(), throwsA(isA<DaemonError>()));
+      await expectLater(c.connect(), throwsA(isA<DaemonError>()));
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(counter.readAsLinesSync(), hasLength(2));
+      await c.close();
+    }, timeout: const Timeout(Duration(seconds: 30)));
   });
 }

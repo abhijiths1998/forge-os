@@ -222,7 +222,12 @@ undone when it stops:
 The setting in force before the game is remembered and put back. While a
 game's thermal profile is held, `$XDG_RUNTIME_DIR/forge/thermal-held-by-game`
 holds its id and the desktop's full-screen rule (`forge-game
-fullscreen-on`) leaves cooling alone. Only the first game to start holds a
+fullscreen-on`) leaves cooling alone. If the game went full screen before
+forge-gamed saw it start, the profile `forge-game` saved in
+`thermal-before-game` is the one put back (and forge-gamed takes that file
+over). What is held is also written to `$XDG_RUNTIME_DIR/forge/gamed-holds.json`;
+a daemon that starts and finds it (or a stale marker) after a crash puts the
+old settings back first. Only the first game to start holds a
 setting; `forged` missing means profiles do nothing (no error). Mangohud,
 GameMode, gamescope and the runner stay per-game settings of your own games:
 Steam, Heroic and Lutris keep those in their own launch options.

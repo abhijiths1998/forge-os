@@ -53,18 +53,23 @@ Json::Value systemInfoJson(const ForgedState& s) {
   return r;
 }
 
-HoldPlan ProfileHolds::start(const std::string& id, const Profile& profile, const ForgedState& st) {
+HoldPlan ProfileHolds::start(const std::string& id, const Profile& profile, const ForgedState& st,
+                             const std::optional<std::string>& fullscreenSaved) {
   HoldPlan plan;
   if (profile.thermal && st.thermalAvailable && thermalBy_.empty()) {
     thermalBy_ = id;
     thermalRestore_.reset();
-    if (st.thermalCurrent && *st.thermalCurrent != *profile.thermal) thermalRestore_ = *st.thermalCurrent;
+    std::optional<std::string> before = st.thermalCurrent;
+    if (fullscreenSaved && !fullscreenSaved->empty()) {
+      before = fullscreenSaved;
+      plan.removeFullscreenSaved = true;
+    }
+    if (before && *before != *profile.thermal) thermalRestore_ = *before;
     plan.writeMarker = id;
     plan.cmds.push_back({"set", "thermal", *profile.thermal});
   }
   if (profile.quiet && st.dndAvailable && dndBy_.empty()) {
     dndBy_ = id;
-    dndRestoreOff_ = false;
     dndRestoreOff_ = !st.dndEnabled;
     if (!st.dndEnabled) plan.cmds.push_back({"set", "dnd", "on"});
   }
@@ -84,6 +89,30 @@ HoldPlan ProfileHolds::stop(const std::string& id) {
     dndBy_.clear();
     dndRestoreOff_ = false;
   }
+  return plan;
+}
+
+Json::Value ProfileHolds::toJson() const {
+  Json::Value v(Json::objectValue);
+  if (!thermalBy_.empty()) {
+    v["thermalBy"] = thermalBy_;
+    if (thermalRestore_) v["thermalRestore"] = *thermalRestore_;
+  }
+  if (!dndBy_.empty()) {
+    v["dndBy"] = dndBy_;
+    v["dndRestoreOff"] = dndRestoreOff_;
+  }
+  return v;
+}
+
+HoldPlan recoveryPlan(const std::string& text) {
+  HoldPlan plan;
+  plan.removeMarker = true;  // whoever wrote it is gone
+  Json::Value v;
+  if (!parseJson(text, v) || !v.isObject()) return plan;
+  if (v["thermalBy"].isString() && v["thermalRestore"].isString() && !v["thermalRestore"].asString().empty())
+    plan.cmds.push_back({"set", "thermal", v["thermalRestore"].asString()});
+  if (v["dndBy"].isString() && jbool(v, "dndRestoreOff")) plan.cmds.push_back({"set", "dnd", "off"});
   return plan;
 }
 
@@ -172,8 +201,28 @@ std::string thermalMarkerPath() {
   return base + "/forge/thermal-held-by-game";
 }
 
+static std::string forgeRunDir() {
+  const char* r = std::getenv("XDG_RUNTIME_DIR");
+  std::string base = r && *r ? r : "/tmp";
+  return base + "/forge";
+}
+
+std::string fullscreenSavedPath() { return forgeRunDir() + "/thermal-before-game"; }
+std::string holdRecordPath() { return forgeRunDir() + "/gamed-holds.json"; }
+
+void saveHoldRecord(const ProfileHolds& holds) {
+  Json::Value v = holds.toJson();
+  if (v.empty()) {
+    ::unlink(holdRecordPath().c_str());
+    return;
+  }
+  writeFileAtomic(holdRecordPath(), toLine(v) + "\n");
+}
+
 void execPlan(const HoldPlan& plan) {
   if (plan.writeMarker) writeFileAtomic(thermalMarkerPath(), *plan.writeMarker);
+  // Before the marker exists forge-game may still save this; after, it won't.
+  if (plan.removeFullscreenSaved) ::unlink(fullscreenSavedPath().c_str());
   for (auto& c : plan.cmds) {
     std::string out;
     runForged(c, 5000, out);

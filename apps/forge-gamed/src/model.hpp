@@ -18,7 +18,7 @@ struct GameSettings {
   std::string exe, args;
   std::optional<std::string> workdir, runner, prefix;
   std::map<std::string, std::string> env;
-  bool gamemode = false, mangohud = false;
+  bool gamemode = true, mangohud = false;  // GameMode on unless turned off (as the UI)
   Gamescope gamescope;
 };
 

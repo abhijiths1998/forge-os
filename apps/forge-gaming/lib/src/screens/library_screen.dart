@@ -244,7 +244,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         palette: p,
         icon: Icons.refresh_rounded,
         label: 'Rescan',
-        onPressed: store.connected ? () => store.refresh() : null,
+        onPressed: () => store.connected ? store.refresh() : store.retry(),
       ),
     ]);
   }
@@ -318,7 +318,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     }
     if (!store.connected && store.games.isEmpty) {
       return _message(Icons.cloud_off_rounded, 'Can\'t reach the game service',
-          store.error ?? 'forge-gamed is not running.', 'Try again', () => store.refresh());
+          store.error ?? 'forge-gamed is not running.', 'Try again', store.retry);
     }
     if (shown.isEmpty) {
       return _filter == LibraryFilter.all && _search.text.isEmpty

@@ -123,6 +123,14 @@ class GamingStore extends ChangeNotifier {
     await Future.wait([refresh(rescan: false), loadRunners(), _loadPads(), loadSystemInfo()]);
   }
 
+  /// "Try again" while offline: show the spinner and reconnect (which may
+  /// start the daemon). Reconnecting reloads everything via [init].
+  Future<void> retry() async {
+    loading = true;
+    notifyListeners();
+    await refresh(rescan: false);
+  }
+
   Future<void> refresh({bool rescan = true}) async {
     try {
       final r = await daemon.call(rescan ? 'library.refresh' : 'library.list');

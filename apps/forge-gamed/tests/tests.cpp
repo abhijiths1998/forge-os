@@ -183,7 +183,7 @@ static void testLaunch() {
     CHECK(!sp.tracked);
   }
   {  // local native, plain, with args and env
-    GameSettings s; s.exe = "/games/foo/foo.sh"; s.args = "-a \"b c\""; s.env["X"] = "1";
+    GameSettings s; s.gamemode = false; s.exe = "/games/foo/foo.sh"; s.args = "-a \"b c\""; s.env["X"] = "1";
     CHECK(buildLaunch(localGame(s), ctx(false), sp, err));
     CHECK_EQ(sp.argv, (V{"/games/foo/foo.sh", "-a", "b c"}));
     CHECK_EQ(sp.env.at("X"), "1");
@@ -212,7 +212,7 @@ static void testLaunch() {
     CHECK_EQ(sp.mkdirs, V{"/data/forge-gaming/prefixes/local_abc"});
   }
   {  // windows + proton without umu-run
-    GameSettings s; s.kind = "windows"; s.exe = "/g/Foo/Foo.exe"; s.prefix = "/pfx"; s.mangohud = true;
+    GameSettings s; s.gamemode = false; s.kind = "windows"; s.exe = "/g/Foo/Foo.exe"; s.prefix = "/pfx"; s.mangohud = true;
     CHECK(buildLaunch(localGame(s), ctx(false), sp, err));
     CHECK_EQ(sp.argv, (V{"mangohud", "/steam/compatibilitytools.d/GE-Proton11-12/proton", "waitforexitandrun", "/g/Foo/Foo.exe"}));
     CHECK_EQ(sp.env.at("STEAM_COMPAT_DATA_PATH"), "/pfx");
@@ -220,7 +220,7 @@ static void testLaunch() {
     CHECK(sp.env.count("PROTONPATH") == 0);
   }
   {  // windows + wine runner (lutris) and system wine
-    GameSettings s; s.kind = "windows"; s.exe = "/g/Foo.exe"; s.runner = "lutris:wine-9";
+    GameSettings s; s.gamemode = false; s.kind = "windows"; s.exe = "/g/Foo.exe"; s.runner = "lutris:wine-9";
     CHECK(buildLaunch(localGame(s), ctx(true), sp, err));
     CHECK_EQ(sp.argv, (V{"/lutris/wine-9/bin/wine", "/g/Foo.exe"}));
     CHECK_EQ(sp.env.at("WINEPREFIX"), "/data/forge-gaming/prefixes/local_abc");
@@ -629,7 +629,103 @@ static void testForgedStateAndProfileJson() {
   CHECK_EQ(parseHeroicInstallPaths(hv)["abc"], "/g/abc");
 }
 
+// Fixes from the 2026-11-20 review.
+static void testReviewFixes() {
+  // A game that went full screen before we saw it: forge-game already saved
+  // "balanced" and switched to "gaming"; restore balanced, not gaming.
+  ForgedState st;
+  st.thermalAvailable = true;
+  st.profiles = {"balanced", "gaming", "performance"};
+  st.thermalCurrent = "gaming";
+  Profile perf;
+  perf.thermal = "performance";
+  ProfileHolds h;
+  auto p1 = h.start("g1", perf, st, std::string("balanced"));
+  CHECK(p1.removeFullscreenSaved);
+  auto rec = h.toJson();
+  CHECK_EQ(rec["thermalBy"].asString(), "g1");
+  CHECK_EQ(rec["thermalRestore"].asString(), "balanced");
+  auto p2 = h.stop("g1");
+  CHECK_EQ(p2.cmds.size(), 1u);
+  CHECK((p2.cmds[0] == ForgedCmd{"set", "thermal", "balanced"}));
+  CHECK(h.toJson().empty());
+  // Without a saved value the current one is restored, as before.
+  ProfileHolds h2;
+  ForgedState st2 = st;
+  st2.thermalCurrent = "balanced";
+  auto p3 = h2.start("g2", perf, st2);
+  CHECK(!p3.removeFullscreenSaved);
+  CHECK_EQ(h2.toJson()["thermalRestore"].asString(), "balanced");
+
+  // Recovering after a crash.
+  auto r1 = recoveryPlan("{\"thermalBy\":\"g\",\"thermalRestore\":\"silent\",\"dndBy\":\"g\",\"dndRestoreOff\":true}");
+  CHECK(r1.removeMarker);
+  CHECK_EQ(r1.cmds.size(), 2u);
+  CHECK((r1.cmds[0] == ForgedCmd{"set", "thermal", "silent"}));
+  CHECK((r1.cmds[1] == ForgedCmd{"set", "dnd", "off"}));
+  auto r2 = recoveryPlan("");  // only a stale marker
+  CHECK(r2.removeMarker && r2.cmds.empty());
+  auto r3 = recoveryPlan("{\"dndBy\":\"g\",\"dndRestoreOff\":false}");
+  CHECK(r3.cmds.empty());
+
+  // A damaged library.json: wrong-typed entries don't throw...
+  std::string dir = std::filesystem::temp_directory_path().string() + "/fg-review-test";
+  std::filesystem::remove_all(dir);
+  std::filesystem::create_directories(dir);
+  writeFileAtomic(dir + "/library.json",
+                  "{\"local\":[{\"id\":\"local:a\",\"title\":\"A\",\"settings\":\"oops\"}],"
+                  "\"meta\":{\"steam:1\":true,\"steam:2\":{\"favorite\":true}}}");
+  Store s(dir);
+  s.load();
+  CHECK_EQ(s.locals.size(), 1u);
+  CHECK(s.meta.count("steam:1") == 0);
+  CHECK(s.meta["steam:2"].favorite);
+  // ...and one that isn't JSON is kept aside instead of being overwritten.
+  writeFileAtomic(dir + "/library.json", "{\"local\": [ truncated");
+  Store t(dir);
+  t.load();
+  CHECK(t.locals.empty());
+  CHECK(isFile(dir + "/library.json.bad"));
+  CHECK(!isFile(dir + "/library.json"));
+  std::filesystem::remove_all(dir);
+
+  // GameMode is on unless turned off (as in the UI and the spec).
+  Json::Value sv;
+  CHECK(parseJson("{\"kind\":\"native\",\"exe\":\"/g/x\"}", sv));
+  GameSettings gs;
+  std::string err;
+  CHECK(settingsFromJson(sv, gs, err));
+  CHECK(gs.gamemode);
+  CHECK(settingsFromStored(sv).gamemode);
+  CHECK(settingsFromStored(Json::Value("x")).exe.empty());  // a string, not an object: no throw
+
+  // A missing optional wrapper is left out instead of failing the launch.
+  Game g;
+  g.id = "local:w";
+  g.source = "local";
+  g.settings = GameSettings();
+  g.settings->exe = "/g/x";
+  g.settings->mangohud = true;
+  g.settings->gamescope.enabled = true;
+  LaunchContext c;
+  c.haveGamemode = false;
+  c.haveMangohud = false;
+  c.haveGamescope = false;
+  LaunchSpec sp;
+  CHECK(buildLaunch(g, c, sp, err));
+  CHECK_EQ(sp.argv, (std::vector<std::string>{"/g/x"}));
+
+  // A missing game folder is reported as such, not as the program failing.
+  LaunchSpec bad;
+  bad.argv = {"true"};
+  bad.workdir = "/nonexistent/fg-folder";
+  auto res = spawnProcess(bad, "", false);
+  CHECK(!res.ok);
+  CHECK(res.error.find("/nonexistent/fg-folder") != std::string::npos);
+}
+
 int main() {
+  testReviewFixes();
   testWatchMatcher();
   testWatchState();
   testProfileHolds();

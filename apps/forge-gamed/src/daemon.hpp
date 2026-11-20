@@ -93,6 +93,7 @@ class Daemon {
   void enqueueForged(std::function<void()> fn);
   void stopForgedWorker();
   void applyProfile(const std::string& gameId);
+  void recoverHolds();
   void releaseProfile(const std::string& gameId);
   void watchTick();
   void onDetectedStart(const std::string& id);
@@ -123,7 +124,9 @@ class Daemon {
 
   std::mutex qmu_;
   std::vector<std::function<void()>> queue_;
-  std::vector<std::thread> threads_;
+  // Workers by id; each one is joined on the main thread once it finishes.
+  std::map<uint64_t, std::thread> threads_;
+  uint64_t nextWorker_ = 0;
   std::atomic<bool> cancel_{false};
   std::set<std::string> installing_;
   std::vector<Release> releases_;  // last fetched (main thread only)

@@ -20,6 +20,9 @@ struct LaunchContext {
   std::string dataDir;           // ~/.local/share/forge-gaming
   std::string steamRoot;         // "" if none
   bool umuRun = false;           // umu-run is on PATH
+  // The optional wrappers that are installed; a missing one is left out
+  // rather than failing every launch with that toggle on.
+  bool haveGamescope = true, haveGamemode = true, haveMangohud = true;
   std::vector<Runner> runners;
   std::string defaultRunner;     // effective default runner id (may be empty)
 };
