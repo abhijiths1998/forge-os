@@ -2,20 +2,17 @@
 
 *Built hot. Runs cool.*
 
-Forge OS is an Arch-based Linux distro for gaming on KDE Plasma, with
+Forge OS is an Arch-based Linux distro for gaming on Hyprland, with
 first-class NVIDIA support. It cherry-picks ideas from CachyOS, Nobara,
 Garuda, Bazzite and EndeavourOS instead of copying any one of them. See
 `docs/ROADMAP.md` for the feature rationale and what's still ahead.
 
-**Forge OS 2** arrives in steps: 2.0 is the Forge look and the first Forge
-apps, then one theme per release (Control Center, living wallpapers, the
-Forge Assistant, safe updates and a Game Hub, Focus) up to 3.0, where the
-everyday apps are all Forge apps. The plan is in `docs/RELEASES.md`; the
-version is set in `forge-os-release` (`forge about` shows it).
-
-**Moving to Hyprland:** Forge OS is moving from KDE Plasma to Hyprland, with
-a Quickshell shell. The plan is in `docs/HYPRLAND.md`; until it lands, the
-ISO described below is still the KDE one.
+**Forge OS 3** moves the desktop from KDE Plasma to Hyprland, with Forge's
+own shell in Quickshell; Plasma is gone. It arrives in steps (3.0 the
+Hyprland desktop, then Forge Arcade and Forge Terminal, the Forge cast and
+wallpapers, Forge Settings, Forge Code, onboarding). The plan is in
+`docs/RELEASES.md`, the move itself in `docs/HYPRLAND.md`; the version is
+set in `forge-os-release` (`forge about` shows it).
 
 ## What you get
 
@@ -27,7 +24,7 @@ ISO described below is still the KDE one.
   Xbox controllers over Bluetooth (xpadneo).
 - **Tuned like Nobara/Bazzite/CachyOS:** linux-zen kernel, zram swap,
   ananicy-cpp with CachyOS's rules, irqbalance, split-lock throttling off,
-  per-drive I/O schedulers, Plasma power profiles.
+  per-drive I/O schedulers, power profiles.
 - **Forge Thermal:** CPU and GPU clock profiles to keep temperatures down,
   from the app or `forge thermal`. The default, Balanced, runs the CPU at
   90% of its maximum.
@@ -35,19 +32,26 @@ ISO described below is still the KDE one.
   (grub-btrfs).
 - **Installer:** Calamares, for UEFI and legacy BIOS machines.
 
-## The look: Forge Glass
+## The desktop: Forge Glass on Hyprland
 
-A calm pastel "liquid glass" desktop on KDE Plasma 6: a slim floating top
-bar, a compact floating dock, frosted glass windows, menus, panels and
-terminal, macOS-style dots under running apps in the dock, Plus Jakarta Sans
-type, and a light and a dark variant. Press **Super+Space** or **Alt+Space** for the command
-bar. In a terminal:
+A calm pastel "liquid glass" desktop: Hyprland frosts translucent windows,
+menus and panels, with rounded squircle corners, a soft lit edge and a deep
+shadow (`apps/forge-session`). Forge's shell (`apps/forge-shell`, Quickshell)
+draws a slim floating glass bar with workspaces, the clock and what's
+playing, the Control Center, notifications with do not disturb, volume and
+brightness displays, and a shortcut panel on the desktop that teaches the
+keys (Super+/ shows them all, holding Super shows what each next key does).
+Shortcuts follow Windows and macOS habits: Super+Q closes, Super+E opens
+files, Super+L locks, Super+arrows snap, Super+1 to 9 switch workspaces,
+Alt+Tab switches windows, Super+Space opens the command bar, Print takes a
+screenshot. Tiling is a per-workspace switch (Super+Shift+T), off to begin
+with. Plus Jakarta Sans type, light and dark. In a terminal:
 
 ```sh
 forge install obs-studio   # repos, Chaotic-AUR, AUR (via pamac)
 forge update               # packages + Flatpaks
 forge theme dark           # or light; no argument toggles
-forge tile on              # auto-tiling (Polonium)
+forge tile on              # tiling on for this workspace
 forge thermal              # temperatures, clocks and the active profile
 forge thermal cool         # silent, cool, balanced or performance
 ```
@@ -64,7 +68,7 @@ theme set in the Theming Kit:
 | **Forge Launcher**: Super+Space / Alt+Space command bar for apps, files, Forge actions, power, maths, `> command` and `? web search` | KRunner | Flutter + GTK runner |
 | **Forge Store**: Discover, categories, search (repos, Chaotic-AUR, AUR), installed, updates | Pamac GUI | Flutter + libpamac (C++) |
 | **Forge Browser**: tabs (across the top or vertical), bookmarks, history, downloads, built-in ad and tracker blocking (EasyList, EasyPrivacy, Peter Lowe) | Brave as the default | C++ / Qt WebEngine |
-| **Forge Control**: the Control Center, a glass panel from the top bar: Wi-Fi, Bluetooth, quiet, dark mode, tiling, brightness, volume, power and cooling profiles, now playing; `forged state` / `forged set` | Plasma's tray popups, in one place | Flutter (forge_ui) + `forged` (Python, D-Bus) |
+| **Forge Shell**: the bar, the Control Center (Wi-Fi, Bluetooth, quiet, dark mode, tiling, night light, brightness, volume, power and cooling profiles, now playing), notifications, OSDs, the desktop shortcut panel, the cheat sheet, overview, Alt+Tab, clipboard and emoji pickers; state from `forged` | Plasma's panels and tray | Quickshell (QML) + `forged` (Python, D-Bus) |
 | **Forge Shot**: screenshots on the Print keys: an area on the frozen screen (loupe, handles), a window or the whole screen; a thumbnail after; an editor (arrows, boxes, text, highlighter, pixelate, numbered steps, crop); copy, save, copy the text in it | Spectacle (kept for recording) | Flutter (forge_ui) + KWin ScreenShot2 |
 | **Forge Theming Kit**: themes (Forge Glass, Frost, Midnight, Ember, Aurora, Mint...) and sliders for colour (accent, glass tint, light/dark) and liquid glass (blur, vibrancy, lens, bevel, inner bending, colour split, grain), opacities and corners; `forge theme <name>` | System Settings' colour and effect pages, for the Forge look | Flutter (forge_ui) |
 

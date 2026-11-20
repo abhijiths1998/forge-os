@@ -1,0 +1,14 @@
+[Unit]
+Description=Forge wallpaper (awww)
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/awww-daemon
+ExecStartPost=/usr/bin/forge-wallpaper restore
+Restart=on-failure
+Slice=background-graphical.slice
+
+[Install]
+WantedBy=graphical-session.target

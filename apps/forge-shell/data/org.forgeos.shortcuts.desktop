@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Keyboard Shortcuts
+GenericName=Shortcut cheat sheet
+Comment=Every Forge OS shortcut, with search (Super+/)
+Icon=preferences-desktop-keyboard-shortcuts
+Exec=forge-shell cheatsheet
+Categories=Settings;DesktopSettings;
+Keywords=keys;keyboard;shortcuts;hotkeys;cheat sheet;help;
+StartupNotify=false

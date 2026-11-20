@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# forge-lock: the Forge Glass lock screen (hyprlock), once. Uses the user's
+# own ~/.config/hypr/hyprlock.conf if there is one.
+pidof hyprlock >/dev/null && exit 0
+user="${XDG_CONFIG_HOME:-${HOME}/.config}/hypr/hyprlock.conf"
+if [[ -f "${user}" ]]; then exec hyprlock -c "${user}"; fi
+exec hyprlock -c /usr/share/forge/hypr/hyprlock.conf

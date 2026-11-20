@@ -582,3 +582,103 @@ not on running anything:
 - Logind `SetBrightness` on the laptop's backlight device.
 - The tiling model and the edge-sheen approximation.
 - Everything NVIDIA.
+
+## 11. Decisions and progress
+
+**2026-11-14: "go ahead and finish everything."** Taken as approval of this
+document's recommendations for every open question in section 9: Lua and
+`[Category]` descriptions, the 3.x numbering, fresh installs only, Plasma
+kept as a fallback through M1, the Control Center in Quickshell, Forge
+Terminal rewritten in GTK4 + VTE, the stopgap apps, `mako`-free M1. The
+untracked `apps/forge-shell/` and `compositor/` build leftovers were moved,
+not deleted, to `~/Projects/forge-os-leftovers/` on the dev machine.
+
+### M1: the session (apps/forge-session)
+
+Built and tested against Hyprland 0.57.2. What changed from the design
+above while building it:
+
+- **The theme is read, not generated.** `theme.lua` reads
+  `~/.config/forge/theme.json` itself (`lib/json.lua`, a small JSON reader
+  and writer), so there's no generated `theme.lua` to go stale. forge-theme-sync
+  only needs to run `hyprctl reload`.
+- **The game watcher is Lua plus a small script.** `game.lua` listens to
+  Hyprland's own events (`window.fullscreen` and the rest), turns blur,
+  shadows and animations off itself, and runs `forge-game fullscreen-on|off`
+  for the wallpaper and the cooling profile. No socket-reading daemon.
+  GameMode's hooks call `forge-game gamemode-start|end`.
+- **Per-workspace tiling is window rules.** Floating a window from the
+  `window.open_early` event had no effect in 0.57, so a rule floats every new
+  window while tiling is off, and a rule per workspace that differs from
+  the default overrides it. Toggling also floats or tiles the windows
+  already there. State: `~/.local/state/forge/tiling.json`; forged writes
+  it and runs `hyprctl eval 'forge.tiling.reload()'`.
+- **uwsm's environment hook** is `/etc/xdg/uwsm/env-hyprland.d/50-forge.sh`,
+  which `eval`s `forge-gpu-env`. The session is Hyprland's own
+  `hyprland-uwsm.desktop`.
+- **Hyprland isn't held back.** Pinning it in `IgnorePkg` without our own
+  repo would leave it linked against libraries that `-Syu` moves on.
+  Section 8's risk 1 stays open until the Forge repo exists.
+- **Hyprland's own wallpapers are off** (`misc.force_default_wallpaper = 0`,
+  `disable_hyprland_logo`). They feature Hyprland's anime mascot, and
+  Forge's anime art is only its own cast.
+
+Tests: `lua tests/check-binds.lua hypr` (no hl.bind outside forge.bind,
+every bind categorised, no key bound twice, JSON round trip),
+`Hyprland --verify-config` in `build/check.sh lua`, and `tests/smoke.sh`.
+The smoke test runs the real config in Hyprland 0.57.2 nested on the dev
+machine's desktop (Hyprland's headless backend needs a seat or a parent
+compositor; Weston's and sway's protocols are too old for Aquamarine). It
+checks the binds over `hyprctl`, that new windows float, Super+Left
+snapping, tiling on and off per workspace, resize mode and workspaces.
+All 13 pass.
+
+Not verified yet: the ISO build, a QEMU install, the live session opening
+Calamares, and anything on the NVIDIA laptop's own session (NVIDIA env,
+explicit sync, VRR, suspend, hyprlock after resume, the touchpad gesture,
+the hardware keys).
+
+### M2: forge-shell (apps/forge-shell) and Plasma out
+
+Built and tested against Quickshell 0.3.2 and Hyprland 0.57.2.
+
+- **The shell**: the bar (Forge button, workspaces, window title, the
+  island with clock and now playing, mode badge, do-not-disturb badge, tray,
+  battery with the percentage inside, Wi-Fi, Bluetooth, sound, Control
+  Center button), the Wi-Fi, Bluetooth, sound and battery popups, the
+  Control Center, notifications (server, pop-ups, centre), OSDs, the desktop
+  shortcut panel, the Super+/ cheat sheet, the hold-Super popup, overview
+  with live previews, Alt+Tab with live previews, clipboard and emoji
+  pickers, and the power menu.
+- **Binds reach the shell as Hyprland global shortcuts**
+  (`hl.dsp.global("forge:<name>")` to Quickshell's `GlobalShortcut`), not a
+  process per key press. That gives key-release events for the hold-Super
+  popup and for Alt+Tab (an `ALT + Alt_L` release bind commits).
+- **forged** changed here rather than in M3, because the shell needs it:
+  brightness through sysfs and logind (polled once a second, since sysfs
+  can't be watched), dark from theme.json only, tiling from the shared
+  `tiling.json` for the focused workspace (Hyprland's event socket says
+  when that changes), do not disturb held by forged itself
+  (`~/.local/state/forge/dnd.json`), `toggle` and `+N`/`-N` values, `forged
+  watch`, and no crash without a system bus. The D-Bus API is unchanged.
+  `tests/test_forged.py` has 8 tests.
+- **Plasma is out of the ISO**: plasma-meta, the KDE apps, the KWin effects,
+  Darkly, Polonium, the KDE portal, plasma-nm, KWallet, the skel KDE files,
+  the look-and-feel and Plasma theme, the colour schemes, `forge-glass-check`,
+  and the KWin glass build in `build/Containerfile`. The Flutter Forge
+  Control panel and its Plasma widgets were retired (the Control Center is
+  in the shell now). Konsole stays until M5. The stopgap apps are in.
+
+Tests: `apps/forge-shell/tests/run.sh` runs the real shell with forged in
+Forge's Hyprland session (nested) and checks 11 things: it starts without
+QML errors, forged answers, Hyprland frosts its layers, notifications pop
+up, do not disturb holds them back, the cheat sheet opens, the clipboard
+history fills, a global shortcut opens the Control Center, Alt+Tab
+switches windows, and no QML errors after using everything. It also takes
+a screenshot of each panel and overlay. All pass.
+`build/check.sh qml` (qmllint) passes. Its warnings are mostly qmllint
+not knowing Quickshell's generated `qs.*` modules.
+
+Not verified: the shell on the laptop (real Wi-Fi, Bluetooth, PipeWire,
+UPower, backlight, tray apps), hold-Super's long press with a real
+keyboard, and the ISO.

@@ -23,6 +23,7 @@ PERI="$(c '138;155;247')" GREEN="$(c '143;211;168')" ROSE="$(c '242;139;155')"
 GREY="$(c '139;144;176')" LILAC="$(c '195;183;238')" BOLD=$'\e[1m' OFF=$'\e[0m'
 # The Forge theme's colours instead, once forge-theme-sync has written them.
 FORGE_THEME_SH="${XDG_CONFIG_HOME:-$HOME/.config}/forge/theme.sh"
+# shellcheck source=/dev/null
 if [[ -r "${FORGE_THEME_SH}" ]] && source "${FORGE_THEME_SH}" 2>/dev/null; then
     PERI="$(c "${FORGE_ACCENT_RGB:-138;155;247}")" LILAC="$(c "${FORGE_ACCENT_SOFT_RGB:-195;183;238}")"
     GREY="$(c "${FORGE_DIM_RGB:-139;144;176}")" ROSE="$(c "${FORGE_ERROR_RGB:-242;139;155}")"

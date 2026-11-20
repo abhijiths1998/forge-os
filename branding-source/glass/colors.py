@@ -147,10 +147,9 @@ def konsole_scheme():
 
 
 def main():
-    cs = ROOT / "color-schemes"
-    cs.mkdir(parents=True, exist_ok=True)
-    (cs / "ForgeGlassLight.colors").write_text(kde_scheme(LIGHT, "ForgeGlassLight"))
-    (cs / "ForgeGlassDark.colors").write_text(kde_scheme(DARK, "ForgeGlassDark"))
+    # KDE colour schemes (kde_scheme) aren't shipped since the move to
+    # Hyprland; forge-theme-sync themes GTK and Qt from theme.json. The
+    # Konsole scheme stays while Konsole does.
     ko = ROOT / "konsole"
     ko.mkdir(parents=True, exist_ok=True)
     (ko / "ForgeGlass.colorscheme").write_text(konsole_scheme())

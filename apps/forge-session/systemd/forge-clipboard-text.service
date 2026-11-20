@@ -1,0 +1,13 @@
+[Unit]
+Description=Forge clipboard history (text)
+PartOf=graphical-session.target
+After=graphical-session.target
+ConditionEnvironment=WAYLAND_DISPLAY
+
+[Service]
+ExecStart=/usr/bin/wl-paste --type text --watch /usr/bin/cliphist store
+Restart=on-failure
+Slice=background-graphical.slice
+
+[Install]
+WantedBy=graphical-session.target

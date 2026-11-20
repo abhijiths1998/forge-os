@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# forge-screenshot area|screen|window: take a screenshot, save it to
+# ~/Pictures/Screenshots, copy it, and say so. Forge Shot does this with its
+# own selection overlay and editor when it's installed; this is the plain
+# version (grim and slurp) it falls back to.
+set -euo pipefail
+
+mode="${1:-area}"
+if command -v forge-shot >/dev/null 2>&1 && forge-shot --hyprland-ready >/dev/null 2>&1; then
+    exec forge-shot "${mode}"
+fi
+
+pictures="$(xdg-user-dir PICTURES 2>/dev/null || echo "${HOME}/Pictures")"
+dir="${pictures}/Screenshots"
+mkdir -p "${dir}"
+file="${dir}/Screenshot $(date +'%Y-%m-%d %H-%M-%S').png"
+
+case "${mode}" in
+    area)
+        geometry="$(slurp -d -b '#1b1d2b66' -c '#7f8ef5ff' -w 2)" || exit 0
+        grim -g "${geometry}" "${file}" ;;
+    screen)
+        output="$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')"
+        grim -o "${output}" "${file}" ;;
+    window)
+        geometry="$(hyprctl activewindow -j | jq -r '"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"')"
+        grim -g "${geometry}" "${file}" ;;
+    *)
+        echo "usage: forge-screenshot area|screen|window" >&2
+        exit 2 ;;
+esac
+
+wl-copy --type image/png < "${file}"
+notify-send --app-name="Screenshot" --icon="${file}" "Screenshot saved" \
+    "Copied, and saved in ${dir/#${HOME}/\~}" 2>/dev/null || true

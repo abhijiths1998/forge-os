@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# forge-idle: hypridle with the user's own config if there is one
+# (~/.config/hypr/hypridle.conf), else Forge's.
+user="${XDG_CONFIG_HOME:-${HOME}/.config}/hypr/hypridle.conf"
+if [[ -f "${user}" ]]; then exec hypridle -c "${user}"; fi
+exec hypridle -c /usr/share/forge/hypr/hypridle.conf

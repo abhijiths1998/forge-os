@@ -3,9 +3,9 @@
 The release plan (2.0 to 3.0, which features ship when) is in
 `docs/RELEASES.md`; this file is the detail and history.
 
-The move from KDE Plasma to Hyprland (2026-11-14) is planned in
-`docs/HYPRLAND.md`: what depends on KDE today, what replaces it, the package
-diff and the risks.
+The move from KDE Plasma to Hyprland (2026-11-14) is planned and logged in
+`docs/HYPRLAND.md`: what depended on KDE, what replaced it, the package
+diff, the risks, and each milestone's progress and test results.
 
 ## Feature cherry-pick map
 

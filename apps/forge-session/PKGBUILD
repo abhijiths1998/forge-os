@@ -1,0 +1,51 @@
+# Forge session: Forge OS's Hyprland desktop session. The Hyprland defaults
+# (/usr/share/forge/hypr, Lua), the scripts the keybinds call, the user
+# services the session runs, GameMode's and the portals' settings.
+# Built from this directory by apps/build-packages.sh during the ISO build.
+pkgname=forge-session
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="Forge OS desktop session on Hyprland: defaults, keybinds, services"
+arch=('any')
+url="https://github.com/abhijiths1998/forge-os"
+license=('GPL-3.0-or-later')
+depends=('hyprland' 'uwsm' 'xdg-desktop-portal-hyprland' 'xdg-desktop-portal-gtk'
+         'hyprpolkitagent' 'hypridle' 'hyprlock' 'hyprpicker' 'hyprland-guiutils'
+         'awww' 'grim' 'slurp' 'wl-clipboard' 'cliphist' 'wl-clip-persist'
+         'brightnessctl' 'playerctl' 'udiskie' 'jq' 'libnotify' 'xdg-user-dirs'
+         'xdg-terminal-exec' 'xdg-utils' 'foot' 'btop' 'gamemode'
+         'adwaita-cursors' 'qt6-wayland' 'qt5-wayland' 'python')
+optdepends=('gpu-screen-recorder: screen recording (Super+Alt+R)'
+            'forge-shell: the bar, Control Center, notifications and pickers')
+backup=('etc/gamemode.ini')
+
+package() {
+    cd "${startdir}"
+    install -d "${pkgdir}/usr/share/forge/hypr/lib"
+    install -m644 hypr/*.lua hypr/*.conf "${pkgdir}/usr/share/forge/hypr/"
+    install -m644 hypr/lib/*.lua "${pkgdir}/usr/share/forge/hypr/lib/"
+
+    # New users' config: two lines that load Forge's, then their own.
+    install -Dm644 skel/hyprland.lua "${pkgdir}/etc/skel/.config/hypr/hyprland.lua"
+    install -Dm644 skel/user.lua "${pkgdir}/etc/skel/.config/hypr/user.lua"
+    install -Dm644 skel/hyprland.lua "${pkgdir}/usr/share/forge/skel/hypr/hyprland.lua"
+    install -Dm644 skel/user.lua "${pkgdir}/usr/share/forge/skel/hypr/user.lua"
+
+    install -d "${pkgdir}/usr/bin"
+    install -m755 bin/* "${pkgdir}/usr/bin/"
+
+    # User services, started with the graphical session (uwsm).
+    install -d "${pkgdir}/usr/lib/systemd/user/graphical-session.target.wants"
+    install -m644 systemd/*.service "${pkgdir}/usr/lib/systemd/user/"
+    for unit in forge-idle forge-wallpaper forge-clipboard-text forge-clipboard-image \
+                forge-clipboard-keep forge-automount hyprpolkitagent; do
+        ln -s "../${unit}.service" \
+            "${pkgdir}/usr/lib/systemd/user/graphical-session.target.wants/${unit}.service"
+    done
+
+    install -Dm644 data/50-forge.sh "${pkgdir}/etc/xdg/uwsm/env-hyprland.d/50-forge.sh"
+    install -Dm644 data/gamemode.ini "${pkgdir}/etc/gamemode.ini"
+    install -Dm644 data/hyprland-portals.conf \
+        "${pkgdir}/etc/xdg/xdg-desktop-portal/hyprland-portals.conf"
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${pkgname}/README.md"
+}

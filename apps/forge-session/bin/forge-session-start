@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# forge-session-start: run once when Hyprland starts (autostart.lua).
+set -u
+
+# D-Bus-activated services (forged, Forge Mind, portals) need the session's
+# display. uwsm exports it already; this covers a session started without it.
+dbus-update-activation-environment --systemd WAYLAND_DISPLAY XDG_CURRENT_DESKTOP \
+    HYPRLAND_INSTANCE_SIGNATURE DISPLAY 2>/dev/null || true
+
+# Cursor everywhere: Hyprland, then GTK apps.
+hyprctl setcursor "${XCURSOR_THEME:-Adwaita}" "${XCURSOR_SIZE:-24}" >/dev/null 2>&1 || true
+
+# GTK and Qt follow the Forge theme (forge-theme-sync writes their colours,
+# light or dark, fonts and icons); without it, sensible Forge defaults.
+if command -v forge-theme-sync >/dev/null 2>&1 && forge-theme-sync --hyprland >/dev/null 2>&1; then
+    exit 0
+fi
+gs() { gsettings set org.gnome.desktop.interface "$1" "$2" 2>/dev/null || true; }
+gs cursor-theme "${XCURSOR_THEME:-Adwaita}"
+gs cursor-size "${XCURSOR_SIZE:-24}"
+gs font-name 'Plus Jakarta Sans 11'
+gs document-font-name 'Plus Jakarta Sans 11'
+gs monospace-font-name 'JetBrainsMono Nerd Font 11'
+gs icon-theme 'WhiteSur-dark'
+gs gtk-theme 'adw-gtk3-dark'
+gs color-scheme 'prefer-dark'
